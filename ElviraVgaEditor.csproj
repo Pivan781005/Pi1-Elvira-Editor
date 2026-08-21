@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Pi1ElviraVgaEditor</AssemblyName>
+    <RootNamespace>ElviraVgaEditor</RootNamespace>
+      <Product>π1 Elvira I&amp;II VGA Editor</Product>
+    <Title>π1 Elvira I&amp;II VGA Editor</Title>
+    <Description>π1 Elvira I&amp;II VGA Editor</Description>
+</PropertyGroup>
+</Project>

@@ -1,0 +1,24 @@
+.vs/
+bin/
+obj/
+*.user
+*.suo
+
+# Backups / temporary files
+*.bak
+*.bak_original
+*.bak_previous
+*.orig
+*.tmp
+
+# Proprietary game files
+GAMEPC
+*.VGA
+*.SND
+*.DAT
+
+# Local folders / output
+OUTPUT/
+artifacts/
+temp/
+tmp/
