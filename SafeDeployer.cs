@@ -36,6 +36,8 @@ internal static class SafeDeployer
         if (!File.Exists(activePath)) throw new FileNotFoundException("Active file is missing.", activePath);
         if (!File.Exists(preparedPath)) throw new FileNotFoundException("Prepared output is missing.", preparedPath);
         string original = OriginalBackupPath(activePath);
+        if (File.Exists(original) && new FileInfo(original).Length == 0)
+            throw new InvalidDataException($"Cannot update {Path.GetFileName(activePath)}: its immutable original backup {Path.GetFileName(original)} is empty and unsafe. No files were changed.");
         string rollback = TemporaryPath(activePath, "rollback");
         bool moved = false;
         try

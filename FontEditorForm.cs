@@ -529,7 +529,7 @@ internal sealed class FontEditorForm : Form
         _originalMatrix.SetGlyph(_current.Original, false, false);
         bool reserved = IsReservedHudEraseGlyph(_current);
         byte[] edited = reserved
-            ? RunItBootstrapService.ReservedHudEraseGlyphBytes
+            ? FontSlotMetadata.GetCanonicalBytes(_loaded!, _current.ByteValue)
             : (_current.HasEdited ? _current.Edited : new byte[8]);
         _editedMatrix.SetGlyph(edited, _current.HasEdited && !reserved, _advanced.Checked && !reserved);
         _originalHex.Text = UiText.Get("OriginalHex") + " " + ToHex(_current.Original);
@@ -603,7 +603,7 @@ internal sealed class FontEditorForm : Form
         {
             ProductionDeploymentResult result = GamePatchDeploymentService.Deploy(_loaded, _glyphs);
             LoadRunVga(result.ActiveExecutable, showErrors: true);
-            MessageBox.Show(this, $"Patched active executable: {result.ActiveExecutable}\nOriginal backup: {result.OriginalExecutable}\nGAMEPC original backup: {result.OriginalGamePc}", UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, $"Patched active executable: {result.ActiveExecutable}\nOriginal backup: {result.OriginalExecutable}\n\nGAMEPC was not modified.", UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
@@ -645,7 +645,7 @@ internal sealed class FontEditorForm : Form
             {
                 ProductionDeploymentResult result = GamePatchDeploymentService.Deploy(_loaded, _glyphs);
                 LoadRunVga(result.ActiveExecutable, showErrors: true);
-                MessageBox.Show(this, $"Activated {(_loaded?.Game == ElviraGame.Elvira2 ? "Elvira II V2 split-font" : "Elvira I V5")} CP852 patch.\n\nOriginal EXE: {result.OriginalExecutable}\nOriginal GAMEPC: {result.OriginalGamePc}", UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, $"Activated {(_loaded?.Game == ElviraGame.Elvira2 ? "Elvira II V2 split-font" : "Elvira I V5")} CP852 patch.\n\nOriginal EXE: {result.OriginalExecutable}\nGAMEPC was not modified.", UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error); }
             return;

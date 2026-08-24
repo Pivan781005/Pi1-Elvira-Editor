@@ -7,13 +7,14 @@ internal enum FontSourceType { RunVga, RunEga }
 internal enum RunVgaFontLayout { Unknown, OriginalPackedAscii80, OriginalPackedAscii98, OriginalAscii98, ExtendedCp852V5, ExtendedCp852RunIt }
 internal enum ElviraGame { Unknown, Elvira1, Elvira2 }
 
-// Reserved slots are game/layout metadata, not a generic CP852 rule. Both games
-// use 0x81 as a HUD erase mask, but their executable layouts remain independent.
+// Reserved slots are game/layout metadata, not a generic CP852 rule. Original
+// previews retain the historical six-row mask; newly generated extended outputs
+// use a full eight-row renderer-cell erase mask.
 internal static class FontSlotMetadata
 {
     internal const int HudEraseGlyph = 0x81;
-    private static readonly byte[] Elvira1HudEraseBytes = Convert.FromHexString("00FCFCFCFCFCFC00");
-    private static readonly byte[] Elvira2HudEraseBytes = Convert.FromHexString("00FCFCFCFCFCFC00");
+    internal static readonly byte[] OriginalHudEraseGlyphBytes = Convert.FromHexString("00FCFCFCFCFCFC00");
+    internal static readonly byte[] PatchedHudFullCellEraseGlyphBytes = Convert.FromHexString("FCFCFCFCFCFCFCFC");
     private static readonly int[] Elvira1ReservedSlots = [HudEraseGlyph];
     private static readonly int[] Elvira2RunItReservedSlots = [HudEraseGlyph];
     private static readonly int[] NoReservedSlots = [];
@@ -24,6 +25,8 @@ internal static class FontSlotMetadata
             (ElviraGame.Elvira1, RunVgaFontLayout.OriginalPackedAscii98) or
             (ElviraGame.Elvira1, RunVgaFontLayout.OriginalAscii98) or
             (ElviraGame.Elvira1, RunVgaFontLayout.ExtendedCp852V5) => Elvira1ReservedSlots,
+            (ElviraGame.Elvira2, RunVgaFontLayout.OriginalPackedAscii98) or
+            (ElviraGame.Elvira2, RunVgaFontLayout.OriginalAscii98) or
             (ElviraGame.Elvira2, RunVgaFontLayout.ExtendedCp852RunIt) => Elvira2RunItReservedSlots,
             _ => NoReservedSlots
         };
@@ -35,7 +38,8 @@ internal static class FontSlotMetadata
     {
         if (!IsReserved(loaded, code))
             throw new InvalidOperationException($"Glyph 0x{code:X2} is not reserved for this game/layout.");
-        return loaded.Game == ElviraGame.Elvira1 ? Elvira1HudEraseBytes.ToArray() : Elvira2HudEraseBytes.ToArray();
+        bool patchedOutput = loaded.Layout is RunVgaFontLayout.ExtendedCp852V5 or RunVgaFontLayout.ExtendedCp852RunIt;
+        return (patchedOutput ? PatchedHudFullCellEraseGlyphBytes : OriginalHudEraseGlyphBytes).ToArray();
     }
 
     public static void RestoreReservedSourceGlyphs(FontLoadResult loaded)

@@ -241,7 +241,9 @@ internal static class Program
                 FontLoadResult reopened = RunVgaFontService.LoadRunVga(saved);
                 bool changed = !beforeA.SequenceEqual(reopened.Glyphs[0x41].Original) && !beforea.SequenceEqual(reopened.Glyphs[0x61].Original) && !before0.SequenceEqual(reopened.Glyphs[0x30].Original);
                 bool cp852 = new[] { 0xA0, 0x82, 0x8D, 0xE1, 0xFD }.All(c => reopened.Glyphs[c].Original.SequenceEqual(raster.AsSpan(c * 8, 8).ToArray()));
-                if (!changed || !cp852) throw new InvalidDataException("TTF raster/import/save/reopen verification failed.");
+                bool reserved = FontSlotMetadata.IsReserved(reopened, 0x81) &&
+                    reopened.Glyphs[0x81].Original.SequenceEqual(FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes);
+                if (!changed || !cp852 || !reserved) throw new InvalidDataException("TTF raster/import/save/reopen reserved-slot verification failed.");
                 Console.WriteLine("RUNIT TTF smoke: PASS"); Environment.ExitCode = 0;
             }
             catch (Exception ex) { Console.Error.WriteLine("RUNIT TTF smoke: FAIL - " + ex.Message); Environment.ExitCode = 1; }
@@ -256,7 +258,8 @@ internal static class Program
                     loaded.LoadedGlyphCount == 98 && loaded.FirstByteValue == 0x20 && loaded.LastByteValue == 0x81 &&
                     loaded.Glyphs[0x30].Original.Any(b => b != 0) && loaded.Glyphs[0x41].Original.Any(b => b != 0) &&
                     loaded.Glyphs[0x4C].Original.Any(b => b != 0) && loaded.Glyphs[0x61].Original.Any(b => b != 0) &&
-                    loaded.Glyphs[0x80].Original.Any(b => b != 0) && loaded.Glyphs[0x81].Original.Any(b => b != 0);
+                    loaded.Glyphs[0x80].Original.Any(b => b != 0) &&
+                    loaded.Glyphs[0x81].Original.SequenceEqual(FontSlotMetadata.OriginalHudEraseGlyphBytes);
                 Console.WriteLine($"RUNIT packed preview: {(pass ? "PASS" : "FAIL")} A={Convert.ToHexString(loaded.Glyphs[0x41].Original)} L={Convert.ToHexString(loaded.Glyphs[0x4C].Original)}");
                 Environment.ExitCode = pass ? 0 : 1;
             }
@@ -321,6 +324,34 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("RUNIT patched preview: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 4 && args[0].Equals("--patched-hud-regression", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                Directory.CreateDirectory(args[3]);
+                string v5a = Path.Combine(args[3], "RUNVGA_V5_A.EXE"), v5b = Path.Combine(args[3], "RUNVGA_V5_B.EXE");
+                string v2a = Path.Combine(args[3], "RUNIT_V2_A.EXE"), v2b = Path.Combine(args[3], "RUNIT_V2_B.EXE");
+                RunVgaBootstrapService.CreateExtendedCp852(args[1], v5a, GlyphRepository.CreateAllCp852Slots());
+                RunVgaBootstrapService.CreateExtendedCp852(args[1], v5b, GlyphRepository.CreateAllCp852Slots());
+                RunItBootstrapService.CreateExtendedCp852(args[2], v2a, GlyphRepository.CreateAllCp852Slots());
+                RunItBootstrapService.CreateExtendedCp852(args[2], v2b, GlyphRepository.CreateAllCp852Slots());
+
+                byte[] v5Bytes = File.ReadAllBytes(v5a), v5Repeat = File.ReadAllBytes(v5b);
+                byte[] v2Bytes = File.ReadAllBytes(v2a), v2Repeat = File.ReadAllBytes(v2b);
+                byte[] fullCell = FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes;
+                bool v5Pass = v5Bytes.SequenceEqual(v5Repeat) && v5Bytes.AsSpan(
+                    RunVgaBootstrapService.V5FontOffset + FontSlotMetadata.HudEraseGlyph * RunVgaFontService.GlyphBytes,
+                    RunVgaFontService.GlyphBytes).SequenceEqual(fullCell);
+                bool v2Pass = v2Bytes.SequenceEqual(v2Repeat) && v2Bytes.AsSpan(
+                    RunItBootstrapService.OriginalFontOffset + (FontSlotMetadata.HudEraseGlyph - RunVgaFontService.OriginalFirstChar) * RunVgaFontService.GlyphBytes,
+                    RunVgaFontService.GlyphBytes).SequenceEqual(fullCell);
+                if (!v5Pass || !v2Pass) throw new InvalidDataException("Patched full-cell HUD glyph or deterministic rebuild validation failed.");
+                Console.WriteLine($"Patched HUD regression: PASS V5={Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(v5Bytes))} V2={Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(v2Bytes))}");
+                Environment.ExitCode = 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine("Patched HUD regression: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 3 && args[0].Equals("--gamepc-backup-smoke", StringComparison.OrdinalIgnoreCase))
         {
             try
@@ -342,17 +373,28 @@ internal static class Program
         if (Directory.Exists(directory)) throw new IOException($"Isolated test directory already exists: {directory}");
         Directory.CreateDirectory(directory);
         string activeExe = Path.Combine(directory, game == ElviraGame.Elvira1 ? "RUNVGA.EXE" : "RUNIT.EXE");
+        string gamepc = Path.Combine(directory, "GAMEPC");
         string sourceDir = Path.GetDirectoryName(pristineExe) ?? throw new InvalidDataException("Source directory missing.");
         File.Copy(pristineExe, activeExe);
-        File.Copy(Path.Combine(sourceDir, "GAMEPC"), Path.Combine(directory, "GAMEPC"));
+        File.Copy(Path.Combine(sourceDir, "GAMEPC"), gamepc);
         FontLoadResult initial = RunVgaFontService.LoadRunVga(activeExe);
         ProductionDeploymentResult first = GamePatchDeploymentService.Deploy(initial, initial.Glyphs);
-        string originalExeHash = Hash(first.OriginalExecutable), originalGamePcHash = Hash(first.OriginalGamePc);
+        string originalExeHash = Hash(first.OriginalExecutable), activeGamePcHash = Hash(gamepc);
+        if (File.Exists(Path.Combine(directory, "GAMEPCO")))
+            throw new InvalidDataException($"{name}: font-only deployment unexpectedly created GAMEPCO.");
+        if (Hash(gamepc) != activeGamePcHash)
+            throw new InvalidDataException($"{name}: font-only deployment modified GAMEPC.");
+        byte[] deployed = File.ReadAllBytes(first.ActiveExecutable);
+        int hudOffset = game == ElviraGame.Elvira1
+            ? RunVgaBootstrapService.V5FontOffset + FontSlotMetadata.HudEraseGlyph * RunVgaFontService.GlyphBytes
+            : RunItBootstrapService.OriginalFontOffset + (FontSlotMetadata.HudEraseGlyph - RunVgaFontService.OriginalFirstChar) * RunVgaFontService.GlyphBytes;
+        if (!deployed.AsSpan(hudOffset, RunVgaFontService.GlyphBytes).SequenceEqual(RunItBootstrapService.ReservedHudEraseGlyphBytes))
+            throw new InvalidDataException($"{name}: generated executable did not preserve reserved glyph 0x81.");
         FontLoadResult extended = RunVgaFontService.LoadRunVga(first.ActiveExecutable);
         extended.Glyphs[0x41].ReplaceEdited(Convert.FromHexString("A0B0C0D0E0F00000"));
         ProductionDeploymentResult second = GamePatchDeploymentService.Deploy(extended, extended.Glyphs);
-        if (Hash(second.OriginalExecutable) != originalExeHash || Hash(second.OriginalGamePc) != originalGamePcHash)
-            throw new InvalidDataException($"{name}: an O-file changed on the second deployment.");
+        if (Hash(second.OriginalExecutable) != originalExeHash || Hash(gamepc) != activeGamePcHash || File.Exists(Path.Combine(directory, "GAMEPCO")))
+            throw new InvalidDataException($"{name}: repeated font deployment changed an immutable backup or unrelated GAMEPC state.");
         FontLoadResult reopened = RunVgaFontService.LoadRunVga(second.ActiveExecutable);
         if (!reopened.Glyphs[0x41].Original.SequenceEqual(Convert.FromHexString("A0B0C0D0E0F00000")))
             throw new InvalidDataException($"{name}: active glyph did not round-trip.");
@@ -372,13 +414,13 @@ internal static class Program
             if (!loaded.Glyphs[code].IsLoadedFromSource || !loaded.Glyphs[code].Original.SequenceEqual(expected))
                 throw new InvalidDataException($"Elvira I {sourceKind} preview glyph 0x{code:X2} differs from the canonical table.");
         }
-        if (!loaded.Glyphs[0x81].Original.SequenceEqual(RunItBootstrapService.ReservedHudEraseGlyphBytes))
+        if (!loaded.Glyphs[0x81].Original.SequenceEqual(FontSlotMetadata.OriginalHudEraseGlyphBytes))
             throw new InvalidDataException($"Elvira I {sourceKind} preview did not preserve reserved glyph 0x81.");
     }
 
     private static void RunPartialBackupSmoke(string pristineExe, string pristineGamePc, string root)
     {
-        foreach (string state in new[] { "exe_o_only", "gamepc_o_only", "active_missing" })
+        foreach (string state in new[] { "exe_o_only", "gamepc_o_only", "active_missing", "corrupt_exe_o" })
         {
             string dir = Path.Combine(root, state);
             if (Directory.Exists(dir)) throw new IOException($"Isolated partial-state directory already exists: {dir}");
@@ -388,12 +430,16 @@ internal static class Program
             if (state == "exe_o_only") File.Copy(active, Path.Combine(dir, "RUNITO.EXE"));
             if (state == "gamepc_o_only") File.Copy(gamepc, Path.Combine(dir, "GAMEPCO"));
             if (state == "active_missing") { File.Copy(active, Path.Combine(dir, "RUNITO.EXE")); File.Copy(gamepc, Path.Combine(dir, "GAMEPCO")); File.Delete(active); }
-            string before = File.Exists(Path.Combine(dir, "RUNITO.EXE")) ? Hash(Path.Combine(dir, "RUNITO.EXE")) : "";
-            bool rejected = false;
+            if (state == "corrupt_exe_o") File.WriteAllBytes(Path.Combine(dir, "RUNITO.EXE"), [0]);
+            string beforeExeO = File.Exists(Path.Combine(dir, "RUNITO.EXE")) ? Hash(Path.Combine(dir, "RUNITO.EXE")) : "";
+            string beforeGamePcO = File.Exists(Path.Combine(dir, "GAMEPCO")) ? Hash(Path.Combine(dir, "GAMEPCO")) : "";
+            bool shouldBlock = state is "active_missing" or "corrupt_exe_o";
+            bool blocked = false;
             try { GamePatchDeploymentService.Deploy(RunVgaFontService.LoadRunVga(active), GlyphRepository.CreateAllCp852Slots()); }
-            catch (Exception) { rejected = true; }
-            if (!rejected) throw new InvalidDataException($"Partial state {state} was accepted.");
-            if (before.Length != 0 && Hash(Path.Combine(dir, "RUNITO.EXE")) != before) throw new InvalidDataException($"Partial state {state} overwrote RUNITO.EXE.");
+            catch (Exception) { blocked = true; }
+            if (blocked != shouldBlock) throw new InvalidDataException($"Target-aware backup state {state} had unexpected result: blocked={blocked}.");
+            if (beforeExeO.Length != 0 && Hash(Path.Combine(dir, "RUNITO.EXE")) != beforeExeO) throw new InvalidDataException($"State {state} overwrote RUNITO.EXE.");
+            if (beforeGamePcO.Length != 0 && Hash(Path.Combine(dir, "GAMEPCO")) != beforeGamePcO) throw new InvalidDataException($"State {state} overwrote unrelated GAMEPCO.");
         }
     }
 
@@ -413,6 +459,18 @@ internal static class Program
         string oHash = Hash(oFile);
         InstallHarmlessValidatedVgaVariant(active, 0x5A);
         if (Hash(oFile) != oHash) throw new InvalidDataException("Second VGA save overwrote the O-file.");
+
+        string unsafeDir = Path.Combine(root, "unsafe_target_backup");
+        Directory.CreateDirectory(unsafeDir);
+        string unsafeActive = Path.Combine(unsafeDir, Path.GetFileName(sourceVga));
+        File.Copy(sourceVga, unsafeActive);
+        File.WriteAllBytes(SafeDeployer.OriginalBackupPath(unsafeActive), []);
+        string unsafePrepared = unsafeActive + ".prepared";
+        File.Copy(unsafeActive, unsafePrepared);
+        bool blocked = false;
+        try { SafeDeployer.ReplaceActiveWithPrepared(unsafeActive, unsafePrepared); } catch (InvalidDataException) { blocked = true; }
+        finally { if (File.Exists(unsafePrepared)) File.Delete(unsafePrepared); }
+        if (!blocked) throw new InvalidDataException("Unsafe empty VGA target backup was accepted.");
     }
 
     private static void InstallHarmlessValidatedVgaVariant(string active, byte marker)

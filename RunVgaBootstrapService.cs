@@ -211,9 +211,8 @@ internal static class RunVgaBootstrapService
         {
             GlyphModel glyph = glyphs.FirstOrDefault(g => g.ByteValue == code)
                 ?? throw new InvalidDataException($"Missing CP852 glyph slot 0x{code:X2}.");
-            // The verified Elvira I HUD uses 0x81 as an erase/blank pass. The
-            // baseline copy above contains the canonical engine bitmap, so it
-            // must not be replaced by an imported or manually altered glyph.
+            // 0x81 is an engine erase pass and must not be replaced by imported
+            // or manually altered glyph data.
             if (FontSlotMetadata.GetReservedSlots(ElviraGame.Elvira1, RunVgaFontLayout.ExtendedCp852V5).Contains(code))
                 continue;
             // Unedited, unloaded slots are intentionally left as the zero/default bank.
@@ -223,6 +222,8 @@ internal static class RunVgaBootstrapService
             if (bitmap.Length != 8) throw new InvalidDataException($"Glyph 0x{code:X2} is not an 8-row bitmap.");
             Array.Copy(bitmap, 0, table, code * 8, 8);
         }
+        Array.Copy(FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes, 0, table,
+            FontSlotMetadata.HudEraseGlyph * 8, RunVgaFontService.GlyphBytes);
         return (table, usedEdited);
     }
 

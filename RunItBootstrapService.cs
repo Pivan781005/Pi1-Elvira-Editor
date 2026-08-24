@@ -33,9 +33,9 @@ internal static class RunItBootstrapService
     internal const string CanonicalSha256 = "7FDE00D641D3BDE82B1732DAD59D21CE19F48573CBEFAD6C64C11754660EB415";
     internal const string CanonicalModuleSha256 = "65413F0A3D99FB20AF1C1B4F2E6A5BDD99768EAA6C6A833C215E3F432F9F4FF4";
     internal const string OriginalFontSha256 = "68C1F23840028438CD9975C5CD79F1861AAF7A009B6F5C65D95CE0B243DDB893";
-    // This is an engine-reserved LOW-table mask, not CP852 ü. The HUD renders it with BL=0
-    // immediately before redrawing dynamic values, so it must never be replaced by font import.
-    internal static readonly byte[] ReservedHudEraseGlyphBytes = Convert.FromHexString("00FCFCFCFCFCFC00");
+    // This is an engine-reserved LOW-table mask, not CP852 ü. Patched V2 outputs use the
+    // full 6×8 renderer-cell mask so shifted HUD glyphs cannot leave top/bottom ghost pixels.
+    internal static readonly byte[] ReservedHudEraseGlyphBytes = FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes;
 
     // Original renderer lookup / loop prefix at physical 0x7B89.
     internal static readonly byte[] OriginalRenderer = Convert.FromHexString("B60080EA20D1E2D1E2D1E2BECA2A03F28E061206");
@@ -89,7 +89,7 @@ internal static class RunItBootstrapService
 
         // LOW direct byte mapping: character 0x20..0x81 -> original native 98x8 table.
         Array.Copy(fontImage, 0x20 * 8, result, OriginalFontOffset, OriginalFontGlyphCount * 8);
-        // Preserve the engine erase mask even if a caller supplies a malformed 256-slot image.
+        // Preserve the patched full-cell erase mask even if a caller supplies a malformed image.
         Array.Copy(ReservedHudEraseGlyphBytes, 0, result, OriginalFontOffset + (ReservedHudEraseGlyph - 0x20) * 8, ReservedHudEraseGlyphBytes.Length);
         // HIGH direct byte mapping: character 0x82..0xFF -> initialized initial-stack segment.
         Array.Copy(fontImage, HighFirstByte * 8, result, HighFontOffset, HighFontSize);
