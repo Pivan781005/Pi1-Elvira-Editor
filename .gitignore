@@ -22,3 +22,8 @@ OUTPUT/
 artifacts/
 temp/
 tmp/
+
+# Generated release packages and publish output (never source-controlled)
+publish/
+*.zip
+*.exe

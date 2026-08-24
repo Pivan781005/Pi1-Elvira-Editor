@@ -62,6 +62,25 @@ internal static class GamePcTextEditor
         return list;
     }
 
+    public static void ValidateText(string text, Encoding enc)
+    {
+        if (text.IndexOf('\0') >= 0)
+            throw new InvalidOperationException(UiText.Get("EmbeddedNulError"));
+
+        Encoding strict = Encoding.GetEncoding(enc.CodePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
+        try
+        {
+            byte[] bytes = strict.GetBytes(text);
+            string roundTrip = strict.GetString(bytes);
+            if (!string.Equals(text, roundTrip, StringComparison.Ordinal))
+                throw new InvalidOperationException(UiText.Get("EncodingRoundTripError"));
+        }
+        catch (EncoderFallbackException)
+        {
+            throw new InvalidOperationException(UiText.Get("EncodingUnsupportedChar"));
+        }
+    }
+
     public static void SaveInPlace(
         string gamePcPath,
         IReadOnlyDictionary<int, string> edited,
@@ -75,6 +94,7 @@ internal static class GamePcTextEditor
             var entry = entries.FirstOrDefault(e => e.Index == kvp.Key)
                 ?? throw new InvalidOperationException($"Unknown string index {kvp.Key}.");
 
+            ValidateText(kvp.Value, enc);
             byte[] newBytes = enc.GetBytes(kvp.Value);
             if (newBytes.Length > entry.ByteLength)
             {
@@ -94,19 +114,20 @@ internal static class GamePcTextEditor
                 data[terminator] = 0;
         }
 
-        Backup(gamePcPath);
-        File.WriteAllBytes(gamePcPath, data);
-    }
+        string temp = gamePcPath + ".pi1_tmp";
+        try
+        {
+            File.WriteAllBytes(temp, data);
+            var verify = LoadEntries(temp);
+            if (verify.Count != entries.Count)
+                throw new InvalidOperationException(string.Format(UiText.Get("StringCountChanged"), entries.Count, verify.Count));
 
-    private static void Backup(string path)
-    {
-        string original = path + ".bak_original";
-        string previous = path + ".bak_previous";
-
-        if (!File.Exists(original))
-            File.Copy(path, original, overwrite: false);
-
-        File.Copy(path, previous, overwrite: true);
+            SafeDeployer.ReplaceActiveWithPrepared(gamePcPath, temp);
+        }
+        finally
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+        }
     }
 
     public static Encoding GetEncoding(string name)

@@ -22,19 +22,37 @@ internal sealed class MainForm : Form
     private readonly Label lblMeta = new();
     private readonly Label lblStatus = new();
     private readonly Button btnAbout = new();
+    private readonly Button btnSpriteEditor = new();
     private readonly Button btnTextEditor = new();
+    private readonly Button btnFontEditor = new();
     private readonly ComboBox cmbUiLanguage = new();
+    private readonly ComboBox cmbGameProfile = new();
+    private readonly Label lblGameProfile = new();
+    private readonly Label lblDetectedGame = new();
     private readonly TabControl tabs = new();
     private readonly TabPage tabVga = new();
     private readonly TabPage tabText = new();
+    private readonly TabPage tabFont = new();
+    private FontEditorForm? _embeddedFontEditor;
 
     private readonly DataGridView textGrid = new();
     private readonly TextBox txtSearch = new();
     private readonly ComboBox cmbTextEncoding = new();
     private readonly Button btnReloadTexts = new();
     private readonly Button btnSaveTexts = new();
-    private readonly Button btnBackToVga = new();
     private readonly Label lblTextStatus = new();
+    private readonly ComboBox cmbTextContext = new();
+    private readonly Label lblTextValidation = new();
+    private readonly CheckBox chkOnlyTextRisks = new();
+    private readonly CheckBox chkIgnoreTextWarning = new();
+    private bool _updatingIgnoreCheck;
+    private TextDiagnosticStore? _textDiagnosticStore;
+    private readonly Label lblSearchCaption = new();
+    private readonly Label lblEncodingCaption = new();
+    private readonly Label lblTextContextCaption = new();
+    private readonly ToolTip textToolTip = new();
+    private bool _refreshingTextGrid;
+    private bool _textGridRefreshQueued;
 
     private readonly List<GamePcStringEntry> _gamePcEntries = new();
     private readonly Dictionary<int, string> _gamePcEdits = new();
@@ -52,6 +70,7 @@ internal sealed class MainForm : Form
     private readonly Dictionary<int, string> _edits = new();
     private readonly List<ElviraPaletteBank> _paletteBanks = new();
     private Color[] _activePalette = ElviraPaletteLoader.DiagnosticPalette();
+    private ElviraGameProfile _detectedProfile = ElviraGameProfile.Unknown;
 
     public MainForm()
     {
@@ -59,14 +78,19 @@ internal sealed class MainForm : Form
         Width = 1450;
         Height = 900;
         StartPosition = FormStartPosition.CenterScreen;
+        WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1100, 700);
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
         UiText.SetLanguage(UiLanguage.English);
         BuildUi();
+        cmbGameProfile.SelectedIndex = 0;
 
         txtGameDir.Text = @"C:\Games\GOG\Elvira";
         Shown += (_, _) =>
         {
+            // The editor is intended as a workspace application; always start maximized.
+            WindowState = FormWindowState.Maximized;
             UiText.SetLanguage(UiLanguage.English);
             if (cmbUiLanguage.Items.Count > 1)
                 cmbUiLanguage.SelectedIndex = 1;
@@ -115,18 +139,20 @@ LoadGamePcTexts();
         var topText = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 42,
+            Height = 104,
             Padding = new Padding(6)
         };
 
-        var lblSearch = new Label { Text = UiText.Get("Search"), AutoSize = true };
-        lblSearch.SetBounds(8, 12, 55, 20);
+        lblSearchCaption.Text = UiText.Get("Search");
+        lblSearchCaption.AutoSize = true;
+        lblSearchCaption.SetBounds(8, 12, 55, 20);
 
         txtSearch.SetBounds(65, 7, 260, 26);
         txtSearch.TextChanged += (_, _) => RefreshTextGrid();
 
-        var lblEnc = new Label { Text = UiText.Get("Encoding"), AutoSize = true };
-        lblEnc.SetBounds(340, 12, 75, 20);
+        lblEncodingCaption.Text = UiText.Get("Encoding");
+        lblEncodingCaption.AutoSize = true;
+        lblEncodingCaption.SetBounds(340, 12, 75, 20);
 
         cmbTextEncoding.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbTextEncoding.Items.AddRange(new object[] { "CP852", "Windows-1250", "Latin1/Raw" });
@@ -135,20 +161,54 @@ LoadGamePcTexts();
         cmbTextEncoding.SelectedIndexChanged += (_, _) => RefreshTextGrid();
 
         btnReloadTexts.Text = UiText.Get("ReloadTexts");
-        btnReloadTexts.SetBounds(695, 6, 130, 28);
+        btnReloadTexts.SetBounds(565, 6, 130, 28);
         btnReloadTexts.Click += (_, _) => LoadGamePcTexts();
 
-        btnBackToVga.Text = UiText.Get("BackToVga");
-        btnBackToVga.SetBounds(565, 6, 120, 28);
-        btnBackToVga.Click += (_, _) => tabs.SelectedTab = tabVga;
-
         btnSaveTexts.Text = UiText.Get("SaveTexts");
-        btnSaveTexts.SetBounds(835, 6, 150, 28);
+        btnSaveTexts.SetBounds(705, 6, 150, 28);
         btnSaveTexts.Click += (_, _) => SaveGamePcTexts();
+
+        lblTextContextCaption.Text = UiText.Get("TextContext");
+        chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
+        chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
+        lblTextContextCaption.AutoSize = true;
+        lblTextContextCaption.SetBounds(8, 46, 90, 20);
+
+        cmbTextContext.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbTextContext.Items.AddRange(new object[] { UiText.Get("ContextAuto"), UiText.Get("ContextGeneric"), UiText.Get("ContextNpc") });
+        cmbTextContext.SelectedIndex = 0;
+        cmbTextContext.SetBounds(100, 41, 210, 26);
+        cmbTextContext.SelectedIndexChanged += (_, _) =>
+        {
+            RefreshTextGrid();
+            UpdateTextValidation();
+            UpdateTextStatusSummary();
+        };
+
+        lblTextValidation.AutoSize = false;
+        lblTextValidation.SetBounds(325, 44, 900, 22);
+        lblTextValidation.TextAlign = ContentAlignment.MiddleLeft;
+
+        chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
+        chkOnlyTextRisks.AutoSize = true;
+        chkOnlyTextRisks.SetBounds(8, 76, 210, 22);
+        chkOnlyTextRisks.CheckedChanged += (_, _) => RefreshTextGrid();
+
+        chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
+        chkIgnoreTextWarning.AutoSize = true;
+        chkIgnoreTextWarning.SetBounds(235, 76, 250, 22);
+        chkIgnoreTextWarning.CheckedChanged += (_, _) =>
+        {
+            if (_updatingIgnoreCheck || _refreshingTextGrid || ActiveGameProfile != ElviraGameProfile.Elvira1) return;
+            if (textGrid.CurrentRow?.Tag is not GamePcStringEntry selectedEntry) return;
+            _textDiagnosticStore?.SetIgnored(selectedEntry.Index, chkIgnoreTextWarning.Checked);
+            QueueTextGridRefresh(selectedEntry.Index);
+        };
 
         topText.Controls.AddRange(new Control[]
         {
-            lblSearch, txtSearch, lblEnc, cmbTextEncoding, btnBackToVga, btnReloadTexts, btnSaveTexts
+            lblSearchCaption, txtSearch, lblEncodingCaption, cmbTextEncoding, btnReloadTexts, btnSaveTexts,
+            lblTextContextCaption, cmbTextContext, lblTextValidation, chkOnlyTextRisks, chkIgnoreTextWarning
         });
 
         textGrid.Dock = DockStyle.Fill;
@@ -157,22 +217,55 @@ LoadGamePcTexts();
         textGrid.RowHeadersVisible = false;
         textGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         textGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        textGrid.ShowCellToolTips = true;
         textGrid.Columns.Add("Index", UiText.Get("TextIndex"));
         textGrid.Columns.Add("Offset", UiText.Get("TextOffset"));
         textGrid.Columns.Add("Length", UiText.Get("Length"));
+        textGrid.Columns.Add("Bytes", UiText.Get("Bytes"));
+        textGrid.Columns.Add("DosLimit", UiText.Get("DosLimit"));
         textGrid.Columns.Add("Text", UiText.Get("Text"));
         textGrid.Columns["Index"].Width = 70;
         textGrid.Columns["Offset"].Width = 110;
         textGrid.Columns["Length"].Width = 80;
-        textGrid.Columns["Text"].Width = 800;
+        textGrid.Columns["Bytes"].Width = 75;
+        textGrid.Columns["DosLimit"].Width = 110;
+        textGrid.Columns["Text"].MinimumWidth = 500;
+        textGrid.Columns["Text"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
         textGrid.CellEndEdit += (_, e) =>
         {
-            if (e.RowIndex < 0) return;
+            if (_refreshingTextGrid || e.RowIndex < 0) return;
             var row = textGrid.Rows[e.RowIndex];
             if (row.Tag is not GamePcStringEntry entry) return;
             string value = row.Cells["Text"].Value?.ToString() ?? "";
             _gamePcEdits[entry.Index] = value;
             row.DefaultCellStyle.BackColor = Color.LightGoldenrodYellow;
+
+            // DataGridView is still finishing its current-cell transition while
+            // CellEndEdit is raised. Rebuilding rows synchronously here can
+            // re-enter SetCurrentCellAddressCore and crash WinForms. Queue the
+            // rebuild until the current event has completely unwound.
+            QueueTextGridRefresh(entry.Index);
+        };
+        textGrid.SelectionChanged += (_, _) =>
+        {
+            if (_refreshingTextGrid) return;
+            UpdateTextValidation();
+        };
+        textGrid.CurrentCellChanged += (_, _) =>
+        {
+            if (_refreshingTextGrid) return;
+            UpdateTextValidation();
+        };
+        textGrid.CellToolTipTextNeeded += (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            if (textGrid.Columns[e.ColumnIndex].Name != "Text" && textGrid.Columns[e.ColumnIndex].Name != "DosLimit") return;
+            var row = textGrid.Rows[e.RowIndex];
+            string value = row.Cells["Text"].Value?.ToString() ?? string.Empty;
+            if (row.Tag is GamePcStringEntry entry)
+                e.ToolTipText = BuildDialogueTooltip(entry, value);
+            else
+                e.ToolTipText = value;
         };
 
         lblTextStatus.Dock = DockStyle.Bottom;
@@ -202,6 +295,7 @@ LoadGamePcTexts();
         {
             _gamePcEntries.Clear();
             _gamePcEdits.Clear();
+            _textDiagnosticStore = TextDiagnosticStore.Load(txtGameDir.Text.Trim());
 
             if (!File.Exists(GamePcPath))
             {
@@ -212,7 +306,9 @@ LoadGamePcTexts();
 
             _gamePcEntries.AddRange(GamePcTextEditor.LoadEntries(GamePcPath));
             RefreshTextGrid();
-            lblTextStatus.Text = $"GAMEPC: {_gamePcEntries.Count} strings";
+            UpdateTextStatusSummary();
+            _detectedProfile = GameProfileDetector.Detect(txtGameDir.Text.Trim(), cmbZone.Items.Count, _gamePcEntries.Count);
+            UpdateGameProfileDisplay();
         }
         catch (Exception ex)
         {
@@ -222,36 +318,143 @@ LoadGamePcTexts();
 
     private void RefreshTextGrid()
     {
-        if (_gamePcEntries.Count == 0)
+        if (_refreshingTextGrid || _gamePcEntries.Count == 0)
             return;
 
-        var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
-        string filter = txtSearch.Text.Trim();
-
-        textGrid.Rows.Clear();
-
-        foreach (var entry in _gamePcEntries)
+        int selectedEntryIndex = textGrid.CurrentRow?.Tag is GamePcStringEntry selected
+            ? selected.Index
+            : -1;
+        int firstDisplayedRow = -1;
+        try
         {
-            string value = _gamePcEdits.TryGetValue(entry.Index, out var edited)
-                ? edited
-                : entry.Decode(enc);
-
-            if (!string.IsNullOrEmpty(filter) &&
-                value.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) < 0 &&
-                entry.Index.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
-                continue;
-
-            int rowIndex = textGrid.Rows.Add(
-                entry.Index,
-                $"0x{entry.Offset:X}",
-                entry.ByteLength,
-                value);
-
-            textGrid.Rows[rowIndex].Tag = entry;
-
-            if (_gamePcEdits.ContainsKey(entry.Index))
-                textGrid.Rows[rowIndex].DefaultCellStyle.BackColor = Color.LightGoldenrodYellow;
+            if (textGrid.Rows.Count > 0)
+                firstDisplayedRow = textGrid.FirstDisplayedScrollingRowIndex;
         }
+        catch
+        {
+            firstDisplayedRow = -1;
+        }
+
+        try
+        {
+            _refreshingTextGrid = true;
+            textGrid.SuspendLayout();
+
+            var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
+            string filter = txtSearch.Text.Trim();
+
+            textGrid.Rows.Clear();
+
+            foreach (var entry in _gamePcEntries)
+            {
+                string value = _gamePcEdits.TryGetValue(entry.Index, out var edited)
+                    ? edited
+                    : entry.Decode(enc);
+
+                if (!string.IsNullOrEmpty(filter) &&
+                    value.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) < 0 &&
+                    entry.Index.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                int bytes = enc.GetByteCount(value);
+                string dosStatus = string.Empty;
+                Color? dosColor = null;
+                Color? rowColor = null;
+                TextDiagnosticResult? diagnostic = null;
+                var profile = GameProfileInfo.For(ActiveGameProfile);
+
+                if (ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0)
+                {
+                    diagnostic = Elvira1TextMetadata.Evaluate(entry.Index, value, enc, _textDiagnosticStore?.IsIgnored(entry.Index) == true);
+                    switch (diagnostic.Kind)
+                    {
+                        case TextDiagnosticKind.ConfirmedRisk:
+                            dosStatus = $"✖ +{diagnostic.OverBy}"; dosColor = Color.DarkRed; rowColor = Color.MistyRose; break;
+                        case TextDiagnosticKind.PossibleRisk:
+                            dosStatus = $"⚠ +{diagnostic.OverBy}"; dosColor = Color.DarkOrange; rowColor = Color.LemonChiffon; break;
+                        case TextDiagnosticKind.ConfirmedSafe:
+                            dosStatus = UiText.Get("SafeStatus"); dosColor = Color.DarkGreen; rowColor = Color.Honeydew; break;
+                        case TextDiagnosticKind.Ignored:
+                            dosStatus = UiText.Get("IgnoredStatus"); dosColor = Color.DimGray; rowColor = Color.Gainsboro; break;
+                    }
+                }
+                else if (cmbTextContext.SelectedIndex == 2)
+                {
+                    if (profile.InteractiveDialogueByteLimit is int limit)
+                    {
+                        int over = Math.Max(0, bytes - limit);
+                        dosStatus = over == 0 ? "OK" : $"✖ +{over}";
+                        dosColor = over == 0 ? Color.DarkGreen : Color.DarkRed;
+                        if (over > 0) rowColor = Color.MistyRose;
+                    }
+                    else
+                    {
+                        dosStatus = "N/A"; dosColor = Color.DimGray;
+                    }
+                }
+
+                if (chkOnlyTextRisks.Checked && !(diagnostic?.IsRisk == true || (cmbTextContext.SelectedIndex == 2 && bytes > (profile.InteractiveDialogueByteLimit ?? int.MaxValue))))
+                    continue;
+
+                int rowIndex = textGrid.Rows.Add(
+                    entry.Index,
+                    $"0x{entry.Offset:X}",
+                    entry.ByteLength,
+                    bytes,
+                    dosStatus,
+                    value);
+
+                var row = textGrid.Rows[rowIndex];
+                row.Tag = entry;
+                if (dosColor.HasValue)
+                {
+                    row.Cells["DosLimit"].Style.ForeColor = dosColor.Value;
+                    if (dosStatus.StartsWith("⚠"))
+                        row.Cells["DosLimit"].Style.Font = new Font(textGrid.Font, FontStyle.Bold);
+                }
+
+                if (rowColor.HasValue)
+                    row.DefaultCellStyle.BackColor = rowColor.Value;
+                else if (_gamePcEdits.ContainsKey(entry.Index))
+                    row.DefaultCellStyle.BackColor = Color.LightGoldenrodYellow;
+            }
+
+            // Restore selection only after the rebuild. Event handlers are
+            // suppressed by _refreshingTextGrid while this happens.
+            if (selectedEntryIndex >= 0)
+                SelectTextEntry(selectedEntryIndex);
+
+            if (firstDisplayedRow >= 0 && textGrid.Rows.Count > 0)
+            {
+                int target = Math.Min(firstDisplayedRow, textGrid.Rows.Count - 1);
+                try { textGrid.FirstDisplayedScrollingRowIndex = target; } catch { }
+            }
+        }
+        finally
+        {
+            textGrid.ResumeLayout();
+            _refreshingTextGrid = false;
+        }
+
+        UpdateTextValidation();
+    }
+
+    private void QueueTextGridRefresh(int selectedEntryIndex)
+    {
+        if (_textGridRefreshQueued || IsDisposed || Disposing)
+            return;
+
+        _textGridRefreshQueued = true;
+        BeginInvoke(new Action(() =>
+        {
+            _textGridRefreshQueued = false;
+            if (IsDisposed || Disposing) return;
+
+            RefreshTextGrid();
+            SelectTextEntry(selectedEntryIndex);
+            UpdateTextValidation();
+            UpdateTextStatusSummary();
+        }));
     }
 
     private void SaveGamePcTexts()
@@ -275,6 +478,7 @@ LoadGamePcTexts();
         Text = UiText.Get("AppTitle");
         tabVga.Text = UiText.Get("VgaTab");
         tabText.Text = UiText.Get("TextTab");
+        tabFont.Text = UiText.Get("FontEditor");
         btnBrowseGame.Text = UiText.Get("Browse");
         btnReload.Text = UiText.Get("Refresh");
         chkZoom.Text = UiText.Get("PixelZoom");
@@ -283,6 +487,20 @@ LoadGamePcTexts();
         btnRestore.Text = UiText.Get("RestoreOriginal");
         btnReloadTexts.Text = UiText.Get("ReloadTexts");
         btnSaveTexts.Text = UiText.Get("SaveTexts");
+        lblSearchCaption.Text = UiText.Get("Search");
+        lblEncodingCaption.Text = UiText.Get("Encoding");
+        lblTextContextCaption.Text = UiText.Get("TextContext");
+        chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
+        chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
+        int contextIndex = Math.Max(0, cmbTextContext.SelectedIndex);
+        cmbTextContext.Items.Clear();
+        cmbTextContext.Items.AddRange(new object[] { UiText.Get("ContextAuto"), UiText.Get("ContextGeneric"), UiText.Get("ContextNpc") });
+        cmbTextContext.SelectedIndex = Math.Min(contextIndex, cmbTextContext.Items.Count - 1);
+
+        int gameProfileIndex = Math.Max(0, cmbGameProfile.SelectedIndex);
+        cmbGameProfile.Items.Clear();
+        cmbGameProfile.Items.AddRange(new object[] { UiText.Get("AutoDetect"), "Elvira I", "Elvira II" });
+        cmbGameProfile.SelectedIndex = Math.Min(gameProfileIndex, cmbGameProfile.Items.Count - 1);
 
         if (grid.Columns.Count >= 6)
         {
@@ -299,19 +517,29 @@ LoadGamePcTexts();
             textGrid.Columns["Index"].HeaderText = UiText.Get("TextIndex");
             textGrid.Columns["Offset"].HeaderText = UiText.Get("TextOffset");
             textGrid.Columns["Length"].HeaderText = UiText.Get("Length");
+            if (textGrid.Columns.Contains("Bytes")) textGrid.Columns["Bytes"].HeaderText = UiText.Get("Bytes");
+            if (textGrid.Columns.Contains("DosLimit")) textGrid.Columns["DosLimit"].HeaderText = UiText.Get("DosLimit");
             textGrid.Columns["Text"].HeaderText = UiText.Get("Text");
         }
         if (cmbZone.Items.Count > 0)
             lblStatus.Text = string.Format(UiText.Get("ZonesFound"), cmbZone.Items.Count);
+        if (_gamePcEntries.Count > 0)
+            UpdateTextStatusSummary();
         btnAbout.Text = UiText.Get("About");
+        btnSpriteEditor.Text = UiText.Get("SpriteEditor");
         btnClearEdit.Text = UiText.Get("CancelEdit");
         btnDeploy.Text = UiText.Get("ApplyGame");
         lblPaletteCaption.Text = UiText.Get("Palette");
         lblLanguageCaption.Text = UiText.Get("Language");
         RefreshPaletteDisplayLanguage();
         btnTextEditor.Text = UiText.Get("OpenTextEditor");
+        btnFontEditor.Text = UiText.Get("FontEditor");
+        lblGameProfile.Text = UiText.Get("Game");
         btnReloadPreview.Text = UiText.Get("ReloadPreview");
-        btnBackToVga.Text = UiText.Get("BackToVga");
+        if (_embeddedFontEditor is not null && !_embeddedFontEditor.IsDisposed)
+            _embeddedFontEditor.ApplyLanguage();
+        UpdateGameProfileDisplay();
+        UpdateModeButtons();
     }
 
     private void ApplySafeHalfSplit()
@@ -376,10 +604,23 @@ LoadGamePcTexts();
     {
         var top = new Panel { Dock = DockStyle.Top, Height = 78, Padding = new Padding(8) };
 
-        txtGameDir.SetBounds(8, 8, 650, 26);
+        txtGameDir.SetBounds(8, 8, 520, 26);
         btnBrowseGame.Text = UiText.Get("Browse");
-        btnBrowseGame.SetBounds(665, 7, 130, 28);
+        btnBrowseGame.SetBounds(535, 7, 130, 28);
         btnBrowseGame.Click += (_, _) => BrowseGame();
+
+        lblGameProfile.Text = UiText.Get("Game");
+        lblGameProfile.AutoSize = true;
+        lblGameProfile.SetBounds(680, 12, 45, 20);
+
+        cmbGameProfile.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbGameProfile.SetBounds(725, 7, 190, 28);
+        cmbGameProfile.Items.AddRange(new object[] { UiText.Get("AutoDetect"), "Elvira I", "Elvira II" });
+        cmbGameProfile.SelectedIndexChanged += (_, _) => UpdateGameProfileDisplay();
+
+        lblDetectedGame.AutoSize = true;
+        lblDetectedGame.Font = new Font(Font, FontStyle.Bold);
+        lblDetectedGame.SetBounds(925, 12, 470, 20);
 
         var zoneLabel = new Label { Text = "xNN2.VGA:", AutoSize = true };
         zoneLabel.SetBounds(8, 46, 70, 20);
@@ -424,10 +665,36 @@ LoadGamePcTexts();
 
         chkZoom.Text = UiText.Get("PixelZoom");
         chkZoom.Checked = true;
-        chkZoom.SetBounds(775, 43, 150, 24);
+        chkZoom.SetBounds(775, 43, 145, 24);
         chkZoom.CheckedChanged += (_, _) => ApplyPreviewZoom();
+
+        // Permanent mode navigation. These buttons stay in the same place in every mode.
+        ConfigureModeButton(btnSpriteEditor);
+        ConfigureModeButton(btnTextEditor);
+        ConfigureModeButton(btnFontEditor);
+
+        btnSpriteEditor.Text = UiText.Get("SpriteEditor");
+        btnSpriteEditor.SetBounds(925, 41, 115, 28);
+        btnSpriteEditor.Click += (_, _) => SwitchMode(tabVga);
+
+        btnTextEditor.Text = UiText.Get("OpenTextEditor");
+        btnTextEditor.SetBounds(1045, 41, 110, 28);
+        btnTextEditor.Click += (_, _) =>
+        {
+            LoadGamePcTexts();
+            SwitchMode(tabText);
+        };
+
+        btnFontEditor.Text = UiText.Get("FontEditor");
+        btnFontEditor.SetBounds(1160, 41, 105, 28);
+        btnFontEditor.Click += (_, _) =>
+        {
+            EnsureEmbeddedFontEditor();
+            SwitchMode(tabFont);
+        };
+
         btnAbout.Text = UiText.Get("About");
-        btnAbout.SetBounds(955, 41, 90, 28);
+        btnAbout.SetBounds(1270, 41, 90, 28);
         btnAbout.Click += (_, _) =>
             MessageBox.Show(
                 UiText.Get("AboutText"),
@@ -435,19 +702,12 @@ LoadGamePcTexts();
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
 
-        btnTextEditor.Text = UiText.Get("OpenTextEditor");
-        btnTextEditor.SetBounds(1055, 41, 110, 28);
-        btnTextEditor.Click += (_, _) =>
-        {
-            tabs.SelectedTab = tabText;
-            LoadGamePcTexts();
-        };
+        lblStatus.Dock = DockStyle.Bottom;
+        lblStatus.Height = 28;
+        lblStatus.Padding = new Padding(6, 6, 0, 0);
+        lblStatus.TextAlign = ContentAlignment.MiddleLeft;
 
-
-        lblStatus.AutoSize = true;
-        lblStatus.SetBounds(1180, 46, 240, 20);
-
-        top.Controls.AddRange(new Control[] { txtGameDir, btnBrowseGame, zoneLabel, cmbZone, btnReload, lblPaletteCaption, cmbPalette, lblLanguageCaption, cmbUiLanguage, chkZoom, btnAbout, btnTextEditor, lblStatus });
+        top.Controls.AddRange(new Control[] { txtGameDir, btnBrowseGame, lblGameProfile, cmbGameProfile, lblDetectedGame, zoneLabel, cmbZone, btnReload, lblPaletteCaption, cmbPalette, lblLanguageCaption, cmbUiLanguage, chkZoom, btnSpriteEditor, btnTextEditor, btnFontEditor, btnAbout });
         Controls.Add(top);
         top.BringToFront();
 
@@ -458,13 +718,19 @@ LoadGamePcTexts();
         mainSplit.Panel2MinSize = 0;
         tabVga.Text = UiText.Get("VgaTab");
         tabVga.Controls.Add(mainSplit);
+        tabVga.Controls.Add(lblStatus);
+        lblStatus.BringToFront();
 
         tabText.Text = UiText.Get("TextTab");
         BuildTextEditorUi();
 
+        tabFont.Text = UiText.Get("FontEditor");
+
         tabs.Dock = DockStyle.Fill;
         tabs.TabPages.Add(tabVga);
         tabs.TabPages.Add(tabText);
+        tabs.TabPages.Add(tabFont);
+        tabs.SelectedIndexChanged += (_, _) => UpdateModeButtons();
         Controls.Add(tabs);
 
         grid.Dock = DockStyle.Fill;
@@ -548,7 +814,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
             Padding = new Padding(4)
         };
 
-        lblPreviewZoom.Text = "Zoom:";
+        lblPreviewZoom.Text = UiText.Get("Zoom");
         lblPreviewZoom.AutoSize = true;
         lblPreviewZoom.SetBounds(4, 9, 42, 20);
 
@@ -583,11 +849,11 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
             Padding = new Padding(4)
         };
 
-        btnReplace.Text = "Nahradiť PNG...";
-        btnClearEdit.Text = "Zrušiť edit";
-        btnExport.Text = "Export PNG...";
-        btnDeploy.Text = "APLIKOVAŤ DO HRY";
-        btnRestore.Text = "Obnoviť originál";
+        btnReplace.Text = UiText.Get("ReplacePng");
+        btnClearEdit.Text = UiText.Get("CancelEdit");
+        btnExport.Text = UiText.Get("ExportPng");
+        btnDeploy.Text = UiText.Get("ApplyGame");
+        btnRestore.Text = UiText.Get("RestoreOriginal");
 
         btnReplace.Width = 120;
         btnClearEdit.Width = 100;
@@ -614,6 +880,250 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         right.Controls.Add(buttons);
     }
 
+    private static void ConfigureModeButton(Button button)
+    {
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderSize = 1;
+        button.UseVisualStyleBackColor = false;
+    }
+
+    private void SwitchMode(TabPage target)
+    {
+        tabs.SelectedTab = target;
+        UpdateModeButtons();
+    }
+
+    private void UpdateModeButtons()
+    {
+        SetModeButtonState(btnSpriteEditor, tabs.SelectedTab == tabVga);
+        SetModeButtonState(btnTextEditor, tabs.SelectedTab == tabText);
+        SetModeButtonState(btnFontEditor, tabs.SelectedTab == tabFont);
+    }
+
+    private static void SetModeButtonState(Button button, bool active)
+    {
+        button.BackColor = active ? SystemColors.Highlight : SystemColors.Control;
+        button.ForeColor = active ? SystemColors.HighlightText : SystemColors.ControlText;
+        button.FlatAppearance.BorderColor = active ? SystemColors.Highlight : SystemColors.ControlDark;
+        button.Font = new Font(button.Font, active ? FontStyle.Bold : FontStyle.Regular);
+    }
+
+    private void EnsureEmbeddedFontEditor()
+    {
+        if (_embeddedFontEditor is not null && !_embeddedFontEditor.IsDisposed)
+            return;
+
+        _embeddedFontEditor = new FontEditorForm(txtGameDir.Text)
+        {
+            TopLevel = false,
+            FormBorderStyle = FormBorderStyle.None,
+            Dock = DockStyle.Fill,
+            MinimumSize = Size.Empty,
+            StartPosition = FormStartPosition.Manual
+        };
+        _embeddedFontEditor.GameExecutableOpened += SynchronizeGameContextFromExecutable;
+
+        // The application's permanent navigation/header overlays the first ~78 px of
+        // the hidden TabControl page area.  VGA/Text already compensate for this.
+        // Host the embedded font editor below the same header so its own Game EXE /
+        // Apply / Import / Export toolbar remains fully visible.
+        var fontHost = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(0, 78, 0, 0)
+        };
+        fontHost.Controls.Add(_embeddedFontEditor);
+
+        tabFont.Controls.Clear();
+        tabFont.Controls.Add(fontHost);
+        _embeddedFontEditor.Show();
+    }
+
+    private void SynchronizeGameContextFromExecutable(string executablePath, ElviraGame game)
+    {
+        string? directory = Path.GetDirectoryName(Path.GetFullPath(executablePath));
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
+        txtGameDir.Text = directory;
+        _detectedProfile = game == ElviraGame.Elvira2 ? ElviraGameProfile.Elvira2 : ElviraGameProfile.Elvira1;
+        // An EXE signature is stronger than a prior manual/folder heuristic, so return the UI to detected mode.
+        cmbGameProfile.SelectedIndex = 0;
+        ScanGameFolder();
+        LoadGamePcTexts();
+        UpdateGameProfileDisplay();
+    }
+
+    private ElviraGameProfile ActiveGameProfile
+    {
+        get
+        {
+            return cmbGameProfile.SelectedIndex switch
+            {
+                1 => ElviraGameProfile.Elvira1,
+                2 => ElviraGameProfile.Elvira2,
+                _ => _detectedProfile
+            };
+        }
+    }
+
+    private void UpdateGameProfileDisplay()
+    {
+        var active = ActiveGameProfile;
+        var info = GameProfileInfo.For(active);
+        string mode = cmbGameProfile.SelectedIndex == 0 ? UiText.Get("Detected") : UiText.Get("Selected");
+        lblDetectedGame.Text = $"{mode}: {info.DisplayName}";
+        lblDetectedGame.ForeColor = active == ElviraGameProfile.Unknown ? Color.DarkOrange : SystemColors.ControlText;
+        UpdateTextValidation();
+    }
+
+    private void UpdateTextValidation()
+    {
+        if (lblTextValidation.IsDisposed) return;
+        if (textGrid.CurrentRow?.Tag is not GamePcStringEntry entry)
+        {
+            lblTextValidation.Text = string.Empty;
+            return;
+        }
+
+        string text = textGrid.CurrentRow.Cells["Text"].Value?.ToString() ?? string.Empty;
+        var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
+        int bytes = enc.GetByteCount(text);
+        var profile = GameProfileInfo.For(ActiveGameProfile);
+
+        _updatingIgnoreCheck = true;
+        chkIgnoreTextWarning.Enabled = ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0;
+        chkIgnoreTextWarning.Checked = _textDiagnosticStore?.IsIgnored(entry.Index) == true;
+        _updatingIgnoreCheck = false;
+
+        if (ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0)
+        {
+            var d = Elvira1TextMetadata.Evaluate(entry.Index, text, enc, _textDiagnosticStore?.IsIgnored(entry.Index) == true);
+            lblTextValidation.ForeColor = d.Kind switch
+            {
+                TextDiagnosticKind.ConfirmedRisk => Color.DarkRed,
+                TextDiagnosticKind.PossibleRisk => Color.DarkOrange,
+                TextDiagnosticKind.ConfirmedSafe => Color.DarkGreen,
+                TextDiagnosticKind.Ignored => Color.DimGray,
+                _ => SystemColors.ControlText
+            };
+            lblTextValidation.Text = d.Kind switch
+            {
+                TextDiagnosticKind.ConfirmedRisk => string.Format(UiText.Get("ConfirmedRiskDetail"), d.Bytes, d.Limit, d.OverBy),
+                TextDiagnosticKind.PossibleRisk => string.Format(UiText.Get("PossibleRiskDetail"), d.Bytes, d.Limit, d.OverBy),
+                TextDiagnosticKind.ConfirmedSafe => string.Format(UiText.Get("ConfirmedSafeDetail"), d.Bytes, d.Context),
+                TextDiagnosticKind.Ignored => string.Format(UiText.Get("IgnoredDetail"), d.Bytes),
+                _ => string.Format(UiText.Get("BytesOnly"), d.Bytes)
+            };
+            textToolTip.SetToolTip(lblTextValidation, BuildDiagnosticTooltip(d, text));
+            return;
+        }
+
+        if (cmbTextContext.SelectedIndex != 2)
+        {
+            lblTextValidation.ForeColor = SystemColors.ControlText;
+            lblTextValidation.Text = string.Format(UiText.Get("BytesOnly"), bytes);
+            return;
+        }
+
+        if (profile.InteractiveDialogueByteLimit is not int limit)
+        {
+            lblTextValidation.ForeColor = SystemColors.ControlText;
+            lblTextValidation.Text = string.Format(UiText.Get("DialogueLimitUnknown"), profile.DisplayName);
+            return;
+        }
+
+        var sim = DialogueLimitValidator.Simulate(text, enc, limit);
+        if (bytes <= limit)
+        {
+            lblTextValidation.ForeColor = Color.DarkGreen;
+            lblTextValidation.Text = string.Format(UiText.Get("DialogueLimitOk"), bytes, limit);
+        }
+        else
+        {
+            lblTextValidation.ForeColor = Color.DarkRed;
+            lblTextValidation.Text = string.Format(UiText.Get("DialogueLimitExceeded"), bytes, limit, bytes - limit, sim.TruncatedText.Length);
+            textToolTip.SetToolTip(lblTextValidation, $"{UiText.Get("DialogueVisible")}: {sim.VisibleText}\n\n{UiText.Get("DialogueTruncated")}: {sim.TruncatedText}");
+        }
+    }
+
+    private static string BuildDiagnosticTooltip(TextDiagnosticResult d, string fullText)
+    {
+        if (d.Kind is TextDiagnosticKind.ConfirmedRisk or TextDiagnosticKind.PossibleRisk)
+            return $"{d.Confidence} | {d.Context}\n{UiText.Get("DialogueVisible")}: {d.VisibleText}\n\n{UiText.Get("DialogueTruncated")}: {d.ClippedText}";
+        return $"{d.Confidence} | {d.Context}\n{fullText}";
+    }
+
+    private string BuildDialogueTooltip(GamePcStringEntry entry, string text)
+    {
+        var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
+        if (ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0)
+        {
+            var d = Elvira1TextMetadata.Evaluate(entry.Index, text, enc, _textDiagnosticStore?.IsIgnored(entry.Index) == true);
+            return BuildDiagnosticTooltip(d, text);
+        }
+
+        int bytes = enc.GetByteCount(text);
+        var profile = GameProfileInfo.For(ActiveGameProfile);
+        if (cmbTextContext.SelectedIndex != 2 || profile.InteractiveDialogueByteLimit is not int limit)
+            return $"{bytes} {UiText.Get("Bytes").ToLowerInvariant()} | {text}";
+
+        var sim = DialogueLimitValidator.Simulate(text, enc, limit);
+        if (bytes <= limit) return string.Format(UiText.Get("DialogueLimitOk"), bytes, limit) + $"\n\n{text}";
+        return string.Format(UiText.Get("DialogueLimitExceeded"), bytes, limit, bytes - limit, sim.TruncatedText.Length) +
+               $"\n\n{UiText.Get("DialogueVisible")}: {sim.VisibleText}\n\n{UiText.Get("DialogueTruncated")}: {sim.TruncatedText}";
+    }
+
+    private void UpdateTextStatusSummary()
+    {
+        if (_gamePcEntries.Count == 0) return;
+        string baseText = string.Format(UiText.Get("StringsCount"), _gamePcEntries.Count);
+        if (ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0)
+        {
+            var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
+            int confirmed = 0, possible = 0;
+            foreach (var entry in _gamePcEntries)
+            {
+                string value = _gamePcEdits.TryGetValue(entry.Index, out var edited) ? edited : entry.Decode(enc);
+                var d = Elvira1TextMetadata.Evaluate(entry.Index, value, enc, _textDiagnosticStore?.IsIgnored(entry.Index) == true);
+                if (d.Kind == TextDiagnosticKind.ConfirmedRisk) confirmed++;
+                else if (d.Kind == TextDiagnosticKind.PossibleRisk) possible++;
+            }
+            baseText += " | " + string.Format(UiText.Get("RiskSummary"), confirmed, possible);
+        }
+        lblTextStatus.Text = baseText;
+    }
+
+    private void SelectTextEntry(int index)
+    {
+        if (textGrid.IsDisposed || index < 0)
+            return;
+
+        foreach (DataGridViewRow row in textGrid.Rows)
+        {
+            if (row.Tag is GamePcStringEntry e && e.Index == index)
+            {
+                textGrid.ClearSelection();
+                row.Selected = true;
+                if (!row.Cells["Text"].Selected)
+                    textGrid.CurrentCell = row.Cells["Text"];
+                break;
+            }
+        }
+    }
+
+    private static string LocalizedProfileNote(ElviraGameProfile profile)
+    {
+        return (UiText.Language, profile) switch
+        {
+            (UiLanguage.Slovak, ElviraGameProfile.Elvira1) => "Pôvodná DOS cesta interaktívneho NPC dialógu má pozorovaný 96-bajtový CP852 limit, ktorý rešpektuje hranice slov. Nie je to globálny limit GAMEPC.",
+            (UiLanguage.Czech, ElviraGameProfile.Elvira1) => "Původní DOS cesta interaktivního NPC dialogu má pozorovaný 96bajtový CP852 limit respektující hranice slov. Nejde o globální limit GAMEPC.",
+            (_, ElviraGameProfile.Elvira1) => "The original DOS interactive NPC dialogue path has an observed 96-byte CP852 word-aware limit. This is not a global GAMEPC limit.",
+            (UiLanguage.Slovak, ElviraGameProfile.Elvira2) => "Pre Elviru II zatiaľ nepredpokladáme rovnaký limit ako v Elvire I; upozornenie zostáva informačné, kým sa limit experimentálne nepotvrdí.",
+            (UiLanguage.Czech, ElviraGameProfile.Elvira2) => "Pro Elviru II zatím nepředpokládáme stejný limit jako v Elviře I; upozornění zůstává informační, dokud se limit experimentálně nepotvrdí.",
+            (_, ElviraGameProfile.Elvira2) => "Elvira II is not assumed to share Elvira I's dialogue limit; validation remains informational until proven.",
+            _ => string.Empty
+        };
+    }
+
     private void BrowseGame()
     {
         using var dlg = new FolderBrowserDialog { SelectedPath = txtGameDir.Text };
@@ -623,6 +1133,8 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
             ApplyLanguage();
             ScanGameFolder();
             LoadGamePcTexts();
+            if (_embeddedFontEditor is not null && !_embeddedFontEditor.IsDisposed)
+                _embeddedFontEditor.LoadFromGameDirectory(txtGameDir.Text);
         }
     }
 
@@ -657,6 +1169,8 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
             }
 
             SetStatus(string.Format(UiText.Get("ZonesFound"), files.Count), false);
+            _detectedProfile = GameProfileDetector.Detect(dir, files.Count, _gamePcEntries.Count > 0 ? _gamePcEntries.Count : null);
+            UpdateGameProfileDisplay();
         }
         catch (Exception ex)
         {
@@ -945,7 +1459,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
 
         using var dlg = new OpenFileDialog
         {
-            Filter = "PNG image|*.png",
+            Filter = $"{UiText.Get("PngImage")}|*.png",
             Title = $"Náhradný PNG pre image {e.ImageId:D4}"
         };
 
@@ -997,7 +1511,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
 
         using var dlg = new SaveFileDialog
         {
-            Filter = "PNG image|*.png",
+            Filter = $"{UiText.Get("PngImage")}|*.png",
             FileName = $"{Path.GetFileNameWithoutExtension(_currentVga)}_{e.ImageId:D4}_off_{e.DataOffset:X8}_{(e.Compressed ? "RLE" : "RAW")}.png"
         };
 
@@ -1023,7 +1537,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         if (_currentVga is null) return;
         if (_edits.Count == 0)
         {
-            MessageBox.Show(this, "Nie sú pripravené žiadne editované PNG.", "π1 Elvira I&II VGA Editor v1.0",
+            MessageBox.Show(this, UiText.Get("NoEditedPng"), UiText.Get("AppTitle"),
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
@@ -1031,10 +1545,9 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         var answer = MessageBox.Show(this,
             $"Automaticky aplikovať {_edits.Count} editov do {Path.GetFileName(_currentVga)}?\n\n" +
             "Program:\n" +
-            "1. vytvorí .bak_original (iba prvýkrát),\n" +
-            "2. zostaví nový VGA,\n" +
-            "3. aktuálny VGA premenuje na .bak_previous,\n" +
-            "4. nový VGA automaticky premenuje na pôvodný názov.",
+            "1. vytvorí nemennú O.VGA zálohu (iba pri prvom uložení),\n" +
+            "2. zostaví a overí nový VGA do dočasného súboru,\n" +
+            "3. nahradí iba aktívny VGA pod pôvodným názvom.",
             "Aplikovať do hry",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning);
@@ -1048,7 +1561,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
             LoadSelectedZone();
             MessageBox.Show(this,
                 "Hotovo. VGA je už pod pôvodným názvom a môžeš rovno spustiť hru.",
-                "π1 Elvira I&II VGA Editor v1.0",
+                UiText.Get("AppTitle"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
@@ -1063,7 +1576,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         if (string.IsNullOrWhiteSpace(_currentVga))
             return;
 
-        string originalBackup = _currentVga + ".bak_original";
+        string originalBackup = SafeDeployer.OriginalBackupPath(_currentVga);
 
         if (!File.Exists(originalBackup))
         {

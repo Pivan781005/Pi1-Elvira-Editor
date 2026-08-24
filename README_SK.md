@@ -1,5 +1,12 @@
 # Elvira VGA Editor — GUI + automatický deploy
 
+## Bezpečnosť CP852 fontu pre Elvira I a II
+
+Verzia 1.3 podporuje vlastné CP852 fonty pre Elvira I aj Elvira II. Glyph
+`0x81` je v oboch hrách rezervovaný na mazanie dynamických HUD hodnôt pred
+prekreslením, preto ho editor automaticky zachová. Ostatné podporované glyphy
+je možné normálne upravovať alebo importovať.
+
 Toto je GUI verzia decoder/encoder workflowu pre **Elvira 1 DOS xNN2.VGA**.
 
 ## Čo pribudlo
@@ -246,3 +253,105 @@ Opravené priamo v zdroji:
 - nový string sa nesmie začať na/za 0x3C00, ale posledný string začatý pred 0x3C00 sa dočíta až po NUL,
 - tým sa opravuje index 666, ktorý začína na 0x3BDA a predtým mal presne 38 bajtov len preto,
   že 0x3C00 - 0x3BDA = 38.
+
+## v1.1b – rozpracované zmeny
+
+- Game profile: Auto-detect / Elvira I / Elvira II, s možnosťou manuálneho override.
+- Textový stĺpec v GAMEPC editore vypĺňa dostupnú šírku okna.
+- Tooltip textovej bunky je vždy generovaný z aktuálneho riadku (oprava stale/leak tooltipu).
+- Voliteľný kontext `Interactive NPC dialogue` a validátor pre pozorovaný Elvira I DOS limit 96 bajtov v CP852. Limit nie je aplikovaný globálne na GAMEPC a Elvira II ho nepreberá bez dôkazu.
+- Integrovaný Font Editor prototype: inventár všetkých 256 CP852 slotov vrátane písmen, číslic, interpunkcie a symbolov; známe slovenské glyphy sú editovateľné.
+- Font editor zobrazuje 8x8 storage a vizuálne sivou označuje posledné dva stĺpce ako predpokladaný spacing/reserved pri 6x8 aktívnom glyphe. Toto rozloženie je zatiaľ označené ako provisional, kým sa z RUNVGA.EXE znovu neodvodí font table a patch mechanizmus.
+
+### Font Editor - aktívny RUNVGA font a import/export (v1.1b)
+
+Font Editor teraz rozlišuje aktívnu architektúru podľa DOS renderera, nie podľa náhodného výskytu bitmapy znaku v EXE. Pri V5 variante načíta plnú 256-znakovú CP852 tabuľku z `0x3AE60`; historická 98-znaková tabuľka, ktorá môže v patchnutom EXE stále fyzicky zostať, sa nepovažuje za aktívny font.
+
+Pri V5 fontoch sú k dispozícii `Import font...` a `Export font...`. Import podporuje raw 2048-bajtový font (256 × 8) alebo font z iného detegovaného V5 RUNVGA.EXE. Import vždy mení iba pravú stranu EDITED; ľavá ORIGINAL zostáva referenciou fontu načítaného z cieľového EXE. Export uloží presne 2048 bajtov a vypíše SHA-256.
+
+Originálny 98-glyph RUNVGA naďalej zobrazuje a umožňuje upravovať iba nativny rozsah 0x20-0x81. Sloty mimo neho sa jasne zobrazujú ako nenachádzajúce sa v danom EXE. Automatický upgrade originálneho RUNVGA na V5 CP852 renderer zatiaľ nie je súčasťou tejto verzie.
+
+### Poznámka k originálnemu RUNVGA fontu
+Natívny unpacked RUNVGA obsahuje 98 glyphov pre kódy 0x20-0x81. Sú v ňom bežné znaky, interpunkcia, čísla 0-9, A-Z a a-z. Ak je originálny RUNVGA stále zabalený/komprimovaný, táto tabuľka nie je vo fyzickom EXE dostupná na známom unpacked ofsete; vznikne až po self-unpackingu DOS programu. Editor taký súbor označí ako unsupported/packed namiesto zobrazovania falošných prázdnych glyphov.
+
+
+## Font Editor – pracovná kópia
+Po otvorení EXE zostáva EDITED zámerne prázdny. Tlačidlo `Copy Original → Edited` vytvorí explicitnú pracovnú kópiu reálne načítaných glyphov. Import 256×8 fontu naplní EDITED samostatne. ORIGINAL sa tým nemení.
+
+## Packed original RUNVGA - pismena a cisla
+Pri znamom zabalenom originalnom Elvira I RUNVGA vie Font Editor nacitat priamo z EXE realny 80-glyph usek 0x2F-0x7E na fyzickom ofsete 0x15A69. Tym su viditelne cislice 0-9, A-Z a a-z bez potreby spustat DOS unpacker. Znak 0x5E ma v packed variante iba 7 ulozenych scanline bajtov, preto loader kompenzuje jednobajtovy posun dalsich glyphov. Pri packed variante je priame prepisovanie EXE zatial vypnute; data sa daju pouzit ako ORIGINAL referencia a skopirovat cez Copy Original -> Edited.
+
+### Import TTF / OTF / SFD fontov
+Font editor dokaze okrem `.F08`/`.BIN`/`.FNT` nacitat aj vektorove `.TTF` a `.OTF` fonty a previezt ich do 256-slotovej CP852 tabulky Elviry. Pri importe sa Unicode znaky mapuju na CP852 a rasterizuju do realnej 6x8 aktivnej oblasti DOS renderera. Mozno nastavit velkost v pixeloch a X/Y posun a pred importom sa zobrazi bitmapovy nahlad. `.SFD` sa automaticky skonvertuje cez FontForge, ak je FontForge nainstalovany.
+
+### TTF/OTF/SFD: skladaná diakritika pre 6×8
+Pri importe vektorového fontu je predvolene zapnutá voľba **Compose CP852 diacritics from base letters**. Editor najprv rasterizuje čisté základné písmeno (`a`, `c`, `d`, `l`, `t`...) a potom pridá malý pixelový akcent vhodný pre 6×8. Tým sa základné písmeno nedeformuje tak ako pri priamom zmenšení hotového Unicode znaku. Slovenské `ď`, `ľ`, `ť` (aj veľké varianty) majú vlastný pravostranný mäkčeň/apostrofový tvar. Voľbu možno vypnúť a porovnať s priamym rasterizovaním TTF/OTF glyphu.
+
+### Inteligentnejšia diakritika pri TTF/OTF importe
+Režim `Compose + optically align CP852 diacritics` skladá slovenské/české znaky zo základného rasterizovaného písmena a pixelovej diakritiky. Poloha akútu, mäkčeňa, vokáňa, bodiek a krúžku sa už neurčuje pevnou X pozíciou, ale podľa skutočného bounding boxu každého 6x8 glyphu. Úzke `i/l/r` a široké `A/M/W` preto dostávajú odlišné optické centrovanie. `ď/ľ/ť` a veľké varianty používajú vlastné pravostranné pravidlá. Globálne X/Y offsety zostávajú ako manuálny override.
+
+### Baseline-aware skladanie diakritiky
+Pri skladanom TTF/OTF/SFD importe editor po novom najprv znormalizuje latinske pismena a cislice na spolocnu zapisovu liniu. Bezna velka/mala pismena a cislice koncia na riadku 6, skutocne spodne presahy (`g`, `j`, `p`, `q`, `y`) mozu pouzit riadok 7. Diakritika sa potom pridava bez nahodneho posuvania zakladneho pismena hore/dole. Ak je pre akcent hore malo miesta, vertikalne sa prisposobi iba telo glyphu a jeho baseline ostane zachovana. Specialne `d/l/t` varianty s pravostrannym makcenom zostavaju samostatnou triedou. Cielom je, aby `A/Á`, `a/á/ä`, `E/É`, `u/ú` atd. sedeli na rovnakej spodnej linii a aby font pri texte vizualne "neskakal".
+
+### Celá znaková sada / lupa 1x-8x
+V paneli `REAL BITMAP PREVIEW` je tlačidlo `Full character set...`. Otvorí samostatnú 16x16 tabuľku všetkých slotov `0x00-0xFF`, podobnú klasickému DOS character-map pohľadu. Zoom sa dá meniť plynulo po celých krokoch od `1x` do `8x`; raster zostáva nearest-neighbour bez antialiasingu. Okno vie prepínať `EDITED`/`ORIGINAL`, pri väčšom zoome sa posúva scrollbarmi a kliknutie na glyph vyberie rovnaký slot aj v hlavnom editore.
+
+### Plný 8×8 import vektorového fontu
+Import TTF/OTF/SFD teraz zachováva **všetkých 8 stĺpcov každého glyphu**. Predvolené nastavenie je 8.0 px, X offset +1, Y offset 0 a zapnutá skladaná/baseline-aware CP852 diakritika. Posuny X/Y sú určené len na jemné doladenie v malej 8×8 bunke.
+
+Dôležité: podľa doteraz zrekonštruovaného DOS renderera Elviry sú v hre aktívne iba ľavé 6 stĺpcov. Stĺpce 7–8 sa preto v editore zobrazujú sivou. Importované pixely v nich sa **nezahodia** — zostávajú uložené v 256×8 tabuľke a pri exporte/uložení sa zachovajú — ale v pôvodnom renderer-i nemusia byť viditeľné v hre.
+
+### Full Character Set
+Okno `Full character set...` má predvolený široký layout **32×8**. Dá sa prepínať medzi `16×16`, `32×8` a `64×4` a zoomovať od 1× do 8×. Viewer zobrazuje všetkých 8 uložených stĺpcov; posledné dva sú sivé ako renderer-inactive.
+
+---
+
+## v1.2 – diagnostika textov a dokončenie pracovného UI
+
+Verzia 1.2 stabilizuje Elvira I workflow a pripravuje architektúru na samostatný profil Elvira II. Podpora Elvira II textových poolov `TEXT01–TEXT09` zatiaľ **nie je implementovaná**; profil E2 zámerne nepoužíva 96-bajtové pravidlo z Elviry I.
+
+### Elvira I – DOS text diagnostics
+
+Text Editor v automatickom režime rozlišuje:
+
+- **červené / potvrdené riziko** – runtime potvrdené stringy 417 a 424; pri prekročení 96 B sa simuluje word-aware orezanie,
+- **oranžové / možné riziko** – ostatné E1 stringy nad 96 B, ktorých konkrétna runtime cesta nie je potvrdená,
+- **zelené / potvrdene bezpečné** – referenčné stringy 298, 425 a 627, ktoré používajú inú textovú cestu,
+- **sivé / ignorované** – warning manuálne potlačený používateľom.
+
+K dispozícii je filter **Zobraziť iba rizikové texty** a checkbox **Ignorovať upozornenie pre tento string**. Ignore stav sa neukladá do `GAMEPC`; zapisuje sa do sidecar súboru `.pi1-text-diagnostics.json` v adresári hry.
+
+Editor počíta dĺžku v skutočných bajtoch zvoleného encodingu a pred uložením kontroluje:
+
+- vložený NUL znak,
+- znaky, ktoré nie je možné bezstratovo zakódovať,
+- zachovanie počtu stringov po zápise.
+
+### Font Editor
+
+- nedeštruktívny posun glyphu šípkami a klávesovými šípkami,
+- pixely mimo 8×8 sa nestrácajú počas presúvania; orežú sa až pri Apply / Save copy / Export po potvrdení,
+- Full Character Set: 32×8 default, 16×16 a 64×4 alternatíva, zoom 1×–8×, Original/Edited, synchronizovaný výber,
+- stavový riadok Full Character Set zobrazuje byte ID, HEX glyphu a offset v 256×8 tabuľke,
+- vektorový import má presety **Default / Lexis / Pixel Operator / HP-style**; parametre po zvolení zostávajú ručne nastaviteľné.
+
+### Vektorové fonty – praktické obmedzenia
+
+TTF/OTF import je vhodný najmä ako základ. Pri 8×8/6×8 rastri môže byť natívna vektorová diakritika nevhodne zmenšená alebo posunutá. Režim **Compose + optically align CP852 diacritics** preto skladá slovenské znaky zo základného písmena a vlastnej diakritiky; `ď/ľ/ť` a veľké varianty používajú osobitné pravidlá.
+
+Referenčné/testované zdroje fontov:
+
+- Lexis (CC0): https://github.com/damianvila/font-lexis
+- Pixel Operator: https://www.dafont.com/pixel-operator.font
+- Oldschool PC Font Resource / PxPlus: https://int10h.org/oldschool-pc-fonts/download/
+- Perfect DOS VGA 437: https://www.dafont.com/perfect-dos-vga-437.font
+
+Pri distribúcii fontu spolu s projektom vždy skontrolujte licenciu konkrétneho fontu. Odkaz v README neznamená, že je font súčasťou projektu alebo že sa jeho licencia zhoduje s licenciou editora.
+
+### Elvira II – pripravený samostatný profil
+
+Z doterajšej analýzy vieme, že Elvira II má podobný `GAMEPC` textový pool, ale odlišný TABLES bytecode a ďalší textový pool `TEXT01–TEXT09`. Verzia 1.2 drží E2 diagnostiku oddelene: byte counter funguje, ale E1 96-byte warning sa na E2 automaticky neaplikuje. Implementácia `TEXT01–TEXT09` a E2 TABLES metadata je plánovaná ako samostatný krok.
+
+### Herné dáta
+
+Projekt neobsahuje originálne herné EXE/VGA/GAMEPC/TABLES ani iné komerčné assety. Používateľ pracuje so svojou vlastnou inštaláciou hry. Elvira a súvisiace herné názvy, grafika a ochranné známky patria príslušným držiteľom práv; screenshoty a názvy slúžia iba na dokumentáciu kompatibility.
