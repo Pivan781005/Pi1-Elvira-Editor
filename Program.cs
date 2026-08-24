@@ -263,6 +263,39 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("RUNIT packed preview: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 3 && args[0].Equals("--runvga-preview-regression", StringComparison.OrdinalIgnoreCase))
+        {
+            string? temporaryCanonical = null;
+            try
+            {
+                // Preview loading must never alter either input. The temporary baseline lets
+                // the same test cover the packed and canonical-unpacked Elvira I paths.
+                byte[] packedBytes = File.ReadAllBytes(args[1]);
+                string packedHashBefore = Hash(args[1]);
+                byte[] canonical = RunVgaBootstrapService.UnpackVerifiedOriginal(packedBytes);
+                FontLoadResult packed = RunVgaFontService.LoadRunVga(args[1]);
+                AssertElvira1OriginalPreview(packed, RunVgaFontLayout.OriginalPackedAscii98, canonical, "packed");
+                if (Hash(args[1]) != packedHashBefore)
+                    throw new InvalidDataException("Packed RUNVGA changed while previewing it.");
+
+                temporaryCanonical = Path.Combine(Path.GetTempPath(), "ElviraVgaEditor-preview-" + Guid.NewGuid().ToString("N") + ".EXE");
+                File.WriteAllBytes(temporaryCanonical, canonical);
+                FontLoadResult unpacked = RunVgaFontService.LoadRunVga(temporaryCanonical);
+                AssertElvira1OriginalPreview(unpacked, RunVgaFontLayout.OriginalAscii98, canonical, "unpacked");
+
+                FontLoadResult v5 = RunVgaFontService.LoadRunVga(args[2]);
+                if (v5.Game != ElviraGame.Elvira1 || v5.Layout != RunVgaFontLayout.ExtendedCp852V5 ||
+                    v5.LoadedGlyphCount != 256 || !v5.Glyphs[0x81].Original.SequenceEqual(RunItBootstrapService.ReservedHudEraseGlyphBytes) ||
+                    !FontSlotMetadata.IsReserved(v5, 0x81))
+                    throw new InvalidDataException("Elvira I V5 preview/reserved-glyph validation failed.");
+
+                Console.WriteLine("RUNVGA packed/unpacked/V5 preview: PASS");
+                Environment.ExitCode = 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine("RUNVGA packed/unpacked/V5 preview: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            finally { if (temporaryCanonical is not null && File.Exists(temporaryCanonical)) File.Delete(temporaryCanonical); }
+            return;
+        }
         if (args.Length == 3 && args[0].Equals("--vga-backup-smoke", StringComparison.OrdinalIgnoreCase))
         {
             try
@@ -280,7 +313,8 @@ internal static class Program
                 FontLoadResult loaded = RunVgaFontService.LoadRunVga(args[1]);
                 bool pass = loaded.Game == ElviraGame.Elvira2 && loaded.Layout == RunVgaFontLayout.ExtendedCp852RunIt &&
                     loaded.LoadedGlyphCount == 224 && loaded.FirstByteValue == 0x20 && loaded.LastByteValue == 0xFF &&
-                    new[] { 0x20, 0x41, 0x61, 0x80, 0x81, 0x82, 0x8E, 0xA0, 0xE1, 0xFF }.All(c => loaded.Glyphs[c].IsLoadedFromSource);
+                    new[] { 0x20, 0x41, 0x61, 0x80, 0x81, 0x82, 0x8E, 0xA0, 0xE1, 0xFF }.All(c => loaded.Glyphs[c].IsLoadedFromSource) &&
+                    FontSlotMetadata.IsReserved(loaded, 0x81) && loaded.Glyphs[0x81].Original.SequenceEqual(RunItBootstrapService.ReservedHudEraseGlyphBytes);
                 Console.WriteLine($"RUNIT patched preview: {(pass ? "PASS" : "FAIL")} loaded={loaded.LoadedGlyphCount}");
                 Environment.ExitCode = pass ? 0 : 1;
             }
@@ -325,6 +359,22 @@ internal static class Program
     }
 
     private static string Hash(string path) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+
+    private static void AssertElvira1OriginalPreview(FontLoadResult loaded, RunVgaFontLayout expectedLayout, byte[] canonical, string sourceKind)
+    {
+        if (loaded.Game != ElviraGame.Elvira1 || loaded.Layout != expectedLayout || loaded.LoadedGlyphCount != 98 ||
+            loaded.FirstByteValue != 0x20 || loaded.LastByteValue != 0x81 || !FontSlotMetadata.IsReserved(loaded, 0x81))
+            throw new InvalidDataException($"Elvira I {sourceKind} preview did not expose the expected 98-glyph range.");
+
+        foreach (int code in new[] { 0x20, 0x30, 0x41, 0x42, 0x43, 0x45, 0x48, 0x49, 0x4D, 0x4F, 0x53, 0x54, 0x3F, 0x61, 0x6D, 0x7A, 0x81 })
+        {
+            byte[] expected = canonical.AsSpan(0x1A216 + (code - 0x20) * RunVgaFontService.GlyphBytes, RunVgaFontService.GlyphBytes).ToArray();
+            if (!loaded.Glyphs[code].IsLoadedFromSource || !loaded.Glyphs[code].Original.SequenceEqual(expected))
+                throw new InvalidDataException($"Elvira I {sourceKind} preview glyph 0x{code:X2} differs from the canonical table.");
+        }
+        if (!loaded.Glyphs[0x81].Original.SequenceEqual(RunItBootstrapService.ReservedHudEraseGlyphBytes))
+            throw new InvalidDataException($"Elvira I {sourceKind} preview did not preserve reserved glyph 0x81.");
+    }
 
     private static void RunPartialBackupSmoke(string pristineExe, string pristineGamePc, string root)
     {

@@ -21,6 +21,7 @@ internal static class FontSlotMetadata
     public static IReadOnlyList<int> GetReservedSlots(ElviraGame game, RunVgaFontLayout layout) =>
         (game, layout) switch
         {
+            (ElviraGame.Elvira1, RunVgaFontLayout.OriginalPackedAscii98) or
             (ElviraGame.Elvira1, RunVgaFontLayout.OriginalAscii98) or
             (ElviraGame.Elvira1, RunVgaFontLayout.ExtendedCp852V5) => Elvira1ReservedSlots,
             (ElviraGame.Elvira2, RunVgaFontLayout.ExtendedCp852RunIt) => Elvira2RunItReservedSlots,
@@ -133,9 +134,15 @@ internal static class RunVgaFontService
         RunVgaBootstrapState runVgaState = RunVgaBootstrapService.DetectState(path);
         if (runVgaState == RunVgaBootstrapState.OriginalPacked)
         {
-            return new FontLoadResult { SourcePath = path, Layout = RunVgaFontLayout.OriginalPackedAscii80, FontOffset = -1, FirstByteValue = 0,
-                LoadedGlyphCount = 0, Glyphs = GlyphRepository.CreateAllCp852Slots().ToList(), Game = ElviraGame.Elvira1,
-                DetectionDetails = "Verified original EXEPACK-packed Elvira I RUNVGA.EXE. Activate CP852 Patch to create the supported V5 executable." };
+            // Match the Elvira II packed-preview behavior: reconstruct the exact verified
+            // canonical image in memory only. The source file is never written or deployed.
+            byte[] canonical = RunVgaBootstrapService.UnpackVerifiedOriginal(data);
+            FontLoadResult result = BuildResult(path, RunVgaFontLayout.OriginalPackedAscii98,
+                KnownOriginalPhysicalOffset, OriginalFirstChar, OriginalGlyphCount, canonical,
+                "Verified packed Elvira I RUNVGA.EXE. The canonical image was unpacked in memory and its real native 98-glyph table was loaded from canonical physical 0x1A216.",
+                ElviraGame.Elvira1);
+            FontSlotMetadata.RestoreReservedSourceGlyphs(result);
+            return result;
         }
 
         // IMPORTANT: Detect the active renderer first. Patched V5 executables intentionally
