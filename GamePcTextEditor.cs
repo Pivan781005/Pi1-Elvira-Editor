@@ -81,13 +81,13 @@ internal static class GamePcTextEditor
         }
     }
 
-    public static void SaveInPlace(
-        string gamePcPath,
+    internal static byte[] BuildEditedData(
+        string dataFilePath,
         IReadOnlyDictionary<int, string> edited,
         IReadOnlyList<GamePcStringEntry> entries,
         Encoding enc)
     {
-        byte[] data = File.ReadAllBytes(gamePcPath);
+        byte[] data = File.ReadAllBytes(dataFilePath);
 
         foreach (var kvp in edited)
         {
@@ -114,20 +114,24 @@ internal static class GamePcTextEditor
                 data[terminator] = 0;
         }
 
-        string temp = gamePcPath + ".pi1_tmp";
-        try
-        {
-            File.WriteAllBytes(temp, data);
-            var verify = LoadEntries(temp);
-            if (verify.Count != entries.Count)
-                throw new InvalidOperationException(string.Format(UiText.Get("StringCountChanged"), entries.Count, verify.Count));
+        return data;
+    }
 
-            SafeDeployer.ReplaceActiveWithPrepared(gamePcPath, temp);
-        }
-        finally
-        {
-            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
-        }
+    public static void SaveInPlace(
+        string dataFilePath,
+        IReadOnlyDictionary<int, string> edited,
+        IReadOnlyList<GamePcStringEntry> entries,
+        Encoding enc)
+    {
+        byte[] data = BuildEditedData(dataFilePath, edited, entries, enc);
+        GameDataFileService.WriteCurrent(dataFilePath, data, entries.Count);
+    }
+
+    internal static void ValidateSerializedData(string temporaryPath, int expectedEntryCount)
+    {
+        var verify = LoadEntries(temporaryPath);
+        if (verify.Count != expectedEntryCount)
+            throw new InvalidOperationException(string.Format(UiText.Get("StringCountChanged"), expectedEntryCount, verify.Count));
     }
 
     public static Encoding GetEncoding(string name)
@@ -142,4 +146,93 @@ internal static class GamePcTextEditor
             _ => Encoding.GetEncoding(852)
         };
     }
+}
+
+/// <summary>
+/// Target-aware persistence for compatible Elvira data files. Only the literal original
+/// GAMEPC participates in the legacy GAMEPCO immutable-original rule; named variants are
+/// working files and use transactional replacement without inventing a second backup format.
+/// </summary>
+internal static class GameDataFileService
+{
+    public static bool IsDos83FileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || Path.GetFileName(fileName) != fileName) return false;
+        string[] parts = fileName.Split('.');
+        if (parts.Length > 2 || parts[0].Length is < 1 or > 8 || (parts.Length == 2 && parts[1].Length is < 1 or > 3)) return false;
+        return parts.All(part => part.All(c => char.IsLetterOrDigit(c) || "!#$%&'()-@^_`{}~".Contains(c)));
+    }
+
+    public static string SaveAsNew(string sourcePath, string destinationPath, IReadOnlyDictionary<int, string> edits, IReadOnlyList<GamePcStringEntry> entries, Encoding enc)
+    {
+        ValidateNewVariantDestination(sourcePath, destinationPath);
+        byte[] data = GamePcTextEditor.BuildEditedData(sourcePath, edits, entries, enc);
+        WriteNew(destinationPath, data, entries.Count);
+        return Path.GetFullPath(destinationPath);
+    }
+
+    public static void WriteCurrent(string dataFilePath, byte[] data, int expectedEntryCount)
+    {
+        if (!File.Exists(dataFilePath)) throw new FileNotFoundException("Current data file is missing.", dataFilePath);
+        string temp = TemporaryPath(dataFilePath, "save");
+        try
+        {
+            File.WriteAllBytes(temp, data);
+            GamePcTextEditor.ValidateSerializedData(temp, expectedEntryCount);
+            if (Path.GetFileName(dataFilePath).Equals("GAMEPC", StringComparison.OrdinalIgnoreCase))
+                SafeDeployer.ReplaceActiveWithPrepared(dataFilePath, temp);
+            else
+                ReplaceWorkingVariant(dataFilePath, temp);
+        }
+        finally
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+        }
+    }
+
+    private static void ValidateNewVariantDestination(string sourcePath, string destinationPath)
+    {
+        string sourceDirectory = Path.GetDirectoryName(Path.GetFullPath(sourcePath)) ?? throw new IOException("Source directory is unavailable.");
+        string destinationDirectory = Path.GetDirectoryName(Path.GetFullPath(destinationPath)) ?? throw new IOException("Destination directory is unavailable.");
+        if (!sourceDirectory.Equals(destinationDirectory, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Save As and Create Variant must stay in the current data-file directory.");
+        string name = Path.GetFileName(destinationPath);
+        if (!IsDos83FileName(name))
+            throw new InvalidOperationException($"'{name}' is not a DOS-compatible 8.3 filename.");
+        if (File.Exists(destinationPath))
+            throw new IOException($"The variant already exists and will not be overwritten: {destinationPath}");
+    }
+
+    private static void WriteNew(string destinationPath, byte[] data, int expectedEntryCount)
+    {
+        string temp = TemporaryPath(destinationPath, "new");
+        try
+        {
+            File.WriteAllBytes(temp, data);
+            GamePcTextEditor.ValidateSerializedData(temp, expectedEntryCount);
+            File.Move(temp, destinationPath);
+        }
+        finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
+    }
+
+    private static void ReplaceWorkingVariant(string activePath, string preparedPath)
+    {
+        string rollback = TemporaryPath(activePath, "rollback");
+        bool moved = false;
+        try
+        {
+            File.Move(activePath, rollback);
+            moved = true;
+            File.Move(preparedPath, activePath);
+            File.Delete(rollback);
+        }
+        catch
+        {
+            if (!File.Exists(activePath) && moved && File.Exists(rollback)) File.Move(rollback, activePath);
+            throw;
+        }
+        finally { try { if (File.Exists(rollback)) File.Delete(rollback); } catch { } }
+    }
+
+    private static string TemporaryPath(string targetPath, string kind) => targetPath + ".pi1_" + kind + "_" + Guid.NewGuid().ToString("N") + ".tmp";
 }

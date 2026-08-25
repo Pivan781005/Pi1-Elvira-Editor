@@ -362,6 +362,48 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("GAMEPC O-backup workflow: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 4 && args[0].Equals("--data-file-variant-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                RunDataFileVariantSmoke("elvira1", args[1], args[3]);
+                RunDataFileVariantSmoke("elvira2", args[2], args[3]);
+                Console.WriteLine("Arbitrary data-file workflow: PASS");
+                Environment.ExitCode = 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine("Arbitrary data-file workflow: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 2 && args[0].Equals("--variant-config-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                RunVariantConfigurationSmoke(args[1]);
+                Console.WriteLine("Variant configuration workflow: PASS");
+                Environment.ExitCode = 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine("Variant configuration workflow: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 4 && args[0].Equals("--mods-launcher-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                RunModsLauncherWorkflowSmoke("elvira1", args[1], args[3]);
+                RunModsLauncherWorkflowSmoke("elvira2", args[2], args[3]);
+                foreach (UiLanguage language in new[] { UiLanguage.English, UiLanguage.Slovak, UiLanguage.Czech })
+                {
+                    UiText.SetLanguage(language);
+                    foreach (string key in new[] { "ModsLauncherTab", "VariantAdd", "VariantEdit", "VariantRemove", "VariantMoveUp", "VariantMoveDown", "VariantEnable", "VariantDisable", "VariantOpenDataFile", "VariantAvailable", "VariantMissing", "AddCreatedVariantQuestion" })
+                        if (UiText.Get(key) == key) throw new InvalidDataException($"Missing variant localization: {key} ({language}).");
+                }
+                UiText.SetLanguage(UiLanguage.English);
+                Console.WriteLine("Mods & Launcher workflow: PASS");
+                Environment.ExitCode = 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine("Mods & Launcher workflow: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         ApplicationConfiguration.Initialize();
         Application.Run(new MainForm());
     }
@@ -500,5 +542,152 @@ internal static class Program
         entry = entries.First(e => e.ByteLength > 0);
         GamePcTextEditor.SaveInPlace(active, new Dictionary<int, string> { [entry.Index] = new string('Y', entry.ByteLength) }, entries, enc);
         if (Hash(oFile) != oHash) throw new InvalidDataException("Repeated GAMEPC save overwrote GAMEPCO.");
+    }
+
+    private static void RunDataFileVariantSmoke(string game, string fixture, string root)
+    {
+        string directory = Path.Combine(root, game);
+        if (Directory.Exists(directory)) throw new IOException($"Isolated data-file test directory already exists: {directory}");
+        Directory.CreateDirectory(directory);
+        string original = Path.Combine(directory, "GAMEPC");
+        File.Copy(fixture, original);
+        string originalHash = Hash(original);
+        var enc = GamePcTextEditor.GetEncoding("CP852");
+        List<GamePcStringEntry> entries = GamePcTextEditor.LoadEntries(original);
+        if (entries.Count == 0 || File.Exists(Path.Combine(directory, "GAMEPCO")))
+            throw new InvalidDataException($"{game}: normal GAMEPC open was not read-only.");
+
+        // Open/inspect an arbitrary compatible name without creating a backup.
+        string renamed = Path.Combine(directory, "MYMOD");
+        File.Copy(original, renamed);
+        if (GamePcTextEditor.LoadEntries(renamed).Count != entries.Count || File.Exists(Path.Combine(directory, "MYMODO")))
+            throw new InvalidDataException($"{game}: renamed compatible data file did not open read-only.");
+
+        GamePcStringEntry editable = entries.First(e => e.ByteLength > 0);
+        var edits = new Dictionary<int, string> { [editable.Index] = new string('X', editable.ByteLength) };
+        // SAVE follows the selected arbitrary file; the original GAMEPC must not be touched.
+        GamePcTextEditor.SaveInPlace(renamed, edits, entries, enc);
+        if (Hash(original) != originalHash || Hash(renamed) == originalHash || File.Exists(Path.Combine(directory, "GAMEPCO")))
+            throw new InvalidDataException($"{game}: Save did not stay on the selected arbitrary data file.");
+
+        // Save As and Create Variant both create a new DOS 8.3 working file, leave GAMEPC intact,
+        // and return the destination that the UI adopts as its new current data-file context.
+        string savedAs = GameDataFileService.SaveAsNew(original, Path.Combine(directory, "GAMEPCSK"), edits, entries, enc);
+        if (!savedAs.EndsWith("GAMEPCSK", StringComparison.OrdinalIgnoreCase) || !File.Exists(savedAs) || Hash(original) != originalHash)
+            throw new InvalidDataException($"{game}: Save As did not preserve GAMEPC or return GAMEPCSK context.");
+        string variant = GameDataFileService.SaveAsNew(original, Path.Combine(directory, "GAMEPCCZ"), edits, entries, enc);
+        if (!variant.EndsWith("GAMEPCCZ", StringComparison.OrdinalIgnoreCase) || !File.Exists(variant) || Hash(original) != originalHash)
+            throw new InvalidDataException($"{game}: Create Variant did not preserve GAMEPC or return GAMEPCCZ context.");
+        if (GamePcTextEditor.LoadEntries(savedAs).Count != entries.Count || GamePcTextEditor.LoadEntries(variant).Count != entries.Count)
+            throw new InvalidDataException($"{game}: created variants failed compatible data-file parsing.");
+        if (!GameDataFileService.IsDos83FileName("GAMEPCSK") || !GameDataFileService.IsDos83FileName("MYMOD") || GameDataFileService.IsDos83FileName("GAMEPCSLOVAK"))
+            throw new InvalidDataException($"{game}: DOS 8.3 filename validation failed.");
+    }
+
+    private static void RunVariantConfigurationSmoke(string root)
+    {
+        if (Directory.Exists(root)) throw new IOException($"Variant test directory already exists: {root}");
+        Directory.CreateDirectory(root);
+        string configPath = Path.Combine(root, VariantConfigurationService.ConfigFileName);
+
+        VariantCatalog defaults = VariantConfigurationService.Load(root);
+        if (defaults.ConfigurationExists || defaults.Entries.Count != 0 || File.Exists(configPath))
+            throw new InvalidDataException("Missing config without GAMEPC did not remain an empty in-memory state.");
+
+        File.WriteAllBytes(Path.Combine(root, "GAMEPC"), [0]);
+        defaults = VariantConfigurationService.Load(root);
+        if (defaults.ConfigurationExists || defaults.Entries.Count != 1 || defaults.Entries[0] != new VariantEntry("English", "GAMEPC", true, 1) || File.Exists(configPath))
+            throw new InvalidDataException("Missing config with GAMEPC did not produce the read-only English default.");
+
+        defaults.Add("Slovak", "GAMEPCSK");
+        defaults.Add("Czech", "GAMEPCCZ", enabled: false);
+        defaults.Add("Hard Mode", "GAMEPCHD");
+        if (!defaults.MoveUp("GAMEPCHD") || !defaults.MoveDown("GAMEPCCZ"))
+            throw new InvalidDataException("Variant move operations failed.");
+        defaults.SetEnabled("GAMEPCSK", false);
+        if (!defaults.Remove("GAMEPCCZ")) throw new InvalidDataException("Variant remove operation failed.");
+        defaults.Edit("GAMEPCHD", "Hard Mode", "GAMEPCHD", enabled: true);
+        if (defaults.GetStatus(defaults.FindByDataFile("GAMEPCSK")!).IsAvailable)
+            throw new InvalidDataException("Missing variant data file was not reported as unavailable.");
+        File.WriteAllBytes(Path.Combine(root, "GAMEPCSK"), [0]);
+        if (!defaults.GetStatus(defaults.FindByDataFile("GAMEPCSK")!).IsAvailable)
+            throw new InvalidDataException("Present variant data file was not reported as available.");
+
+        foreach (string invalid in new[] { @"..\GAMEPC", @"C:\foo\GAMEPC", @"subdir\GAMEPC", "GAMEPCSLOVAK" })
+        {
+            bool rejected = false;
+            try { defaults.Add("Invalid" + invalid.GetHashCode(), invalid); } catch (InvalidOperationException) { rejected = true; }
+            if (!rejected) throw new InvalidDataException($"Invalid variant DataFile was accepted: {invalid}");
+        }
+        bool duplicateRejected = false;
+        try { defaults.Add("Slovak duplicate", "GAMEPCSK"); } catch (InvalidOperationException) { duplicateRejected = true; }
+        if (!duplicateRejected) throw new InvalidDataException("Duplicate variant DataFile was accepted.");
+
+        VariantConfigurationService.Save(defaults);
+        string firstHash = Hash(configPath);
+        VariantConfigurationService.Save(defaults);
+        if (Hash(configPath) != firstHash) throw new InvalidDataException("Variant config serialization is not deterministic.");
+        VariantCatalog reloaded = VariantConfigurationService.Load(root);
+        if (!reloaded.ConfigurationExists || reloaded.Entries.Count != defaults.Entries.Count ||
+            !reloaded.Entries.SequenceEqual(defaults.Entries) || reloaded.FindByDataFilePath(Path.Combine(root, "GAMEPCSK"))?.DisplayName != "Slovak" ||
+            reloaded.FindByDataFile("GAMEPCSK")!.Enabled)
+            throw new InvalidDataException("Variant config save/reload did not preserve entries, order, enabled state, or current-file resolution.");
+
+        string malformedDirectory = Path.Combine(root, "malformed");
+        Directory.CreateDirectory(malformedDirectory);
+        File.WriteAllText(Path.Combine(malformedDirectory, VariantConfigurationService.ConfigFileName), "[Variant1]\nName=Bad\nDataFile=..\\GAMEPC\n[Variant2]\nName=Valid\nDataFile=GAMEPCSK\nEnabled=maybe\nOrder=x\n[Broken\n", new System.Text.UTF8Encoding(false));
+        VariantCatalog malformed = VariantConfigurationService.Load(malformedDirectory);
+        if (malformed.Entries.Count != 1 || malformed.Entries[0].DisplayName != "Valid" || malformed.LoadWarnings.Count == 0)
+            throw new InvalidDataException("Hand-edited malformed config was not handled safely.");
+    }
+
+    private static void RunModsLauncherWorkflowSmoke(string game, string fixture, string root)
+    {
+        string directory = Path.Combine(root, game);
+        if (Directory.Exists(directory)) throw new IOException($"Isolated Mods test directory already exists: {directory}");
+        Directory.CreateDirectory(directory);
+        string gamepc = Path.Combine(directory, "GAMEPC");
+        File.Copy(fixture, gamepc);
+        string configPath = Path.Combine(directory, VariantConfigurationService.ConfigFileName);
+
+        // Opening the tab is equivalent to loading this catalog; no configuration may be created.
+        VariantCatalog catalog = VariantConfigurationService.Load(directory);
+        if (catalog.ConfigurationExists || catalog.Entries.Count != 1 || catalog.Entries[0].DataFile != "GAMEPC" || File.Exists(configPath))
+            throw new InvalidDataException($"{game}: implicit English variant did not remain read-only.");
+
+        // Create Variant + choose Add to Mods: physical creation succeeds first, then explicit metadata persists.
+        var enc = GamePcTextEditor.GetEncoding("CP852");
+        List<GamePcStringEntry> entries = GamePcTextEditor.LoadEntries(gamepc);
+        string createdPath = GameDataFileService.SaveAsNew(gamepc, Path.Combine(directory, "GAMEPCSK"), new Dictionary<int, string>(), entries, enc);
+        if (!File.Exists(createdPath) || GamePcTextEditor.LoadEntries(createdPath).Count != entries.Count)
+            throw new InvalidDataException($"{game}: variant data file did not create/open correctly.");
+        VariantEntry slovak = catalog.Add("Slovak", "GAMEPCSK");
+        VariantConfigurationService.Save(catalog);
+        if (!File.Exists(configPath) || catalog.FindByDataFilePath(createdPath)?.DataFile != "GAMEPCSK")
+            throw new InvalidDataException($"{game}: created variant did not persist or resolve from current data path.");
+
+        // Missing is retained, visible through status, and is never auto-created.
+        VariantEntry missing = catalog.Add("Czech", "GAMEPCCZ");
+        if (catalog.GetStatus(missing).IsAvailable || File.Exists(Path.Combine(directory, "GAMEPCCZ")))
+            throw new InvalidDataException($"{game}: missing variant status is unsafe.");
+
+        // Edit, ordering, and enabled state are metadata-only and persist deterministically.
+        catalog.Edit(slovak.DataFile, "Slovak text", "GAMEPCSK", enabled: false);
+        if (!catalog.MoveUp("GAMEPCSK") || !catalog.MoveDown("GAMEPCSK"))
+            throw new InvalidDataException($"{game}: variant ordering operations failed.");
+        catalog.SetEnabled("GAMEPCSK", true);
+        VariantConfigurationService.Save(catalog);
+        VariantCatalog reloaded = VariantConfigurationService.Load(directory);
+        if (reloaded.FindByDataFile("GAMEPCSK")?.Enabled != true || reloaded.FindByDataFile("GAMEPCSK")?.DisplayName != "Slovak text")
+            throw new InvalidDataException($"{game}: edit/enable persistence failed.");
+
+        // Remove only edits metadata; the physical file survives. A declined metadata prompt is represented by no Add call.
+        if (!reloaded.Remove("GAMEPCSK")) throw new InvalidDataException($"{game}: variant removal failed.");
+        VariantConfigurationService.Save(reloaded);
+        if (!File.Exists(createdPath) || VariantConfigurationService.Load(directory).FindByDataFile("GAMEPCSK") is not null)
+            throw new InvalidDataException($"{game}: remove touched physical data or retained metadata.");
+        string declinedPath = GameDataFileService.SaveAsNew(gamepc, Path.Combine(directory, "GAMEPCHD"), new Dictionary<int, string>(), entries, enc);
+        if (!File.Exists(declinedPath) || VariantConfigurationService.Load(directory).FindByDataFile("GAMEPCHD") is not null)
+            throw new InvalidDataException($"{game}: declined metadata incorrectly changed catalog or physical output.");
     }
 }

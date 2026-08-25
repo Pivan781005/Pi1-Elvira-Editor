@@ -33,14 +33,19 @@ internal sealed class MainForm : Form
     private readonly TabPage tabVga = new();
     private readonly TabPage tabText = new();
     private readonly TabPage tabFont = new();
+    private readonly TabPage tabMods = new();
     private FontEditorForm? _embeddedFontEditor;
 
     private readonly DataGridView textGrid = new();
     private readonly TextBox txtSearch = new();
     private readonly ComboBox cmbTextEncoding = new();
+    private readonly Button btnOpenDataFile = new();
     private readonly Button btnReloadTexts = new();
     private readonly Button btnSaveTexts = new();
+    private readonly Button btnSaveAsDataFile = new();
+    private readonly Button btnCreateDataVariant = new();
     private readonly Label lblTextStatus = new();
+    private readonly Label lblTextSource = new();
     private readonly ComboBox cmbTextContext = new();
     private readonly Label lblTextValidation = new();
     private readonly CheckBox chkOnlyTextRisks = new();
@@ -53,6 +58,18 @@ internal sealed class MainForm : Form
     private readonly ToolTip textToolTip = new();
     private bool _refreshingTextGrid;
     private bool _textGridRefreshQueued;
+    private string? _currentDataFilePath;
+
+    private readonly DataGridView variantGrid = new();
+    private readonly Button btnVariantAdd = new();
+    private readonly Button btnVariantEdit = new();
+    private readonly Button btnVariantRemove = new();
+    private readonly Button btnVariantMoveUp = new();
+    private readonly Button btnVariantMoveDown = new();
+    private readonly Button btnVariantToggleEnabled = new();
+    private readonly Button btnVariantOpenDataFile = new();
+    private readonly Label lblLauncherPlaceholder = new();
+    private VariantCatalog? _variantCatalog;
 
     private readonly List<GamePcStringEntry> _gamePcEntries = new();
     private readonly Dictionary<int, string> _gamePcEdits = new();
@@ -139,45 +156,62 @@ LoadGamePcTexts();
         var topText = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 104,
+            Height = 136,
             Padding = new Padding(6)
         };
 
+        lblTextSource.AutoSize = false;
+        lblTextSource.SetBounds(8, 8, 310, 28);
+        lblTextSource.TextAlign = ContentAlignment.MiddleLeft;
+        lblTextSource.Font = new Font(Font, FontStyle.Bold);
+
+        btnOpenDataFile.Text = UiText.Get("OpenDataFile");
+        btnOpenDataFile.SetBounds(325, 6, 135, 28);
+        btnOpenDataFile.Click += (_, _) => OpenTextDataFile();
+
         lblSearchCaption.Text = UiText.Get("Search");
         lblSearchCaption.AutoSize = true;
-        lblSearchCaption.SetBounds(8, 12, 55, 20);
+        lblSearchCaption.SetBounds(8, 47, 55, 20);
 
-        txtSearch.SetBounds(65, 7, 260, 26);
+        txtSearch.SetBounds(65, 42, 260, 26);
         txtSearch.TextChanged += (_, _) => RefreshTextGrid();
 
         lblEncodingCaption.Text = UiText.Get("Encoding");
         lblEncodingCaption.AutoSize = true;
-        lblEncodingCaption.SetBounds(340, 12, 75, 20);
+        lblEncodingCaption.SetBounds(340, 47, 75, 20);
 
         cmbTextEncoding.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbTextEncoding.Items.AddRange(new object[] { "CP852", "Windows-1250", "Latin1/Raw" });
         cmbTextEncoding.SelectedIndex = 0;
-        cmbTextEncoding.SetBounds(420, 7, 130, 26);
+        cmbTextEncoding.SetBounds(420, 42, 130, 26);
         cmbTextEncoding.SelectedIndexChanged += (_, _) => RefreshTextGrid();
 
         btnReloadTexts.Text = UiText.Get("ReloadTexts");
-        btnReloadTexts.SetBounds(565, 6, 130, 28);
+        btnReloadTexts.SetBounds(470, 6, 90, 28);
         btnReloadTexts.Click += (_, _) => LoadGamePcTexts();
 
         btnSaveTexts.Text = UiText.Get("SaveTexts");
-        btnSaveTexts.SetBounds(705, 6, 150, 28);
+        btnSaveTexts.SetBounds(570, 6, 80, 28);
         btnSaveTexts.Click += (_, _) => SaveGamePcTexts();
+
+        btnSaveAsDataFile.Text = UiText.Get("SaveAsDataFile");
+        btnSaveAsDataFile.SetBounds(660, 6, 105, 28);
+        btnSaveAsDataFile.Click += (_, _) => SaveTextDataFileAs(createVariant: false);
+
+        btnCreateDataVariant.Text = UiText.Get("CreateVariant");
+        btnCreateDataVariant.SetBounds(775, 6, 125, 28);
+        btnCreateDataVariant.Click += (_, _) => SaveTextDataFileAs(createVariant: true);
 
         lblTextContextCaption.Text = UiText.Get("TextContext");
         chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
         chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
         lblTextContextCaption.AutoSize = true;
-        lblTextContextCaption.SetBounds(8, 46, 90, 20);
+        lblTextContextCaption.SetBounds(8, 82, 90, 20);
 
         cmbTextContext.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbTextContext.Items.AddRange(new object[] { UiText.Get("ContextAuto"), UiText.Get("ContextGeneric"), UiText.Get("ContextNpc") });
         cmbTextContext.SelectedIndex = 0;
-        cmbTextContext.SetBounds(100, 41, 210, 26);
+        cmbTextContext.SetBounds(100, 77, 210, 26);
         cmbTextContext.SelectedIndexChanged += (_, _) =>
         {
             RefreshTextGrid();
@@ -186,17 +220,17 @@ LoadGamePcTexts();
         };
 
         lblTextValidation.AutoSize = false;
-        lblTextValidation.SetBounds(325, 44, 900, 22);
+        lblTextValidation.SetBounds(325, 80, 900, 22);
         lblTextValidation.TextAlign = ContentAlignment.MiddleLeft;
 
         chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
         chkOnlyTextRisks.AutoSize = true;
-        chkOnlyTextRisks.SetBounds(8, 76, 210, 22);
+        chkOnlyTextRisks.SetBounds(8, 108, 210, 22);
         chkOnlyTextRisks.CheckedChanged += (_, _) => RefreshTextGrid();
 
         chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
         chkIgnoreTextWarning.AutoSize = true;
-        chkIgnoreTextWarning.SetBounds(235, 76, 250, 22);
+        chkIgnoreTextWarning.SetBounds(235, 108, 250, 22);
         chkIgnoreTextWarning.CheckedChanged += (_, _) =>
         {
             if (_updatingIgnoreCheck || _refreshingTextGrid || ActiveGameProfile != ElviraGameProfile.Elvira1) return;
@@ -207,7 +241,8 @@ LoadGamePcTexts();
 
         topText.Controls.AddRange(new Control[]
         {
-            lblSearchCaption, txtSearch, lblEncodingCaption, cmbTextEncoding, btnReloadTexts, btnSaveTexts,
+            lblTextSource, btnOpenDataFile, btnReloadTexts, btnSaveTexts, btnSaveAsDataFile, btnCreateDataVariant,
+            lblSearchCaption, txtSearch, lblEncodingCaption, cmbTextEncoding,
             lblTextContextCaption, cmbTextContext, lblTextValidation, chkOnlyTextRisks, chkIgnoreTextWarning
         });
 
@@ -274,7 +309,7 @@ LoadGamePcTexts();
 
         // The main application toolbar overlays the top ~75 px of the tab area.
         // Use the same 75 px content offset as the VGA editor so the text-editor
-        // toolbar (Back to VGA / Reload GAMEPC / Save GAMEPC) stays visible.
+        // toolbar (Back to VGA / data-file actions) stays visible.
         var textHost = new Panel
         {
             Dock = DockStyle.Fill,
@@ -287,7 +322,210 @@ LoadGamePcTexts();
         tabText.Controls.Add(textHost);
     }
 
-    private string GamePcPath => Path.Combine(txtGameDir.Text.Trim(), "GAMEPC");
+    private void BuildModsLauncherUi()
+    {
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 72,
+            Padding = new Padding(8),
+            WrapContents = true
+        };
+
+        foreach (Button button in new[] { btnVariantAdd, btnVariantEdit, btnVariantRemove, btnVariantMoveUp, btnVariantMoveDown, btnVariantToggleEnabled, btnVariantOpenDataFile })
+        {
+            button.AutoSize = true;
+            button.Height = 28;
+            actions.Controls.Add(button);
+        }
+        btnVariantAdd.Click += (_, _) => AddVariant();
+        btnVariantEdit.Click += (_, _) => EditVariant();
+        btnVariantRemove.Click += (_, _) => RemoveVariant();
+        btnVariantMoveUp.Click += (_, _) => MoveVariant(-1);
+        btnVariantMoveDown.Click += (_, _) => MoveVariant(1);
+        btnVariantToggleEnabled.Click += (_, _) => ToggleVariantEnabled();
+        btnVariantOpenDataFile.Click += (_, _) => OpenSelectedVariantDataFile();
+
+        variantGrid.Dock = DockStyle.Fill;
+        variantGrid.AllowUserToAddRows = false;
+        variantGrid.AllowUserToDeleteRows = false;
+        variantGrid.AllowUserToResizeRows = false;
+        variantGrid.RowHeadersVisible = false;
+        variantGrid.ReadOnly = true;
+        variantGrid.MultiSelect = false;
+        variantGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        variantGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        variantGrid.BackgroundColor = SystemColors.Window;
+        variantGrid.BorderStyle = BorderStyle.FixedSingle;
+        variantGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Order", Width = 50 });
+        variantGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", Width = 200 });
+        variantGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "DataFile", Width = 130 });
+        variantGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", Width = 110 });
+        variantGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Enabled", Width = 85 });
+        variantGrid.SelectionChanged += (_, _) => UpdateVariantActions();
+
+        lblLauncherPlaceholder.Dock = DockStyle.Bottom;
+        lblLauncherPlaceholder.Height = 34;
+        lblLauncherPlaceholder.Padding = new Padding(8, 8, 0, 0);
+        lblLauncherPlaceholder.ForeColor = SystemColors.GrayText;
+
+        var host = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 75, 0, 0) };
+        host.Controls.Add(variantGrid);
+        host.Controls.Add(actions);
+        host.Controls.Add(lblLauncherPlaceholder);
+        tabMods.Controls.Add(host);
+    }
+
+    private VariantCatalog EnsureVariantCatalog()
+    {
+        string directory = Path.GetFullPath(txtGameDir.Text.Trim());
+        if (_variantCatalog is null || !_variantCatalog.InstallationDirectory.Equals(directory, StringComparison.OrdinalIgnoreCase))
+            _variantCatalog = VariantConfigurationService.Load(directory);
+        return _variantCatalog;
+    }
+
+    private VariantEntry? SelectedVariant => variantGrid.CurrentRow?.Tag as VariantEntry;
+
+    private void RefreshVariantGrid(string? selectDataFile = null)
+    {
+        VariantCatalog catalog = EnsureVariantCatalog();
+        string? selected = selectDataFile ?? SelectedVariant?.DataFile;
+        variantGrid.Rows.Clear();
+        foreach (VariantEntry entry in catalog.Entries)
+        {
+            VariantEntryStatus status = catalog.GetStatus(entry);
+            int rowIndex = variantGrid.Rows.Add(entry.Order, entry.DisplayName, entry.DataFile,
+                status.IsAvailable ? UiText.Get("VariantAvailable") : UiText.Get("VariantMissing"),
+                entry.Enabled ? UiText.Get("VariantYes") : UiText.Get("VariantNo"));
+            DataGridViewRow row = variantGrid.Rows[rowIndex];
+            row.Tag = entry;
+            if (!status.IsAvailable)
+            {
+                row.DefaultCellStyle.BackColor = Color.LemonChiffon;
+                row.Cells["Status"].Style.ForeColor = Color.DarkOrange;
+                row.Cells["Status"].Style.Font = new Font(variantGrid.Font, FontStyle.Bold);
+            }
+            if (!entry.Enabled)
+                row.DefaultCellStyle.ForeColor = SystemColors.GrayText;
+            if (!string.IsNullOrWhiteSpace(selected) && entry.DataFile.Equals(selected, StringComparison.OrdinalIgnoreCase))
+                row.Selected = true;
+        }
+        UpdateVariantActions();
+    }
+
+    private void OpenModsLauncher()
+    {
+        EnsureVariantCatalog();
+        RefreshVariantGrid(Path.GetFileName(CurrentDataFilePath));
+    }
+
+    private void PersistVariants(string? selectDataFile)
+    {
+        VariantCatalog catalog = EnsureVariantCatalog();
+        VariantConfigurationService.Save(catalog);
+        RefreshVariantGrid(selectDataFile);
+    }
+
+    private void AddVariant()
+    {
+        VariantCatalog catalog = EnsureVariantCatalog();
+        using var dialog = new VariantEntryDialog();
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            VariantEntry created = catalog.Add(dialog.DisplayName, dialog.DataFile, dialog.IsVariantEnabled);
+            PersistVariants(created.DataFile);
+        }
+        catch (Exception ex) { ShowVariantError(ex.Message); }
+    }
+
+    private void EditVariant()
+    {
+        VariantEntry? selected = SelectedVariant;
+        if (selected is null) return;
+        using var dialog = new VariantEntryDialog(selected);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            EnsureVariantCatalog().Edit(selected.DataFile, dialog.DisplayName, dialog.DataFile, dialog.IsVariantEnabled);
+            PersistVariants(dialog.DataFile);
+        }
+        catch (Exception ex) { ShowVariantError(ex.Message); }
+    }
+
+    private void RemoveVariant()
+    {
+        VariantEntry? selected = SelectedVariant;
+        if (selected is null) return;
+        string message = string.Format(UiText.Get("VariantRemoveConfirm"), selected.DisplayName, selected.DataFile);
+        if (MessageBox.Show(this, message, UiText.Get("VariantRemove"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            return;
+        EnsureVariantCatalog().Remove(selected.DataFile);
+        PersistVariants(null);
+    }
+
+    private void MoveVariant(int direction)
+    {
+        VariantEntry? selected = SelectedVariant;
+        if (selected is null) return;
+        VariantCatalog catalog = EnsureVariantCatalog();
+        bool moved = direction < 0 ? catalog.MoveUp(selected.DataFile) : catalog.MoveDown(selected.DataFile);
+        if (moved) PersistVariants(selected.DataFile);
+    }
+
+    private void ToggleVariantEnabled()
+    {
+        VariantEntry? selected = SelectedVariant;
+        if (selected is null) return;
+        EnsureVariantCatalog().SetEnabled(selected.DataFile, !selected.Enabled);
+        PersistVariants(selected.DataFile);
+    }
+
+    private void OpenSelectedVariantDataFile()
+    {
+        VariantEntry? selected = SelectedVariant;
+        if (selected is null) return;
+        VariantCatalog catalog = EnsureVariantCatalog();
+        VariantEntryStatus status = catalog.GetStatus(selected);
+        if (!status.IsAvailable)
+        {
+            MessageBox.Show(this, string.Format(UiText.Get("VariantDataFileMissing"), selected.DataFile), UiText.Get("Warning"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        OpenTextDataFile(Path.Combine(catalog.InstallationDirectory, selected.DataFile));
+    }
+
+    private void UpdateVariantActions()
+    {
+        VariantEntry? selected = SelectedVariant;
+        bool hasSelection = selected is not null;
+        btnVariantEdit.Enabled = hasSelection;
+        btnVariantRemove.Enabled = hasSelection;
+        btnVariantMoveUp.Enabled = hasSelection;
+        btnVariantMoveDown.Enabled = hasSelection;
+        btnVariantToggleEnabled.Enabled = hasSelection;
+        btnVariantOpenDataFile.Enabled = hasSelection;
+        btnVariantToggleEnabled.Text = UiText.Get(selected?.Enabled == false ? "VariantEnable" : "VariantDisable");
+    }
+
+    private void ShowVariantError(string message) =>
+        MessageBox.Show(this, message, UiText.Get("Warning"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+    private string CurrentDataFilePath
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(_currentDataFilePath)) return _currentDataFilePath;
+            _currentDataFilePath = Path.Combine(txtGameDir.Text.Trim(), "GAMEPC");
+            return _currentDataFilePath;
+        }
+    }
+
+    private void SetCurrentDataFile(string path)
+    {
+        _currentDataFilePath = Path.GetFullPath(path);
+        lblTextSource.Text = string.Format(UiText.Get("DataFileSource"), Path.GetFileName(_currentDataFilePath));
+    }
 
     private void LoadGamePcTexts()
     {
@@ -297,14 +535,16 @@ LoadGamePcTexts();
             _gamePcEdits.Clear();
             _textDiagnosticStore = TextDiagnosticStore.Load(txtGameDir.Text.Trim());
 
-            if (!File.Exists(GamePcPath))
+            string dataFilePath = CurrentDataFilePath;
+            SetCurrentDataFile(dataFilePath);
+            if (!File.Exists(dataFilePath))
             {
-                lblTextStatus.Text = UiText.Get("NoGamepc");
+                lblTextStatus.Text = string.Format(UiText.Get("NoDataFile"), Path.GetFileName(dataFilePath));
                 textGrid.Rows.Clear();
                 return;
             }
 
-            _gamePcEntries.AddRange(GamePcTextEditor.LoadEntries(GamePcPath));
+            _gamePcEntries.AddRange(GamePcTextEditor.LoadEntries(dataFilePath));
             RefreshTextGrid();
             UpdateTextStatusSummary();
             _detectedProfile = GameProfileDetector.Detect(txtGameDir.Text.Trim(), cmbZone.Items.Count, _gamePcEntries.Count);
@@ -462,9 +702,101 @@ LoadGamePcTexts();
         try
         {
             var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
-            GamePcTextEditor.SaveInPlace(GamePcPath, _gamePcEdits, _gamePcEntries, enc);
-            lblTextStatus.Text = UiText.Get("TextSaved");
+            GamePcTextEditor.SaveInPlace(CurrentDataFilePath, _gamePcEdits, _gamePcEntries, enc);
+            lblTextStatus.Text = string.Format(UiText.Get("TextSaved"), Path.GetFileName(CurrentDataFilePath));
             LoadGamePcTexts();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, UiText.Get("AppTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            lblTextStatus.Text = ex.Message;
+        }
+    }
+
+    private void OpenTextDataFile()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = UiText.Get("OpenDataFile"),
+            InitialDirectory = Directory.Exists(Path.GetDirectoryName(CurrentDataFilePath)) ? Path.GetDirectoryName(CurrentDataFilePath) : txtGameDir.Text.Trim(),
+            Filter = UiText.Get("DataFileFilter"),
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        OpenTextDataFile(dialog.FileName);
+    }
+
+    private void OpenTextDataFile(string path)
+    {
+        SetCurrentDataFile(path);
+        LoadGamePcTexts();
+        SwitchMode(tabText);
+    }
+
+    private void OfferCreatedVariant(string createdPath)
+    {
+        if (MessageBox.Show(this, UiText.Get("AddCreatedVariantQuestion"), UiText.Get("ModsLauncherTab"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        using var dialog = new VariantEntryDialog(displayName: Path.GetFileName(createdPath), dataFile: Path.GetFileName(createdPath), enabled: true);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            VariantEntry created = EnsureVariantCatalog().Add(dialog.DisplayName, dialog.DataFile, dialog.IsVariantEnabled);
+            PersistVariants(created.DataFile);
+        }
+        catch (Exception ex)
+        {
+            // The physical data file has already been created successfully. Metadata is deliberately independent.
+            ShowVariantError(string.Format(UiText.Get("VariantMetadataNotAdded"), ex.Message));
+        }
+    }
+
+    private void ApplyVariantLanguage()
+    {
+        btnVariantAdd.Text = UiText.Get("VariantAdd");
+        btnVariantEdit.Text = UiText.Get("VariantEdit");
+        btnVariantRemove.Text = UiText.Get("VariantRemove");
+        btnVariantMoveUp.Text = UiText.Get("VariantMoveUp");
+        btnVariantMoveDown.Text = UiText.Get("VariantMoveDown");
+        btnVariantOpenDataFile.Text = UiText.Get("VariantOpenDataFile");
+        lblLauncherPlaceholder.Text = UiText.Get("LauncherFutureNote");
+        if (variantGrid.Columns.Count == 5)
+        {
+            variantGrid.Columns["Order"].HeaderText = UiText.Get("VariantOrder");
+            variantGrid.Columns["Name"].HeaderText = UiText.Get("VariantName");
+            variantGrid.Columns["DataFile"].HeaderText = UiText.Get("VariantDataFile");
+            variantGrid.Columns["Status"].HeaderText = UiText.Get("VariantStatus");
+            variantGrid.Columns["Enabled"].HeaderText = UiText.Get("VariantEnabled");
+        }
+        if (_variantCatalog is not null)
+            RefreshVariantGrid(Path.GetFileName(CurrentDataFilePath));
+        else
+            UpdateVariantActions();
+    }
+
+    private void SaveTextDataFileAs(bool createVariant)
+    {
+        if (_gamePcEntries.Count == 0) return;
+        using var dialog = new SaveFileDialog
+        {
+            Title = UiText.Get(createVariant ? "CreateVariant" : "SaveAsDataFile"),
+            InitialDirectory = Path.GetDirectoryName(CurrentDataFilePath),
+            FileName = Path.GetFileName(CurrentDataFilePath),
+            Filter = UiText.Get("DataFileFilter"),
+            OverwritePrompt = false
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
+            string createdPath = GameDataFileService.SaveAsNew(CurrentDataFilePath, dialog.FileName, _gamePcEdits, _gamePcEntries, enc);
+            SetCurrentDataFile(createdPath);
+            LoadGamePcTexts();
+            lblTextStatus.Text = string.Format(UiText.Get(createVariant ? "VariantCreated" : "DataFileSavedAs"), Path.GetFileName(CurrentDataFilePath));
+            if (createVariant)
+                OfferCreatedVariant(createdPath);
         }
         catch (Exception ex)
         {
@@ -479,6 +811,7 @@ LoadGamePcTexts();
         tabVga.Text = UiText.Get("VgaTab");
         tabText.Text = UiText.Get("TextTab");
         tabFont.Text = UiText.Get("FontEditor");
+        tabMods.Text = UiText.Get("ModsLauncherTab");
         btnBrowseGame.Text = UiText.Get("Browse");
         btnReload.Text = UiText.Get("Refresh");
         chkZoom.Text = UiText.Get("PixelZoom");
@@ -487,6 +820,10 @@ LoadGamePcTexts();
         btnRestore.Text = UiText.Get("RestoreOriginal");
         btnReloadTexts.Text = UiText.Get("ReloadTexts");
         btnSaveTexts.Text = UiText.Get("SaveTexts");
+        btnOpenDataFile.Text = UiText.Get("OpenDataFile");
+        btnSaveAsDataFile.Text = UiText.Get("SaveAsDataFile");
+        btnCreateDataVariant.Text = UiText.Get("CreateVariant");
+        SetCurrentDataFile(CurrentDataFilePath);
         lblSearchCaption.Text = UiText.Get("Search");
         lblEncodingCaption.Text = UiText.Get("Encoding");
         lblTextContextCaption.Text = UiText.Get("TextContext");
@@ -525,6 +862,7 @@ LoadGamePcTexts();
             lblStatus.Text = string.Format(UiText.Get("ZonesFound"), cmbZone.Items.Count);
         if (_gamePcEntries.Count > 0)
             UpdateTextStatusSummary();
+        ApplyVariantLanguage();
         btnAbout.Text = UiText.Get("About");
         btnSpriteEditor.Text = UiText.Get("SpriteEditor");
         btnClearEdit.Text = UiText.Get("CancelEdit");
@@ -725,12 +1063,19 @@ LoadGamePcTexts();
         BuildTextEditorUi();
 
         tabFont.Text = UiText.Get("FontEditor");
+        tabMods.Text = UiText.Get("ModsLauncherTab");
+        BuildModsLauncherUi();
 
         tabs.Dock = DockStyle.Fill;
         tabs.TabPages.Add(tabVga);
         tabs.TabPages.Add(tabText);
         tabs.TabPages.Add(tabFont);
-        tabs.SelectedIndexChanged += (_, _) => UpdateModeButtons();
+        tabs.TabPages.Add(tabMods);
+        tabs.SelectedIndexChanged += (_, _) =>
+        {
+            if (tabs.SelectedTab == tabMods) OpenModsLauncher();
+            UpdateModeButtons();
+        };
         Controls.Add(tabs);
 
         grid.Dock = DockStyle.Fill;
@@ -944,6 +1289,8 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         string? directory = Path.GetDirectoryName(Path.GetFullPath(executablePath));
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
         txtGameDir.Text = directory;
+        _currentDataFilePath = null;
+        _variantCatalog = null;
         _detectedProfile = game == ElviraGame.Elvira2 ? ElviraGameProfile.Elvira2 : ElviraGameProfile.Elvira1;
         // An EXE signature is stronger than a prior manual/folder heuristic, so return the UI to detected mode.
         cmbGameProfile.SelectedIndex = 0;
@@ -1075,7 +1422,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
     private void UpdateTextStatusSummary()
     {
         if (_gamePcEntries.Count == 0) return;
-        string baseText = string.Format(UiText.Get("StringsCount"), _gamePcEntries.Count);
+        string baseText = string.Format(UiText.Get("StringsCount"), Path.GetFileName(CurrentDataFilePath), _gamePcEntries.Count);
         if (ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0)
         {
             var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
@@ -1130,6 +1477,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         if (dlg.ShowDialog(this) == DialogResult.OK)
         {
             txtGameDir.Text = dlg.SelectedPath;
+            _variantCatalog = null;
             ApplyLanguage();
             ScanGameFolder();
             LoadGamePcTexts();
