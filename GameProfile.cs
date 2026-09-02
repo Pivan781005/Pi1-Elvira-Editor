@@ -18,9 +18,9 @@ internal sealed record GameProfileInfo(
     {
         ElviraGameProfile.Elvira1 => new(
             ElviraGameProfile.Elvira1,
-            "Elvira I: Mistress of the Dark",
-            96,
-            "Original DOS interactive NPC dialogue path has an observed 96-byte CP852 word-aware limit. This is not a global GAMEPC limit."),
+            "Elvira: Mistress of the Dark",
+            null,
+            "No fixed Elvira I runtime text-length limit is currently proven; byte counts are informational."),
         ElviraGameProfile.Elvira2 => new(
             ElviraGameProfile.Elvira2,
             "Elvira II: The Jaws of Cerberus",
@@ -35,7 +35,7 @@ internal sealed record GameProfileInfo(
             ElviraGameProfile.AutoDetect,
             "Auto-detect",
             null,
-            "Detect from folder name and resource characteristics; manual override is always available.")
+            "Detect from supported executable signatures and resource characteristics; manual override is always available.")
     };
 }
 
@@ -43,14 +43,8 @@ internal static class GameProfileDetector
 {
     public static ElviraGameProfile Detect(string directory, int zoneCount, int? gamePcStringCount)
     {
-        string name = Path.GetFileName(directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        string full = directory;
-
-        if (ContainsElvira2(name) || ContainsElvira2(full))
-            return ElviraGameProfile.Elvira2;
-
-        if (ContainsElvira1(name) || ContainsElvira1(full))
-            return ElviraGameProfile.Elvira1;
+        if (GameInstallationValidator.TryValidate(directory, InstallationDiscoverySource.Manual, out GameInstallation? installation) && installation is not null)
+            return installation.Game;
 
         // Secondary heuristics derived from the currently tested GOG installations.
         // They are intentionally conservative; manual override remains available.
@@ -69,17 +63,4 @@ internal static class GameProfileDetector
         return ElviraGameProfile.Unknown;
     }
 
-    private static bool ContainsElvira2(string value)
-    {
-        string s = value.ToLowerInvariant();
-        return s.Contains("elvira ii") || s.Contains("elvira 2") || s.Contains("elvira2") || s.Contains("jaws of cerberus");
-    }
-
-    private static bool ContainsElvira1(string value)
-    {
-        string s = value.ToLowerInvariant();
-        if (!s.Contains("elvira"))
-            return false;
-        return !ContainsElvira2(value);
-    }
 }

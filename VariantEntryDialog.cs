@@ -39,7 +39,7 @@ internal sealed class VariantEntryDialog : Form
         lblMetadataOnly.AutoSize = false;
         lblMetadataOnly.ForeColor = SystemColors.GrayText;
 
-        btnOk.Text = "OK";
+        btnOk.Text = UiText.Get("Common.Ok");
         btnOk.SetBounds(280, 168, 82, 28);
         btnOk.DialogResult = DialogResult.OK;
         btnOk.Click += (_, _) => ValidateInput();

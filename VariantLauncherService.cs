@@ -1,0 +1,125 @@
+using System.Text.Json;
+
+namespace ElviraVgaEditor;
+
+/// <summary>Read-only routing state. A target is never an instruction to run
+/// DOS; R6R owns process execution.</summary>
+internal enum VariantLaunchReadiness
+{
+    NoActiveInstallation,
+    VariantMissing,
+    ForeignOrInvalidVariant,
+    BuildIncomplete,
+    LaunchReady
+}
+
+internal sealed record VariantLaunchTarget(
+    string GameId,
+    BuiltInVariantId VariantId,
+    VariantRuntimeKind RuntimeKind,
+    string VariantRoot,
+    string WorkingDirectory,
+    string ExecutableFile,
+    string DataFile,
+    VariantDirectoryOperationStatus Ownership,
+    bool BuildConfigured,
+    VariantLaunchReadiness Readiness,
+    string Detail);
+
+internal sealed record LauncherRedirectionPlan(
+    string LauncherRelativePath,
+    string ActiveLauncherPath,
+    string RestoreSourcePath,
+    PristineFileClassification Classification,
+    VariantLaunchTarget Target,
+    bool IsWriteAuthorized,
+    string Detail);
+
+/// <summary>Semantic, non-mutating launcher target resolver. It relies only
+/// on immutable ProjectContext, VariantContext and ownership validation; it
+/// deliberately neither reads GAMEPCO nor discovers root *SK artifacts.</summary>
+internal sealed class VariantLauncherService
+{
+    private readonly VariantDirectoryService _directories;
+    private readonly CompositeBuildService _composite;
+
+    public VariantLauncherService(VariantDirectoryService directories, CompositeBuildService composite)
+    {
+        _directories = directories ?? throw new ArgumentNullException(nameof(directories));
+        _composite = composite ?? throw new ArgumentNullException(nameof(composite));
+    }
+
+    public VariantLaunchTarget Resolve(ProjectContext? project, VariantContext? variant)
+    {
+        if (project is null || variant is null)
+            return new("None", 0, 0, string.Empty, string.Empty, string.Empty, string.Empty,
+                VariantDirectoryOperationStatus.InvalidContext, false, VariantLaunchReadiness.NoActiveInstallation,
+                "No game selected. Use Find games... or Browse folder...");
+        if (!ReferenceEquals(project, variant.Project))
+            return Invalid(project, variant, "VariantContext does not belong to the active ProjectContext.");
+
+        string root;
+        try { root = _directories.GetVariantDirectoryPath(project, variant); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
+        { return Invalid(project, variant, ex.Message); }
+        VariantDirectoryOperationResult ownership = _directories.ValidateOwnedVariantDirectory(project, variant);
+        if (ownership.Status == VariantDirectoryOperationStatus.NotFound)
+            return Make(project, variant, root, ownership.Status, false, VariantLaunchReadiness.VariantMissing, "Owned variant directory is missing.");
+        if (ownership.Status != VariantDirectoryOperationStatus.AlreadyValid)
+            return Make(project, variant, root, ownership.Status, false, VariantLaunchReadiness.ForeignOrInvalidVariant,
+                "Variant directory is not owned by this project/runtime: " + ownership.Status + ".");
+
+        CompositeBuildPlan plan = _composite.CreatePlan(project, variant, CompositeBuildMode.Full);
+        bool configured = plan.Capabilities.Count > 0 && plan.Capabilities.All(capability => capability.Configured);
+        IReadOnlyList<string> artifacts = _composite.GetRuntimeArtifactNames(project, variant);
+        string executableName = artifacts.Single(name => name.EndsWith(".EXE", StringComparison.OrdinalIgnoreCase));
+        string dataName = artifacts.Single(name => !name.EndsWith(".EXE", StringComparison.OrdinalIgnoreCase));
+        string output = Path.Combine(root, executableName);
+        string data = Path.Combine(root, dataName);
+        bool outputExists = File.Exists(output) && File.Exists(data);
+        if (outputExists)
+        {
+            try
+            {
+                VariantManifest manifest = VariantManifestService.Read(root);
+                if (!manifest.ProjectCode.Equals(_composite.GetProjectVariantCode(project, variant), StringComparison.OrdinalIgnoreCase))
+                    return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                        "The generated output belongs to a different selected project variant.");
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
+            {
+                return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                    "The generated output has no valid project-identity manifest.");
+            }
+        }
+        if (!configured || !outputExists)
+            return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                !configured ? "Full build is not configured." : "Required generated executable or data artifact is missing.");
+        return Make(project, variant, root, ownership.Status, true, VariantLaunchReadiness.LaunchReady, "Authorized generated variant output is present.", executableName, dataName);
+    }
+
+    public LauncherRedirectionPlan CreateRedirectionPlan(ProjectContext project, VariantContext variant)
+    {
+        VariantLaunchTarget target = Resolve(project, variant);
+        string launcher = project.GameProfile == ElviraGameProfile.Elvira1 ? "ELVIRA.BAT" : "CERBERUS.BAT";
+        PristineManifestFile? manifestFile = project.PristineManifest.Files.SingleOrDefault(file => file.RelativePath.Equals(launcher, StringComparison.OrdinalIgnoreCase));
+        string active = Path.Combine(project.GameRoot, launcher);
+        string restore = Path.Combine(project.StorageLayout.MutableBackupsRoot, launcher);
+        bool classified = manifestFile?.Classification == PristineFileClassification.MutableBackedUp;
+        bool backup = classified && File.Exists(restore);
+        bool authorized = target.Readiness == VariantLaunchReadiness.LaunchReady && classified && backup;
+        string detail = !classified ? "Launcher is not declared MutableBackedUp in the pristine manifest."
+            : !backup ? "Pristine mutable launcher backup is missing."
+            : !authorized ? "Variant is not launch-ready."
+            : "Future launcher redirection is authorized; R6Q does not write it.";
+        return new(launcher, active, restore, manifestFile?.Classification ?? PristineFileClassification.Immutable, target, authorized, detail);
+    }
+
+    private static VariantLaunchTarget Invalid(ProjectContext project, VariantContext variant, string detail) =>
+        Make(project, variant, string.Empty, VariantDirectoryOperationStatus.InvalidContext, false, VariantLaunchReadiness.ForeignOrInvalidVariant, detail);
+
+    private static VariantLaunchTarget Make(ProjectContext project, VariantContext variant, string root, VariantDirectoryOperationStatus ownership,
+        bool configured, VariantLaunchReadiness readiness, string detail, string? executableName = null, string? dataName = null) => new(
+            PristineManifestService.GameIdFor(project.GameProfile), variant.VariantId, variant.RuntimeKind, root, root,
+            executableName ?? variant.GeneratedExecutableName, dataName ?? variant.LogicalDataFileName, ownership, configured, readiness, detail);
+}

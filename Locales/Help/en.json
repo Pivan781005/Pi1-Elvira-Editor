@@ -1,0 +1,160 @@
+{
+  "topics": [
+    {
+      "id": "getting-started",
+      "group": "General",
+      "title": "Getting Started",
+      "body": "1. Choose a supported installation with **Find games...** or **Browse folder...**.\n2. Select the installation explicitly. The editor starts with no active game.\n3. Choose the required **Active Variant**: Elvira I VGA, Elvira I EGA, or Elvira II VGA.\n4. Choose an **Edition**: Original (EN) is read-only; SK/S1-style editions own isolated editable project state.\n5. Make edits in Graphics, Game Text, Runtime UI, or Font, then use **Save to project**. This does not modify the pristine game and does not create runnable files.\n6. Use **Build variant...** to open the active Runtime + Edition build target, build/rebuild it, review its manifest/readiness, and only then use **Run** or **Debug**.\n\nFor exported sprite PNG files, avoid Microsoft Paint because it may turn transparent pixels opaque white; use an RGBA-preserving editor such as FireAlpaca, Paint.NET, or GIMP. Changing the interface language never activates, builds, runs, or modifies a game."
+    },
+    {
+      "id": "active-variant",
+      "group": "General",
+      "title": "Active Variant",
+      "body": "**Installation** and **Active Variant** are separate choices. Elvira I provides **VGA / RUNVGA** and **EGA / RUNEGA**. Elvira II provides **VGA / RUNIT**.\n\nChanging the active variant updates the context used by Graphics, Game Text, Runtime UI, Font, and Mods/Launcher. Selecting a variant does not build files and does not start the game."
+    },
+    {
+      "id": "variant-manager",
+      "group": "General",
+      "title": "Variant Manager",
+      "body": "Variant Manager shows the supported runtime variants, their editor-owned output directory, ownership state, build state, and launch readiness.\n\nUse it to see whether an output is missing, incomplete, ready, or unsafe. A directory that is foreign, invalid, or not owned by the editor is reported and preserved; it must never be silently adopted or deleted."
+    },
+    {
+      "id": "build-status",
+      "group": "General",
+      "title": "Build Status",
+      "body": "**Missing** — the editor-owned variant output does not exist.\n\n**Invalid** — the current context or output directory is not valid for a safe build.\n\n**Incomplete** — an owned output exists but required build products are missing or incomplete.\n\n**Ready** — the owned output contains the required executable and logical game data and has passed the editor's readiness checks.\n\nA directory merely existing on disk does not mean the variant is ready."
+    },
+    {
+      "id": "variant-manifest",
+      "group": "General",
+      "title": "Variant Manifest",
+      "body": "A completed editor-owned build writes **variant-manifest.json** into the variant output. It records the baseline identity, the runtime that was built, build state, and deterministic SHA-256 identities for generated artifacts.\n\nThe manifest is diagnostic metadata. Its presence alone does not make a build Ready; always use Build Status and readiness checks."
+    },
+    {
+      "id": "localization",
+      "group": "General",
+      "title": "Interface Language",
+      "body": "The interface language is independent of game text encoding, the selected translation, font profile, and active runtime variant.\n\nEnglish is the canonical interface language. Slovak and Czech use their own locale files and may fall back to English if a future key is not yet translated. Switching language refreshes the interface, Help, and About without changing project or game state."
+    },
+    {
+      "id": "recovery-safety",
+      "group": "General",
+      "title": "Recovery & Safety",
+      "body": "Recovery & Safety verifies the captured pristine installation baseline and distinguishes editor-owned outputs from external changes.\n\nRecovery actions are explicit. The editor may restore known mutable files from its baseline area and manage editor-owned variant directories. Unexpected external files or foreign directories are reported and preserved instead of being deleted automatically."
+    },
+    {
+      "id": "restore-semantics",
+      "group": "General",
+      "title": "What Restore Means",
+      "body": "Always review the recovery preview before confirming an action.\n\n**Restore** returns known editor-managed mutable content to its captured baseline state. **Rebuild** recreates an editor-owned variant output. **Remove owned variant** removes only an output that passes ownership checks.\n\nFiles that the editor cannot prove it owns are not silently removed. Recovery is not a substitute for manually deleting unknown files from the game directory."
+    },
+    {
+      "id": "legacy-import",
+      "group": "General",
+      "title": "Manual Open / Legacy Import",
+      "body": "Manual opening, Save As, and import remain available for compatible GAMEPC-style data and supported executable/font sources. They are compatibility tools for deliberate manual work.\n\nFor normal project work, prefer the active-variant project workflow and a controlled variant build. Opening or previewing a source should be treated as read-only until you explicitly choose a save, apply, or build action."
+    },
+    {
+      "id": "recommended-workflow",
+      "group": "General",
+      "title": "Recommended Project Workflow",
+      "body": "**Select installation → Select active variant → Edit project content → Check Build Status → Build variant → Review readiness/manifest → Run or Debug.**\n\nKeep the original installation as the reference baseline. Generated runtime outputs belong to editor-owned variant builds. If Recovery & Safety reports an unexpected file, investigate it before continuing."
+    },
+    {
+      "id": "troubleshooting",
+      "group": "General",
+      "title": "Troubleshooting & Known Limits",
+      "body": "If a game is not available, validate the intended installation explicitly. Unsupported or altered executable layouts remain read-only unless a supported production path is available.\n\nReplacement PNG files must preserve the image dimensions and use colors from the active 16-color palette. A PNG containing other colors must be corrected before replacement.\n\nCharacter **0x81** is reserved by the engine for HUD cell erasing and is protected from normal font editing.\n\nSome Runtime UI mappings are intentionally incomplete; those records must remain blocked rather than guessed. See the Runtime UI sections for the current limits."
+    },
+    {
+      "id": "graphics-e1-vga",
+      "group": "Graphics",
+      "title": "Elvira I — VGA",
+      "body": "Select **Elvira I VGA / RUNVGA** as the active variant. Choose the required VGA resource, palette, and image entry, then inspect the preview before editing.\n\nUse **Export PNG...** to create an editable copy. Preserve the original dimensions and use only colors from the active 16-color palette. **Replace PNG...** loads the edited image into the project; review the preview before saving project state or building a variant.\n\nDo not assume that a visually similar RGB color belongs to the palette: exact palette colors are required."
+    },
+    {
+      "id": "graphics-e1-ega",
+      "group": "Graphics",
+      "title": "Elvira I — EGA",
+      "body": "Select **Elvira I EGA / RUNEGA** before editing. The Graphics view follows the global active variant and exposes only resources that are valid for that context.\n\nTreat VGA and EGA as separate runtime targets. Do not reuse executable names or runtime assumptions between them. Export/replace workflows must preserve the source image dimensions and the active palette constraints."
+    },
+    {
+      "id": "graphics-e2-vga",
+      "group": "Graphics",
+      "title": "Elvira II — VGA",
+      "body": "Elvira II uses the **VGA / RUNIT** runtime profile. Select Elvira II VGA before editing graphics so the project resolves the correct game context.\n\nUse the same controlled workflow: inspect resource and palette, export PNG, edit without changing dimensions, keep all colors inside the active 16-color palette, replace the PNG, review the preview, then save/build explicitly."
+    },
+    {
+      "id": "text-e1",
+      "group": "Game Text",
+      "title": "Elvira I",
+      "body": "Game Text edits compatible **GAMEPC-style** content while preserving logical string order and required non-text structure.\n\nThe **Original B**, **Translation B**, and **Difference** columns show encoded byte counts for review. They are informational; the editor must not invent an unproven fixed text-length limit.\n\nFor a translation project, work in the selected project/variant context and save deliberately. Use manual Open/Save As only when you intentionally want the legacy/manual workflow."
+    },
+    {
+      "id": "text-e2",
+      "group": "Game Text",
+      "title": "Elvira II",
+      "body": "Elvira II uses the same GAMEPC-style project text model with the **Elvira II VGA / RUNIT** context. Search, edit, and review encoded byte counts exactly as for Elvira I.\n\nKeep text editing separate from Runtime UI overrides: GAMEPC text and executable-resident Runtime UI are different content sources and are built through different stages."
+    },
+    {
+      "id": "runtime-ui-e1-vga",
+      "group": "Runtime UI",
+      "title": "Elvira I — VGA / RUNVGA",
+      "body": "Runtime UI overrides are project state stored separately from GAMEPC text. Saving Runtime UI project state must not rewrite GAMEPC.\n\nFor RUNVGA, the complete per-record production span/capacity mapping is not yet proven for every Runtime UI record. Records without a proven mapping remain **MappingIncomplete** and must not be patched by guesswork.\n\nPreview and validate available records, but treat MappingIncomplete as a deliberate safety block."
+    },
+    {
+      "id": "runtime-ui-e1-ega",
+      "group": "Runtime UI",
+      "title": "Elvira I — EGA / RUNEGA",
+      "body": "RUNEGA uses its own validated Runtime UI mapping and is independent of RUNVGA. Select Elvira I EGA before reviewing or editing these records.\n\nRuntime UI text can have fixed layout and interaction constraints. Keep translated text within the validated record capacity and preserve the original menu/hotspot behavior. Save project state first; executable changes belong to the controlled build."
+    },
+    {
+      "id": "runtime-ui-e2",
+      "group": "Runtime UI",
+      "title": "Elvira II — RUNIT",
+      "body": "RUNIT Runtime UI state is separate from GAMEPC. The **SAVE_FAILURE** route has a proven production span and may be validated against its known capacity.\n\nThe exact redirected routes for **LOAD_FAILURE**, **FILE_NOT_FOUND**, and **TRY_ANOTHER_DISK** are not yet proven. Those records remain **MappingIncomplete** and must not be patched until their runtime routes are verified."
+    },
+    {
+      "id": "font-e1-vga",
+      "group": "Font",
+      "title": "Elvira I — VGA / RUNVGA",
+      "body": "RUNVGA supports the validated extended CP852 font workflow. You can preview the source font, edit a working copy, import/export bitmap font data, or rasterize a suitable vector font into the game's 8×8 storage.\n\nThe recovered renderer displays the left 6 columns; the two rightmost stored columns are renderer-inactive. Character **0x81** is reserved for HUD erasing and is protected in every supported output path.\n\nCreate executable output only through a supported, explicit production/build action."
+    },
+    {
+      "id": "font-e1-ega",
+      "group": "Font",
+      "title": "Elvira I — EGA / RUNEGA",
+      "body": "RUNEGA has its own supported font profile and must be treated separately from RUNVGA. Select Elvira I EGA before loading or applying font project state.\n\nThe same CP852 editing principles apply: preserve validated storage/layout rules and keep character **0x81** reserved for the engine.\n\nCompatibility note: RUNEGA rendering has been observed correctly in DOSBox 0.74-2 and DOSBox Staging; DOSBox-X may display different characters in some configurations."
+    },
+    {
+      "id": "font-e2",
+      "group": "Font",
+      "title": "Elvira II — RUNIT",
+      "body": "The supported RUNIT extended CP852 profile uses a validated split low/high font arrangement. Unknown or modified executable layouts remain read-only unless they match a supported production source.\n\nCharacter **0x81** remains the protected HUD erase character. Edited glyphs and safe default slots are used only when an explicit supported output/build action is performed."
+    },
+    {
+      "id": "mods-launcher-e1",
+      "group": "Mods, Launching & Debugging",
+      "title": "Elvira I — Mods & Launcher",
+      "body": "Mods & Launcher follows the selected Elvira I runtime variant. Use it to review variant readiness and configure the launcher for the intended built output.\n\nLauncher restoration is a controlled recovery action. Do not treat manually modified or foreign launcher files as editor-owned without review."
+    },
+    {
+      "id": "run-debug-e1",
+      "group": "Mods, Launching & Debugging",
+      "title": "Elvira I — Run / Debug",
+      "body": "**Run** and **Debug** require a Ready editor-owned Elvira I VGA or EGA build. Merely selecting a variant never starts a process.\n\nBefore launching, verify Build Status, readiness, and the expected executable/data output. If the build is Missing, Invalid, or Incomplete, resolve that state first."
+    },
+    {
+      "id": "mods-launcher-e2",
+      "group": "Mods, Launching & Debugging",
+      "title": "Elvira II — Mods & Launcher",
+      "body": "Elvira II uses the VGA / RUNIT runtime profile. Configure launching only for a validated editor-owned output and review readiness before generating or updating launcher configuration.\n\nUnknown files or foreign directories must remain outside editor ownership."
+    },
+    {
+      "id": "run-debug-e2",
+      "group": "Mods, Launching & Debugging",
+      "title": "Elvira II — Run / Debug",
+      "body": "Run/Debug is available only when the Elvira II VGA build is Ready. A manifest is useful for diagnostics, but it does not authorize launch by itself.\n\nStatus refresh is read-only: it must not build, modify, or launch the game."
+    }
+  ]
+}

@@ -26,16 +26,17 @@ internal static class ElviraPaletteLoader
     public static List<ElviraPaletteBank> Load(string vga1Path)
     {
         byte[] data = File.ReadAllBytes(vga1Path);
-        if (data.Length < 8)
+        if (data.Length < 12)
             throw new InvalidDataException($"{Path.GetFileName(vga1Path)} je príliš malý.");
 
+        // xNN1.VGA stores the actual palette-bank count in its BE header at +0x02.
+        // Bytes after the declared table belong to other VGA resource structures;
+        // they are not additional 0x20-byte palette banks.
+        int count = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(2, 2));
         int paletteBase = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(6, 2));
-        if (paletteBase < 0 || paletteBase + 32 > data.Length)
+        if (count <= 0 || count > 1000 || paletteBase < 0 || (long)paletteBase + (long)count * 32 > data.Length)
             throw new InvalidDataException(
-                $"Neplatný palette table offset 0x{paletteBase:X} v {Path.GetFileName(vga1Path)}.");
-
-        int count = (data.Length - paletteBase) / 32;
-        count = Math.Min(count, 1000);
+                $"Neplatná palette table/count hlavička v {Path.GetFileName(vga1Path)} (count={count}, offset=0x{paletteBase:X}).");
 
         var result = new List<ElviraPaletteBank>();
 

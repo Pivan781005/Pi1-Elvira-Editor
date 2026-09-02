@@ -1,4 +1,4 @@
-# π1 Elvira I&II VGA Editor v1.3
+# π1 Elvira I&II VGA Editor v1.0
 
 A Windows editor for the original DOS releases of **Elvira: Mistress of the
 Dark** and **Elvira II: The Jaws of Cerberus**. It edits VGA resources, GAMEPC
@@ -27,7 +27,10 @@ editing, import, export, save-copy, and apply operations keep the reserved
 ## Text and VGA resources
 
 The Text Editor supports GAMEPC text with CP852, Windows-1250, and raw Latin-1
-encoding choices. The VGA Editor previews and replaces supported VGA images.
+encoding choices. It repacks the complete header-counted text pool when text
+length changes, preserving logical indices and the current file's binary suffix.
+Elvira I runtime diagnostics remain context-specific; Elvira II has no inherited
+96-byte heuristic. The VGA Editor previews and replaces supported VGA images.
 
 ## Backups and safety
 

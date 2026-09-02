@@ -28,36 +28,11 @@ internal sealed record TextDiagnosticResult(
 
 internal static class Elvira1TextMetadata
 {
-    public const int DialogueLimit = 96;
-    public static readonly HashSet<int> ConfirmedAffected = new() { 417, 424 };
-    public static readonly HashSet<int> ConfirmedSafe = new() { 298, 425, 627 };
-
     public static TextDiagnosticResult Evaluate(int index, string text, Encoding enc, bool ignored)
     {
         int bytes = enc.GetByteCount(text);
-        var sim = DialogueLimitValidator.Simulate(text, enc, DialogueLimit);
-        int over = Math.Max(0, bytes - DialogueLimit);
-
-        if (ignored)
-            return new(TextDiagnosticKind.Ignored, bytes, DialogueLimit, over, sim.VisibleText, sim.TruncatedText,
-                "User override", "MANUAL");
-
-        if (ConfirmedSafe.Contains(index))
-            return new(TextDiagnosticKind.ConfirmedSafe, bytes, null, 0, text, string.Empty,
-                index switch { 298 => "Object/room description", 425 => "Cutscene/script message", 627 => "Scroll/script message", _ => "Direct render" },
-                "CONFIRMED SAFE PATH");
-
-        if (ConfirmedAffected.Contains(index))
-            return new(bytes > DialogueLimit ? TextDiagnosticKind.ConfirmedRisk : TextDiagnosticKind.ConfirmedSafe,
-                bytes, DialogueLimit, over, sim.VisibleText, sim.TruncatedText,
-                "Interactive NPC dialogue", "CONFIRMED RUNTIME CASE");
-
-        if (bytes > DialogueLimit)
-            return new(TextDiagnosticKind.PossibleRisk, bytes, DialogueLimit, over, sim.VisibleText, sim.TruncatedText,
-                "Unknown / possible dialogue path", "POSSIBLE");
-
-        return new(TextDiagnosticKind.None, bytes, DialogueLimit, 0, text, string.Empty,
-            "Unknown", "N/A");
+        return new(TextDiagnosticKind.None, bytes, null, 0, text, string.Empty,
+            "No fixed Elvira I runtime text-length limit is currently proven.", "PROVEN NO GLOBAL LIMIT");
     }
 }
 

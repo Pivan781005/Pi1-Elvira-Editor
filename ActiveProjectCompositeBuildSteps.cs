@@ -1,0 +1,212 @@
+namespace ElviraVgaEditor;
+
+/// <summary>Explicit snapshot of editor project state consumed by one authorized
+/// composite build. It is never persisted in the pristine game root.</summary>
+internal sealed record ActiveProjectBuildInput(
+    TranslationProjectVariant Translation,
+    GraphicsProjectState Graphics,
+    RuntimeUiTextState RuntimeUi,
+    bool HasFontProjectState = false);
+
+internal static class ActiveProjectCompositeBuildFactory
+{
+    internal static IReadOnlyList<ICompositeBuildStep> Create(VariantDirectoryService directories,
+        TranslationProjectService translations, GraphicsVariantService graphics, ActiveProjectBuildInput input)
+    {
+        ArgumentNullException.ThrowIfNull(directories); ArgumentNullException.ThrowIfNull(translations);
+        ArgumentNullException.ThrowIfNull(graphics); ArgumentNullException.ThrowIfNull(input);
+        return
+        [
+            new SelectedTranslationProjectBuildStep(translations, directories, input.Translation),
+            new GraphicsProjectMaterializationBuildStep(directories, graphics, input.Graphics),
+            new NoProjectChangesBuildStep(CompositeBuildStage.ApplyFontTransformations, "No saved font project changes", input.HasFontProjectState),
+            new RuntimeUiProjectBuildStep(input.RuntimeUi),
+            new TranslationAwareExecutableBuildStep(directories, input.Translation)
+        ];
+    }
+}
+
+internal static class ActiveProjectBuildIdentity
+{
+    internal static string ExecutableName(VariantContext variant, TranslationProjectVariant translation)
+    {
+        if (translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase)) return variant.SourceExecutableName;
+        string stem = Path.GetFileNameWithoutExtension(variant.SourceExecutableName);
+        string name = (stem + translation.Code + ".EXE").ToUpperInvariant();
+        if (!GameDataFileService.IsDos83FileName(name)) throw new InvalidDataException("Selected translation executable name is not DOS 8.3 safe.");
+        return name;
+    }
+}
+
+/// <summary>Materializes the already-selected project translation. English is
+/// intentionally the disposable baseline GAMEPC/RUN*.EXE pair.</summary>
+internal sealed class SelectedTranslationProjectBuildStep : ICompositeBuildStep
+{
+    private readonly TranslationProjectService _translations;
+    private readonly VariantDirectoryService _directories;
+    private readonly TranslationProjectVariant _translation;
+    internal SelectedTranslationProjectBuildStep(TranslationProjectService translations, VariantDirectoryService directories, TranslationProjectVariant translation)
+    { _translations = translations; _directories = directories; _translation = translation; }
+    public CompositeBuildStage Stage => CompositeBuildStage.ApplyDataTransformations;
+    public string Name => "Selected project translation data";
+    public bool AppliesTo(VariantContext variant) => variant is not null;
+    public string? Preflight(ProjectContext project, VariantContext variant)
+    {
+        if (project is null || variant is null || !ReferenceEquals(project, variant.Project)) return "Selected translation requires the exact active project and runtime.";
+        if (!GameDataFileService.IsDos83FileName(_translation.DataFile) || !GameDataFileService.IsDos83FileName(_translation.ExeFile)) return "Selected translation output names are not DOS 8.3 safe.";
+        if (_translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase)) return null;
+        TranslationProjectLoadResult loaded = _translations.Load(project);
+        if (!loaded.IsSuccess) return loaded.Detail ?? "Translation project data is invalid.";
+        return loaded.State!.Variants.Any(item => item.Code.Equals(_translation.Code, StringComparison.OrdinalIgnoreCase) &&
+            item.DataFile.Equals(_translation.DataFile, StringComparison.OrdinalIgnoreCase) && item.ExeFile.Equals(_translation.ExeFile, StringComparison.OrdinalIgnoreCase) &&
+            item.Edits.OrderBy(edit => edit.Key).SequenceEqual(_translation.Edits.OrderBy(edit => edit.Key)))
+            ? null : "The selected translation no longer matches persisted project state.";
+    }
+    public string? Execute(ProjectContext project, VariantContext variant)
+    {
+        try
+        {
+            if (!_translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase))
+                _ = _translations.MaterializeOwnedVariantDataFile(project, variant, _directories, _translation);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+        { return "Selected translation materialization failed: " + ex.Message; }
+    }
+}
+
+/// <summary>Rebuilds only the project-owned image replacements applicable to
+/// the selected runtime, inside its marker-validated variant directory.</summary>
+internal sealed class GraphicsProjectMaterializationBuildStep : ICompositeBuildStep
+{
+    private readonly VariantDirectoryService _directories;
+    private readonly GraphicsVariantService _graphics;
+    private readonly GraphicsProjectState _state;
+    internal GraphicsProjectMaterializationBuildStep(VariantDirectoryService directories, GraphicsVariantService graphics, GraphicsProjectState state)
+    { _directories = directories; _graphics = graphics; _state = state; }
+    public CompositeBuildStage Stage => CompositeBuildStage.ApplyGraphicsTransformations;
+    public string Name => "Project graphics edits";
+    public bool AppliesTo(VariantContext variant) => variant is not null;
+    public string? Preflight(ProjectContext project, VariantContext variant)
+    {
+        try
+        {
+            foreach (GraphicsVariantProjection projection in _graphics.GetGraphicsEditsForVariant(project, _state, variant))
+                if (!File.Exists(projection.Edit.ReplacementPngPath)) return "Graphics replacement is missing: " + projection.Edit.ReplacementPngPath;
+            return null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException) { return "Graphics project input is invalid: " + ex.Message; }
+    }
+    public string? Execute(ProjectContext project, VariantContext variant)
+    {
+        try
+        {
+            string root = _directories.GetVariantDirectoryPath(project, variant);
+            foreach (IGrouping<string, GraphicsVariantProjection> group in _graphics.GetGraphicsEditsForVariant(project, _state, variant)
+                .GroupBy(item => item.Edit.Identity.ResourceFileName, StringComparer.OrdinalIgnoreCase).OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                string target = Path.Combine(root, group.Key);
+                if (!File.Exists(target)) return "Variant graphics source is missing: " + group.Key;
+                Dictionary<int, string> edits = group.OrderBy(item => item.Edit.Identity.ImageId).ToDictionary(item => item.Edit.Identity.ImageId, item => item.Edit.ReplacementPngPath);
+                IReadOnlyDictionary<int, System.Drawing.Color[]> palettes = group.ToDictionary(item => item.Edit.Identity.ImageId,
+                    item => ResolvePalette(project, target, item.Edit.Identity.ImageId));
+                string temporary = target + ".pi1-build.tmp";
+                try
+                {
+                    _ = new VgaFileRebuilder().Rebuild(target, edits, temporary,
+                        entry => palettes.TryGetValue(entry.ImageId, out System.Drawing.Color[]? palette) ? palette : null);
+                    _ = new VgaImageTableParser(File.ReadAllBytes(temporary)).Parse();
+                    File.Move(temporary, target, true);
+                }
+                finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            }
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        { return "Graphics materialization failed: " + ex.Message; }
+    }
+
+    private static System.Drawing.Color[] ResolvePalette(ProjectContext project, string resourcePath, int imageId)
+    {
+        string name = Path.GetFileName(resourcePath);
+        if (name.Length < 3) throw new InvalidDataException("Graphics resource has no paired palette identity.");
+        string palettePath = Path.Combine(Path.GetDirectoryName(resourcePath)!, name[..2] + "1.VGA");
+        if (!File.Exists(palettePath)) throw new InvalidDataException("Paired palette resource is missing: " + Path.GetFileName(palettePath));
+        IReadOnlyList<ElviraPaletteBank> banks = ElviraPaletteLoader.Load(palettePath);
+        PaletteResolution resolution = project.GameProfile switch
+        {
+            ElviraGameProfile.Elvira1 => new Elvira1PaletteResolver().Resolve(palettePath, resourcePath, imageId),
+            ElviraGameProfile.Elvira2 => new Elvira2PaletteResolver().Resolve(palettePath, resourcePath, imageId),
+            _ => PaletteResolution.Unresolved()
+        };
+        int bank = Elvira1PaletteResolver.EffectivePaletteBank(null, resolution, banks.Count);
+        if (banks.Count == 0 || bank < 0 || bank >= banks.Count) throw new InvalidDataException("No usable palette bank is available for " + name + " image " + imageId + ".");
+        return banks[bank].Colors;
+    }
+}
+
+internal sealed class NoProjectChangesBuildStep : ICompositeBuildStep
+{
+    private readonly CompositeBuildStage _stage; private readonly string _name; private readonly bool _hasUnsupportedState;
+    internal NoProjectChangesBuildStep(CompositeBuildStage stage, string name, bool hasUnsupportedState)
+    { _stage = stage; _name = name; _hasUnsupportedState = hasUnsupportedState; }
+    public CompositeBuildStage Stage => _stage; public string Name => _name;
+    public bool AppliesTo(VariantContext variant) => variant is not null;
+    public string? Preflight(ProjectContext project, VariantContext variant) => _hasUnsupportedState ? "Saved project state requires a materializer that is not configured." : null;
+    public string? Execute(ProjectContext project, VariantContext variant) => null;
+}
+
+internal sealed class RuntimeUiProjectBuildStep : ICompositeBuildStep
+{
+    private readonly RuntimeUiTextState _state;
+    internal RuntimeUiProjectBuildStep(RuntimeUiTextState state) => _state = state;
+    public CompositeBuildStage Stage => CompositeBuildStage.ApplyRuntimeUiTransformations;
+    public string Name => "Runtime UI project state";
+    public bool AppliesTo(VariantContext variant) => variant is not null;
+    public string? Preflight(ProjectContext project, VariantContext variant) => _state.Overrides.Count == 0 ? null : "Runtime UI overrides are saved project state but their executable materializer is not configured.";
+    public string? Execute(ProjectContext project, VariantContext variant) => null;
+}
+
+/// <summary>Uses the frozen runtime bootstrap, then gives the selected
+/// translation its semantic executable filename. The data filename is supplied
+/// by the launcher; it is not hard-coded into the DOS executable.</summary>
+internal sealed class TranslationAwareExecutableBuildStep : ICompositeBuildStep
+{
+    private readonly VariantDirectoryService _directories;
+    private readonly TranslationProjectVariant _translation;
+    internal TranslationAwareExecutableBuildStep(VariantDirectoryService directories, TranslationProjectVariant translation)
+    { _directories = directories; _translation = translation; }
+    public CompositeBuildStage Stage => CompositeBuildStage.ApplyExecutableTransformation;
+    public string Name => "Selected translation executable";
+    public bool AppliesTo(VariantContext variant) => variant is not null;
+    public string? Preflight(ProjectContext project, VariantContext variant)
+    {
+        if (_translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase)) return null;
+        return CreateBootstrap(variant)?.Preflight(project, variant);
+    }
+    public string? Execute(ProjectContext project, VariantContext variant)
+    {
+        if (_translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase)) return null;
+        ICompositeBuildStep? bootstrap = CreateBootstrap(variant);
+        if (bootstrap is null) return "No executable bootstrap is defined for the selected runtime.";
+        string? error = bootstrap.Execute(project, variant);
+        if (error is not null) return error;
+        try
+        {
+            string root = _directories.GetVariantDirectoryPath(project, variant);
+            string generated = Path.Combine(root, variant.GeneratedExecutableName);
+            string selected = Path.Combine(root, ActiveProjectBuildIdentity.ExecutableName(variant, _translation));
+            if (!File.Exists(generated)) return "Frozen bootstrap did not create its generated executable.";
+            if (!generated.Equals(selected, StringComparison.OrdinalIgnoreCase)) File.Move(generated, selected, false);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "Selected executable materialization failed: " + ex.Message; }
+    }
+    private ICompositeBuildStep? CreateBootstrap(VariantContext variant) => variant.RuntimeKind switch
+    {
+        VariantRuntimeKind.Elvira1Vga => new RunVgaCompositeBuildStep(_directories),
+        VariantRuntimeKind.Elvira1Ega => new RunEgaCompositeBuildStep(_directories),
+        VariantRuntimeKind.Elvira2Vga => new RunItCompositeBuildStep(_directories),
+        _ => null
+    };
+}

@@ -4,7 +4,14 @@ namespace ElviraVgaEditor;
 
 internal sealed class VgaFileRebuilder
 {
-    public EncodeReport Rebuild(string sourceVga, IReadOnlyDictionary<int, string> edits, string outputVga)
+    public EncodeReport Rebuild(string sourceVga, IReadOnlyDictionary<int, string> edits, string outputVga, IReadOnlyList<System.Drawing.Color>? activePalette = null)
+        => Rebuild(sourceVga, edits, outputVga, activePalette is null ? null : _ => activePalette);
+
+    /// <summary>Composite builds resolve the palette for each edited image from
+    /// its persisted resource context. A single VGA resource can contain images
+    /// whose proven palette banks differ.</summary>
+    public EncodeReport Rebuild(string sourceVga, IReadOnlyDictionary<int, string> edits, string outputVga,
+        Func<VgaImageEntry, IReadOnlyList<System.Drawing.Color>?>? paletteForImage)
     {
         byte[] original = File.ReadAllBytes(sourceVga);
         var parsed = new VgaImageTableParser(original).Parse();
@@ -40,7 +47,12 @@ internal sealed class VgaFileRebuilder
                         if (e.PixelWidth != master.PixelWidth || e.Height != master.Height || e.Compressed != master.Compressed)
                             throw new InvalidDataException($"Shared offset 0x{oldOffset:X} má nekompatibilné entries.");
 
-                    byte[] pixels = PaletteTools.ReadIndices(edits[master.ImageId], master.PixelWidth, master.Height);
+                    IReadOnlyList<System.Drawing.Color>? palette = paletteForImage?.Invoke(master);
+                    byte[] pixels = paletteForImage is null
+                        ? PaletteTools.ReadIndices(edits[master.ImageId], master.PixelWidth, master.Height)
+                        : palette is null
+                            ? throw new InvalidDataException($"No validated palette is available for image {master.ImageId}.")
+                            : PaletteTools.ReadIndices(edits[master.ImageId], master.PixelWidth, master.Height, palette);
                     byte[] encoded = ElviraImageEncoder.Encode(master, pixels);
                     ms.Write(encoded);
                     replaced++;

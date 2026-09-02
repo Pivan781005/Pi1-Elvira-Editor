@@ -20,9 +20,9 @@ internal static class GamePatchDeploymentService
         if (loaded.Game is not (ElviraGame.Elvira1 or ElviraGame.Elvira2))
             throw new InvalidDataException("The executable game type is unknown; deployment is disabled.");
 
-        string directory = Path.GetDirectoryName(Path.GetFullPath(loaded.SourcePath)) ?? throw new IOException("Game directory is unavailable.");
-        string activeExe = Path.Combine(directory, loaded.Game == ElviraGame.Elvira1 ? "RUNVGA.EXE" : "RUNIT.EXE");
-        string originalExe = Path.Combine(directory, loaded.Game == ElviraGame.Elvira1 ? "RUNVGAO.EXE" : "RUNITO.EXE");
+        string activeExe = Path.GetFullPath(loaded.SourcePath);
+        string directory = Path.GetDirectoryName(activeExe) ?? throw new IOException("Game directory is unavailable.");
+        string originalExe = OriginalBackupPathFor(activeExe, loaded.Game);
 
         bool haveOriginalExe = File.Exists(originalExe);
         if (!File.Exists(activeExe))
@@ -85,6 +85,19 @@ internal static class GamePatchDeploymentService
             ? RunVgaBootstrapService.DetectState(path) == RunVgaBootstrapState.ExtendedCp852V5
             : RunItBootstrapService.DetectState(path) == RunItBootstrapState.ExtendedCp852;
         if (!valid) throw new InvalidDataException("The temporary patched executable failed structural validation.");
+    }
+
+    // Keep the historic English O-file names unchanged. Variant executable stems
+    // already occupy the complete DOS 8-character basename, so their immutable
+    // backup uses the same basename with the non-executable .O extension.
+    private static string OriginalBackupPathFor(string activeExe, ElviraGame game)
+    {
+        string file = Path.GetFileName(activeExe);
+        if (game == ElviraGame.Elvira1 && file.Equals("RUNVGA.EXE", StringComparison.OrdinalIgnoreCase))
+            return Path.Combine(Path.GetDirectoryName(activeExe)!, "RUNVGAO.EXE");
+        if (game == ElviraGame.Elvira2 && file.Equals("RUNIT.EXE", StringComparison.OrdinalIgnoreCase))
+            return Path.Combine(Path.GetDirectoryName(activeExe)!, "RUNITO.EXE");
+        return Path.ChangeExtension(activeExe, ".O");
     }
 
     private static void DeleteIfExists(string path) { if (File.Exists(path)) File.Delete(path); }

@@ -8,14 +8,22 @@ internal sealed class CharacterSetViewerForm : Form
     private readonly Label _zoomLabel = new();
     private readonly ComboBox _mode = new();
     private readonly ComboBox _layout = new();
+    private readonly Label _title = new();
+    private readonly Label _layoutText = new();
+    private readonly Label _zoomText = new();
+    private readonly Label _hint = new();
+    private readonly Label _warning = new();
     private readonly Label _selection = new();
     private readonly Label _status = new();
     private readonly Action<int>? _selectionChanged;
+    internal string LocalizedTitleForTest => Text;
+    internal string LocalizedHintForTest => _hint.Text;
 
     public CharacterSetViewerForm(IReadOnlyList<GlyphModel> glyphs, int selectedCode, FontPreviewMode initialMode, Action<int>? selectionChanged = null)
     {
         _glyphs = glyphs;
         _selectionChanged = selectionChanged;
+        AutoScaleMode = AutoScaleMode.Dpi;
         Text = UiText.Get("FullSetTitle");
         Width = 1500;
         Height = 720;
@@ -23,12 +31,28 @@ internal sealed class CharacterSetViewerForm : Form
         StartPosition = FormStartPosition.CenterParent;
 
         var top = new Panel { Dock = DockStyle.Top, Height = 82, Padding = new Padding(10, 8, 10, 4) };
-        var title = new Label
+        var topRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 30,
+            ColumnCount = 7,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _title = new Label
         {
             Text = UiText.Get("FullSetHeading"),
             Font = new Font(Font, FontStyle.Bold),
             AutoSize = true,
-            Location = new Point(10, 11)
+            Anchor = AnchorStyles.Left
         };
 
         _grid = new CharacterSetGridControl
@@ -48,8 +72,10 @@ internal sealed class CharacterSetViewerForm : Form
 
         _mode.DropDownStyle = ComboBoxStyle.DropDownList;
         _mode.Items.AddRange(new object[] { UiText.Get("Edited"), UiText.Get("Original") });
-        _mode.Width = 105;
-        _mode.Location = new Point(245, 8);
+        _mode.Width = 112;
+        _mode.Height = 28;
+        _mode.Anchor = AnchorStyles.Left;
+        _mode.Margin = new Padding(12, 1, 0, 1);
         _mode.SelectedIndex = initialMode == FontPreviewMode.Original ? 1 : 0;
         _mode.SelectedIndexChanged += (_, _) =>
         {
@@ -58,11 +84,28 @@ internal sealed class CharacterSetViewerForm : Form
             UpdateSelectionLabel(_grid.SelectedCode);
         };
 
-        var layoutText = new Label { Text = UiText.Get("LayoutLabel"), AutoSize = true, Location = new Point(370, 12) };
+        var layoutGroup = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            Anchor = AnchorStyles.None
+        };
+        _layoutText = new Label
+        {
+            Text = UiText.Get("LayoutLabel"),
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 6, 8, 0)
+        };
         _layout.DropDownStyle = ComboBoxStyle.DropDownList;
         _layout.Items.AddRange(new object[] { UiText.Get("LayoutWide"), UiText.Get("LayoutClassic"), UiText.Get("LayoutUltra") });
-        _layout.Width = 150;
-        _layout.Location = new Point(420, 8);
+        _layout.Width = 180;
+        _layout.Height = 28;
+        _layout.Margin = Padding.Empty;
         _layout.SelectedIndex = 0;
         _layout.SelectedIndexChanged += (_, _) =>
         {
@@ -74,15 +117,25 @@ internal sealed class CharacterSetViewerForm : Form
             };
         };
 
-        var zoomText = new Label { Text = UiText.Get("Zoom").TrimEnd(':'), AutoSize = true, Location = new Point(590, 12) };
+        var zoomGroup = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            Anchor = AnchorStyles.Right
+        };
+        _zoomText = new Label { Text = UiText.Get("Zoom").TrimEnd(':'), AutoSize = true, Margin = new Padding(0, 6, 6, 0) };
         _zoom.Minimum = 1;
         _zoom.Maximum = 8;
         _zoom.Value = 4;
         _zoom.TickFrequency = 1;
         _zoom.SmallChange = 1;
         _zoom.LargeChange = 1;
-        _zoom.Width = 245;
-        _zoom.Location = new Point(635, 2);
+        _zoom.Width = 180;
+        _zoom.Margin = new Padding(0, 0, 6, 0);
         _zoom.ValueChanged += (_, _) =>
         {
             _zoomLabel.Text = $"{_zoom.Value}×";
@@ -91,12 +144,13 @@ internal sealed class CharacterSetViewerForm : Form
         _zoomLabel.Text = "4×";
         _zoomLabel.AutoSize = true;
         _zoomLabel.Font = new Font(Font, FontStyle.Bold);
-        _zoomLabel.Location = new Point(885, 12);
+        _zoomLabel.Margin = new Padding(0, 6, 0, 0);
 
         _selection.AutoSize = true;
-        _selection.Location = new Point(945, 12);
+        _selection.Anchor = AnchorStyles.Right;
+        _selection.Margin = new Padding(12, 6, 0, 0);
 
-        var hint = new Label
+        _hint = new Label
         {
             Text = UiText.Get("ViewerHint"),
             AutoSize = true,
@@ -104,7 +158,7 @@ internal sealed class CharacterSetViewerForm : Form
             ForeColor = Color.DimGray
         };
 
-        var warning = new Label
+        _warning = new Label
         {
             Text = UiText.Get("ViewerWarning"),
             AutoSize = true,
@@ -112,7 +166,14 @@ internal sealed class CharacterSetViewerForm : Form
             ForeColor = Color.DarkOrange
         };
 
-        top.Controls.AddRange(new Control[] { title, _mode, layoutText, _layout, zoomText, _zoom, _zoomLabel, _selection, hint, warning });
+        layoutGroup.Controls.AddRange(new Control[] { _layoutText, _layout });
+        zoomGroup.Controls.AddRange(new Control[] { _zoomText, _zoom, _zoomLabel });
+        topRow.Controls.Add(_title, 0, 0);
+        topRow.Controls.Add(_mode, 1, 0);
+        topRow.Controls.Add(layoutGroup, 3, 0);
+        topRow.Controls.Add(zoomGroup, 5, 0);
+        topRow.Controls.Add(_selection, 6, 0);
+        top.Controls.AddRange(new Control[] { topRow, _hint, _warning });
 
         _status.Dock = DockStyle.Bottom;
         _status.Height = 28;
@@ -122,6 +183,27 @@ internal sealed class CharacterSetViewerForm : Form
         Controls.Add(_grid);
         Controls.Add(_status);
         Controls.Add(top);
+        UiText.LocaleChanged += OnLocaleChanged;
+        Disposed += (_, _) => UiText.LocaleChanged -= OnLocaleChanged;
+        UpdateSelectionLabel(_grid.SelectedCode);
+    }
+
+    private void OnLocaleChanged(object? sender, UiLocaleChangedEventArgs e)
+    {
+        Text = UiText.Get("FullSetTitle");
+        _title.Text = UiText.Get("FullSetHeading");
+        _layoutText.Text = UiText.Get("LayoutLabel");
+        _zoomText.Text = UiText.Get("Zoom").TrimEnd(':');
+        _hint.Text = UiText.Get("ViewerHint");
+        _warning.Text = UiText.Get("ViewerWarning");
+        int mode = Math.Max(0, _mode.SelectedIndex);
+        _mode.Items.Clear();
+        _mode.Items.AddRange(new object[] { UiText.Get("Edited"), UiText.Get("Original") });
+        _mode.SelectedIndex = Math.Min(mode, _mode.Items.Count - 1);
+        int layout = Math.Max(0, _layout.SelectedIndex);
+        _layout.Items.Clear();
+        _layout.Items.AddRange(new object[] { UiText.Get("LayoutWide"), UiText.Get("LayoutClassic"), UiText.Get("LayoutUltra") });
+        _layout.SelectedIndex = Math.Min(layout, _layout.Items.Count - 1);
         UpdateSelectionLabel(_grid.SelectedCode);
     }
 

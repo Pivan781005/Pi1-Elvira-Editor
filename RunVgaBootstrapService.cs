@@ -100,6 +100,12 @@ internal static class RunVgaBootstrapService
         ReplaceExpected(output, 0x11638, OriginalResizeCave, V5ResizeCave, "DOS memory-resize hook");
         ReplaceExpected(output, 0x116A8, OriginalResizeRedirect, V5ResizeRedirect, "DOS memory-resize redirect");
         Array.Copy(fontTable, 0, output, V5FontOffset, V5FontSize);
+        // Raw callers may supply a complete table directly, so this final image
+        // boundary must enforce the engine-owned HUD erase glyph independently
+        // of UI/model/import protections.
+        Array.Copy(FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes, 0, output,
+            V5FontOffset + FontSlotMetadata.HudEraseGlyph * RunVgaFontService.GlyphBytes,
+            RunVgaFontService.GlyphBytes);
         ValidateV5(output);
         return output;
     }
@@ -241,6 +247,9 @@ internal static class RunVgaBootstrapService
     private static void ValidateV5(byte[] data)
     {
         if (!IsV5(data)) throw new InvalidDataException("Generated V5 executable failed structural validation.");
+        if (!At(data, V5FontOffset + FontSlotMetadata.HudEraseGlyph * RunVgaFontService.GlyphBytes,
+            FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes))
+            throw new InvalidDataException("Generated V5 executable does not preserve the reserved HUD erase glyph 0x81.");
         for (int i = BaselineSize; i < V5FontOffset; i++)
             if (data[i] != 0) throw new InvalidDataException("V5 zero-padding invariant failed.");
     }

@@ -42,10 +42,22 @@ internal static class FontSlotMetadata
         return (patchedOutput ? PatchedHudFullCellEraseGlyphBytes : OriginalHudEraseGlyphBytes).ToArray();
     }
 
-    public static void RestoreReservedSourceGlyphs(FontLoadResult loaded)
+    /// <summary>
+    /// Preserve the bytes read from an existing EXE for ORIGINAL preview while
+    /// making EDITED/output authoritative. This is in-memory only; opening an
+    /// old malformed V5/V2 source does not write or silently alter that file.
+    /// </summary>
+    public static void InitializeReservedEditingState(FontLoadResult loaded)
     {
+        if (!loaded.HasFullCp852Font) return;
         foreach (int code in loaded.ReservedGlyphSlots)
-            loaded.Glyphs[code].LoadFromSource(GetCanonicalBytes(loaded, code));
+        {
+            GlyphModel glyph = loaded.Glyphs[code];
+            bool noncanonicalSource = !glyph.Original.SequenceEqual(PatchedHudFullCellEraseGlyphBytes);
+            glyph.ReplaceEdited(PatchedHudFullCellEraseGlyphBytes);
+            if (noncanonicalSource)
+                loaded.DetectionDetails += " Reserved HUD erase glyph 0x81 is noncanonical in this source; it is protected in memory and will be repaired only by an explicit output operation.";
+        }
     }
 }
 
@@ -59,7 +71,7 @@ internal sealed class FontLoadResult
     public int LastByteValue { get; init; } = 255;
     public int LoadedGlyphCount { get; init; }
     public required List<GlyphModel> Glyphs { get; init; }
-    public required string DetectionDetails { get; init; }
+    public required string DetectionDetails { get; set; }
     public ElviraGame Game { get; init; } = ElviraGame.Unknown;
     // CP852 editing exposes printable/game-addressable slots 0x20..0xFF. The
     // V5 table still physically retains all 256 byte-indexed records.
@@ -145,7 +157,7 @@ internal static class RunVgaFontService
                 KnownOriginalPhysicalOffset, OriginalFirstChar, OriginalGlyphCount, canonical,
                 "Verified packed Elvira I RUNVGA.EXE. The canonical image was unpacked in memory and its real native 98-glyph table was loaded from canonical physical 0x1A216.",
                 ElviraGame.Elvira1);
-            FontSlotMetadata.RestoreReservedSourceGlyphs(result);
+            FontSlotMetadata.InitializeReservedEditingState(result);
             return result;
         }
 
@@ -166,7 +178,7 @@ internal static class RunVgaFontService
                 $"(signature {Convert.ToHexString(V5RendererSignature)}). " +
                 $"Loading the active 256×8 font table from physical 0x{KnownExtendedPhysicalOffset:X}. " +
                 "The historical 98-glyph table may still exist in this EXE but is not used by the patched renderer.");
-            FontSlotMetadata.RestoreReservedSourceGlyphs(result);
+            FontSlotMetadata.InitializeReservedEditingState(result);
             return result;
         }
 
@@ -425,17 +437,16 @@ internal static class RunVgaFontService
         List<GlyphModel> glyphs = GlyphRepository.CreateAllCp852Slots().ToList();
         for (int value = 0x20; value <= 0x81; value++)
             glyphs[value].LoadFromSource(data.AsSpan(RunItOriginalPhysicalOffset + (value - 0x20) * GlyphBytes, GlyphBytes).ToArray());
-        // Do not trust a pre-v1.3.1 user-patched active EXE: the model always presents the
-        // canonical engine erase mask and every save path repairs it.
-        glyphs[RunItBootstrapService.ReservedHudEraseGlyph].LoadFromSource(RunItBootstrapService.ReservedHudEraseGlyphBytes);
         for (int value = 0x82; value <= 0xFF; value++)
             glyphs[value].LoadFromSource(data.AsSpan(RunItHighPhysicalOffset + (value - 0x82) * GlyphBytes, GlyphBytes).ToArray());
-        return new FontLoadResult
+        FontLoadResult result = new()
         {
             SourcePath = path, Layout = RunVgaFontLayout.ExtendedCp852RunIt, FontOffset = RunItOriginalPhysicalOffset,
             FirstByteValue = 0x20, LastByteValue = 0xFF, LoadedGlyphCount = 224, Glyphs = glyphs, Game = ElviraGame.Elvira2,
             DetectionDetails = "Elvira II V2 split-font renderer detected: LOW 0x20-0x81 at 0x168CA; HIGH 0x82-0xFF at 0x28480; helper at 0x28870."
         };
+        FontSlotMetadata.InitializeReservedEditingState(result);
+        return result;
     }
 
     private static FontLoadResult UnknownResult(string path, string details) => new()

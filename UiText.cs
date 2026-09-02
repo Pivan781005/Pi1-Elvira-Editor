@@ -9,248 +9,49 @@ internal enum UiLanguage
 
 internal static class UiText
 {
-    private static UiLanguage _language = UiLanguage.English;
-    public static UiLanguage Language => _language;
-    public static void SetLanguage(UiLanguage language) => _language = language;
+    private static JsonUiLocaleProvider JsonLocales = JsonUiLocaleProvider.Discover(DefaultLocaleDirectory);
+    private static readonly UiLocalizationService Service = new(Lookup, "en");
 
-    private static readonly Dictionary<string, string[]> T = new()
+    private static string DefaultLocaleDirectory => Path.Combine(AppContext.BaseDirectory, "Locales");
+
+    // UI strings resolve exclusively through the discovered JSON locale catalog.
+    public static UiLanguage Language => Service.CurrentLocaleId switch
     {
-        ["AppTitle"] = new[] { "π1 Elvira I&II VGA Editor v1.3", "π1 Elvira I&II VGA Editor v1.3", "π1 Elvira I&II VGA Editor v1.3" },
-        ["FontTitle"] = new[] { "π1 Editor fontu v1.3", "π1 Elvira Font Editor v1.3", "π1 Editor fontu v1.3" },
-        ["About"] = new[] { "O programe", "About", "O programu" },
-        ["AboutText"] = new[]
-        {
-            "π1 Elvira I&II VGA Editor v1.3\n\nEditor VGA, GAMEPC textov a CP852 fontov pre Elvira I a Elvira II. Pri prvej trvalej úprave chráni RUNVGAO.EXE/RUNITO.EXE, GAMEPCO a 012O.VGA (pre upravený 012.VGA) ako nemenné originály; samotné otvorenie/prehľad žiadnu zálohu nevytvára.\n\nElvira I aj Elvira II podporujú vlastné CP852 fonty. V oboch hrách je glyph 0x81 interne rezervovaný pre mazanie dynamického HUD pred prekreslením; editor jeho pôvodné bajty automaticky chráni. Ostatné podporované glyphy je možné normálne upravovať alebo importovať. O-súbory uchovajte.\n\nLicencia: GPL-3.0",
-            "π1 Elvira I&II VGA Editor v1.3\n\nEdits VGA, GAMEPC text, and CP852 fonts for Elvira I and Elvira II. On the first persistent modification it preserves RUNVGAO.EXE/RUNITO.EXE, GAMEPCO, and—for example—012O.VGA for edited 012.VGA as immutable originals; opening or previewing creates no backup.\n\nElvira I and Elvira II support custom CP852 fonts. In both games glyph 0x81 is internally reserved to clear dynamic HUD values before redraw; the editor automatically preserves its original bytes. All remaining supported glyphs can be edited or imported normally. Keep the O-files.\n\nLicense: GPL-3.0",
-            "π1 Elvira I&II VGA Editor v1.3\n\nEditor VGA, textů GAMEPC a fontů CP852 pro Elvira I a Elvira II. Při první trvalé úpravě chrání RUNVGAO.EXE/RUNITO.EXE, GAMEPCO a například 012O.VGA pro upravený 012.VGA jako neměnné originály; otevření či náhled zálohu nevytváří.\n\nElvira I i Elvira II podporují vlastní fonty CP852. V obou hrách je glyph 0x81 interně rezervovaný pro mazání dynamického HUD před překreslením; editor jeho původní bajty automaticky chrání. Ostatní podporované glyphy lze normálně upravovat nebo importovat. O-soubory uchovejte.\n\nLicence: GPL-3.0"
-        },
-        ["Browse"] = new[] { "Vybrať adresár...", "Browse folder...", "Vybrat adresář..." },
-        ["Refresh"] = new[] { "Obnoviť", "Refresh", "Obnovit" },
-        ["Palette"] = new[] { "Paleta:", "Palette:", "Paleta:" },
-        ["PaletteWord"] = new[] { "Paleta", "Palette", "Paleta" },
-        ["DiagnosticPalette"] = new[] { "Diagnostická", "Diagnostic", "Diagnostická" },
-        ["PixelZoom"] = new[] { "Pixelové zväčšenie", "Pixel zoom", "Pixelové zvětšení" },
-        ["Language"] = new[] { "Jazyk:", "Language:", "Jazyk:" },
-        ["VgaTab"] = new[] { "Editor spritov", "Sprite Editor", "Editor spritů" },
-        ["SpriteEditor"] = new[] { "Editor spritov", "Sprite Editor", "Editor spritů" },
-        ["TextTab"] = new[] { "Textový editor", "Text Editor", "Textový editor" },
-        ["OpenTextEditor"] = new[] { "Textový editor", "Text Editor", "Textový editor" },
-        ["FontEditor"] = new[] { "Editor fontu", "Font Editor", "Editor fontu" },
-        ["Game"] = new[] { "Hra:", "Game:", "Hra:" },
-        ["AutoDetect"] = new[] { "Automatická detekcia", "Auto-detect", "Automatická detekce" },
-        ["Detected"] = new[] { "Rozpoznané", "Detected", "Rozpoznáno" },
-        ["Selected"] = new[] { "Vybrané", "Selected", "Vybráno" },
-        ["ReplacePng"] = new[] { "Nahradiť PNG...", "Replace PNG...", "Nahradit PNG..." },
-        ["CancelEdit"] = new[] { "Zrušiť edit", "Cancel edit", "Zrušit edit" },
-        ["ExportPng"] = new[] { "Export PNG...", "Export PNG...", "Export PNG..." },
-        ["ApplyGame"] = new[] { "APLIKOVAŤ DO HRY", "APPLY TO GAME", "APLIKOVAT DO HRY" },
-        ["RestoreOriginal"] = new[] { "Obnoviť originál", "Restore original", "Obnovit originál" },
-        ["Zoom"] = new[] { "Zoom:", "Zoom:", "Zoom:" },
-        ["Id"] = new[] { "ID", "ID", "ID" },
-        ["Offset"] = new[] { "Offset", "Offset", "Offset" },
-        ["Type"] = new[] { "Typ", "Type", "Typ" },
-        ["Resolution"] = new[] { "Rozlíšenie", "Size", "Rozlišení" },
-        ["Flags"] = new[] { "Príznaky", "Flags", "Příznaky" },
-        ["Edit"] = new[] { "Upraviť", "Edit", "Upravit" },
-        ["TextIndex"] = new[] { "Index", "Index", "Index" },
-        ["TextOffset"] = new[] { "Pozícia v súbore", "File offset", "Pozice v souboru" },
-        ["Length"] = new[] { "Dĺžka", "Length", "Délka" },
-        ["Text"] = new[] { "Text", "Text", "Text" },
-        ["Bytes"] = new[] { "Bajty", "Bytes", "Bajty" },
-        ["DosLimit"] = new[] { "DOS limit", "DOS limit", "DOS limit" },
-        ["DialogueWarnings"] = new[] { "upozornení: {0}", "warnings: {0}", "upozornění: {0}" },
-        ["DialogueLimitUnknown"] = new[] { "Pre {0} nie je nastavený overený limit interaktívneho dialógu.", "No proven interactive-dialogue limit is configured for {0}.", "Pro {0} není nastaven ověřený limit interaktivního dialogu." },
-        ["DialogueLimitOk"] = new[] { "✓ {0} / {1} bajtov", "✓ {0} / {1} bytes", "✓ {0} / {1} bajtů" },
-        ["DialogueLimitExceeded"] = new[] { "⚠ {0} / {1} bajtov (+{2}) — DOS limit prekročený; engine by odrezal približne {3} znakov", "⚠ {0} / {1} bytes (+{2}) — DOS limit exceeded; engine would omit about {3} characters", "⚠ {0} / {1} bajtů (+{2}) — DOS limit překročen; engine by odřízl přibližně {3} znaků" },
-        ["DialogueVisible"] = new[] { "Viditeľné (simulácia)", "Visible (simulated)", "Viditelné (simulace)" },
-        ["DialogueTruncated"] = new[] { "Odrezané", "Truncated", "Odříznuté" },
-        ["Search"] = new[] { "Hľadať:", "Search:", "Hledat:" },
-        ["Encoding"] = new[] { "Kódovanie:", "Encoding:", "Kódování:" },
-        ["TextContext"] = new[] { "Kontext textu:", "Text context:", "Kontext textu:" },
-        ["ContextGeneric"] = new[] { "Všeobecné / neznáme", "Generic / unknown", "Obecné / neznámé" },
-        ["ContextNpc"] = new[] { "Interaktívny NPC dialóg", "Interactive NPC dialogue", "Interaktivní NPC dialog" },
-        ["StringsCount"] = new[] { "{0}: {1} reťazcov", "{0}: {1} strings", "{0}: {1} řetězců" },
-        ["OpenDataFile"] = new[] { "Otvoriť dátový súbor...", "Open Data File...", "Otevřít datový soubor..." },
-        ["SaveTexts"] = new[] { "ULOŽIŤ", "SAVE", "ULOŽIT" },
-        ["SaveAsDataFile"] = new[] { "Uložiť ako...", "Save As...", "Uložit jako..." },
-        ["CreateVariant"] = new[] { "Vytvoriť variant...", "Create Variant...", "Vytvořit variantu..." },
-        ["ModsLauncherTab"] = new[] { "Mody a spúšťač", "Mods & Launcher", "Mody a spouštěč" },
-        ["VariantOrder"] = new[] { "#", "#", "#" },
-        ["VariantName"] = new[] { "Názov", "Name", "Název" },
-        ["VariantDataFile"] = new[] { "Dátový súbor", "Data file", "Datový soubor" },
-        ["VariantStatus"] = new[] { "Stav", "Status", "Stav" },
-        ["VariantEnabled"] = new[] { "Povolený", "Enabled", "Povolená" },
-        ["VariantAvailable"] = new[] { "Dostupný", "Available", "Dostupný" },
-        ["VariantMissing"] = new[] { "Chýba", "Missing", "Chybí" },
-        ["VariantYes"] = new[] { "Áno", "Yes", "Ano" },
-        ["VariantNo"] = new[] { "Nie", "No", "Ne" },
-        ["VariantAdd"] = new[] { "Pridať...", "Add...", "Přidat..." },
-        ["VariantEdit"] = new[] { "Upraviť...", "Edit...", "Upravit..." },
-        ["VariantRemove"] = new[] { "Odstrániť", "Remove", "Odebrat" },
-        ["VariantMoveUp"] = new[] { "Posunúť vyššie", "Move Up", "Posunout výše" },
-        ["VariantMoveDown"] = new[] { "Posunúť nižšie", "Move Down", "Posunout níže" },
-        ["VariantEnable"] = new[] { "Povoliť", "Enable", "Povolit" },
-        ["VariantDisable"] = new[] { "Zakázať", "Disable", "Zakázat" },
-        ["VariantOpenDataFile"] = new[] { "Otvoriť dátový súbor v Text Editore", "Open Data File in Text Editor", "Otevřít datový soubor v Text Editoru" },
-        ["VariantDialogAddTitle"] = new[] { "Pridať variant", "Add Variant", "Přidat variantu" },
-        ["VariantDialogEditTitle"] = new[] { "Upraviť variant", "Edit Variant", "Upravit variantu" },
-        ["VariantDisplayName"] = new[] { "Zobrazovaný názov:", "Display name:", "Zobrazovaný název:" },
-        ["VariantEnabledField"] = new[] { "Povolený", "Enabled", "Povolená" },
-        ["VariantMetadataOnly"] = new[] { "Táto zmena upraví iba metadata; dátový súbor sa nepremenuje ani nezmení.", "This change updates metadata only; the data file is not renamed or modified.", "Tato změna upraví pouze metadata; datový soubor se nepřejmenuje ani nezmění." },
-        ["VariantValidationError"] = new[] { "Zadajte názov a platný DOS názov súboru 8.3 bez cesty.", "Enter a display name and a valid DOS 8.3 filename without a path.", "Zadejte název a platný DOS název souboru 8.3 bez cesty." },
-        ["VariantRemoveConfirm"] = new[] { "Odstrániť variant „{0}“ ({1}) z konfigurácie?\n\nDátový súbor nebude odstránený.", "Remove variant “{0}” ({1}) from configuration?\n\nThe data file will not be deleted.", "Odebrat variantu „{0}“ ({1}) z konfigurace?\n\nDatový soubor nebude odstraněn." },
-        ["VariantDataFileMissing"] = new[] { "Konfigurovaný dátový súbor chýba: {0}", "Configured data file is missing: {0}", "Nakonfigurovaný datový soubor chybí: {0}" },
-        ["AddCreatedVariantQuestion"] = new[] { "Pridať tento súbor do Modov a spúšťača?", "Add this file to Mods & Launcher?", "Přidat tento soubor do Modů a spouštěče?" },
-        ["VariantMetadataNotAdded"] = new[] { "Dátový súbor už bol vytvorený, ale metadata variantu sa nepodarilo pridať: {0}", "The data file was created, but variant metadata could not be added: {0}", "Datový soubor již byl vytvořen, ale metadata varianty se nepodařilo přidat: {0}" },
-        ["LauncherFutureNote"] = new[] { "Generovanie spúšťača bude nastavené v ďalšom kroku.", "Launcher generation will be configured in the next step.", "Generování spouštěče bude nastaveno v dalším kroku." },
-        ["ReloadTexts"] = new[] { "Načítať znova", "Reload", "Načíst znovu" },
-        ["TooLong"] = new[] { "Text je dlhší než pôvodný priestor.", "Text is longer than the original slot.", "Text je delší než původní prostor." },
-        ["NoGamepc"] = new[] { "GAMEPC nebol nájdený.", "GAMEPC was not found.", "GAMEPC nebyl nalezen." },
-        ["NoDataFile"] = new[] { "Dátový súbor nebol nájdený: {0}", "Data file was not found: {0}", "Datový soubor nebyl nalezen: {0}" },
-        ["DataFileSource"] = new[] { "Zdroj: {0}", "Source: {0}", "Zdroj: {0}" },
-        ["DataFileFilter"] = new[] { "Elvira data files (*.*)|*.*", "Elvira data files (*.*)|*.*", "Datové soubory Elvira (*.*)|*.*" },
-        ["Saved"] = new[] { "Uložené.", "Saved.", "Uloženo." },
-        ["BackupMade"] = new[] { "Záloha vytvorená.", "Backup created.", "Záloha vytvořena." },
-        ["ZonesFound"] = new[] { "Nájdených zón: {0}", "Zones found: {0}", "Nalezených zón: {0}" },
-        ["EntriesStatus"] = new[] { "{0} položiek: {1} | endian: {2}", "{0} entries: {1} | endian: {2}", "{0} položek: {1} | endian: {2}" },
-        ["Warning"] = new[] { "Upozornenie", "Warning", "Upozornění" },
-        ["OriginalBackupMissing"] = new[] { "Originálna záloha neexistuje. Nie je čo obnoviť.", "The original backup does not exist. There is nothing to restore.", "Původní záloha neexistuje. Není co obnovit." },
-        ["ReloadPreview"] = new[] { "Načítať znova", "Reload", "Načíst znovu" },
-        ["TextSaved"] = new[] { "Uložené: {0}", "Saved: {0}", "Uloženo: {0}" },
-        ["DataFileSavedAs"] = new[] { "Uložené ako: {0}", "Saved as: {0}", "Uloženo jako: {0}" },
-        ["VariantCreated"] = new[] { "Variant vytvorený: {0}", "Variant created: {0}", "Varianta vytvořena: {0}" },
-
-        ["ContextAuto"] = new[] { "Automaticky podľa známych ciest", "Automatic / known paths", "Automaticky podle známých cest" },
-        ["OnlyRisks"] = new[] { "Zobraziť iba rizikové texty", "Show only truncation risks", "Zobrazit pouze rizikové texty" },
-        ["IgnoreWarning"] = new[] { "Ignorovať upozornenie pre tento string", "Ignore warning for this string", "Ignorovat upozornění pro tento string" },
-        ["SafeStatus"] = new[] { "✓ SAFE", "✓ SAFE", "✓ SAFE" },
-        ["IgnoredStatus"] = new[] { "IGN", "IGN", "IGN" },
-        ["ConfirmedRiskDetail"] = new[] { "✖ Potvrdené DOS riziko: {0}/{1} B (+{2})", "✖ Confirmed DOS risk: {0}/{1} B (+{2})", "✖ Potvrzené DOS riziko: {0}/{1} B (+{2})" },
-        ["PossibleRiskDetail"] = new[] { "⚠ Možné skrátenie dialógu: {0}/{1} B (+{2})", "⚠ Possible dialogue truncation: {0}/{1} B (+{2})", "⚠ Možné zkrácení dialogu: {0}/{1} B (+{2})" },
-        ["ConfirmedSafeDetail"] = new[] { "✓ Potvrdená bezpečná cesta | {0} B | {1}", "✓ Confirmed safe path | {0} B | {1}", "✓ Potvrzená bezpečná cesta | {0} B | {1}" },
-        ["IgnoredDetail"] = new[] { "Ignorované používateľom | {0} B", "Ignored by user | {0} B", "Ignorováno uživatelem | {0} B" },
-        ["BytesOnly"] = new[] { "Dĺžka: {0} B", "Length: {0} B", "Délka: {0} B" },
-        ["RiskSummary"] = new[] { "potvrdené riziká: {0} | možné: {1}", "confirmed risks: {0} | possible: {1}", "potvrzená rizika: {0} | možná: {1}" },
-        ["EmbeddedNulError"] = new[] { "Text obsahuje NUL znak (\0), ktorý by zmenil počet stringov.", "Text contains a NUL character (\0), which would change the string count.", "Text obsahuje NUL znak (\0), který by změnil počet stringů." },
-        ["EncodingRoundTripError"] = new[] { "Text sa po zakódovaní nedá bezstratovo načítať späť.", "Text does not round-trip through the selected encoding without loss.", "Text se po zakódování nedá bezeztrátově načíst zpět." },
-        ["EncodingUnsupportedChar"] = new[] { "Text obsahuje znak, ktorý vybrané kódovanie nedokáže uložiť.", "Text contains a character that the selected encoding cannot store.", "Text obsahuje znak, který vybrané kódování nedokáže uložit." },
-        ["StringCountChanged"] = new[] { "Kontrola zlyhala: počet stringov sa zmenil z {0} na {1}. Súbor nebol nahradený.", "Validation failed: string count changed from {0} to {1}. The file was not replaced.", "Kontrola selhala: počet stringů se změnil z {0} na {1}. Soubor nebyl nahrazen." },
-        ["FontStatusSummary"] = new[] { "Font: {0} znakov | upravené: {1} | posunuté: {2}", "Font: {0} glyphs | edited: {1} | shifted: {2}", "Font: {0} znaků | upravené: {1} | posunuté: {2}" },
-        ["VectorPreset"] = new[] { "Prednastavenie", "Preset", "Přednastavení" },
-        ["PresetDefault"] = new[] { "Predvolené", "Default", "Výchozí" },
-        ["PresetLexis"] = new[] { "Lexis", "Lexis", "Lexis" },
-        ["PresetPixelOperator"] = new[] { "Pixel Operator", "Pixel Operator", "Pixel Operator" },
-        ["PresetHpStyle"] = new[] { "HP štýl", "HP-style", "HP styl" },
-        ["ViewerStatus"] = new[] { "ID 0x{0:X2} / {0} | HEX {1} | offset v 256×8 tabuľke: 0x{2:X3}", "ID 0x{0:X2} / {0} | HEX {1} | offset in 256×8 table: 0x{2:X3}", "ID 0x{0:X2} / {0} | HEX {1} | offset v tabulce 256×8: 0x{2:X3}" },
-
-        // Font editor
-        ["OpenRunVga"] = new[] { "Otvoriť Game EXE...", "Open Game EXE...", "Otevřít Game EXE..." },
-        ["OpenGameExe"] = new[] { "Otvoriť Game EXE...", "Open Game EXE...", "Otevřít Game EXE..." },
-        ["OpenElviraRunVga"] = new[] { "Otvoriť Elvira RUNVGA.EXE", "Open Elvira RUNVGA.EXE", "Otevřít Elvira RUNVGA.EXE" },
-        ["RunVgaExecutable"] = new[] { "RUNVGA spustiteľný súbor", "RUNVGA executable", "RUNVGA spustitelný soubor" },
-        ["DosExecutables"] = new[] { "DOS spustiteľné súbory", "DOS executables", "DOS spustitelné soubory" },
-        ["PngImage"] = new[] { "PNG obrázok", "PNG image", "PNG obrázek" },
-        ["ApplyToExe"] = new[] { "Aplikovať do EXE", "Apply to EXE", "Použít na EXE" },
-        ["SaveCopyAs"] = new[] { "Uložiť kópiu ako...", "Save copy as...", "Uložit kopii jako..." },
-        ["CopyOriginalEdited"] = new[] { "Kopírovať Originál → Upravený", "Copy Original → Edited", "Kopírovat Originál → Upravený" },
-        ["ImportFont"] = new[] { "Importovať font...", "Import font...", "Importovat font..." },
-        ["ExportFont"] = new[] { "Exportovať font...", "Export font...", "Exportovat font..." },
-        ["FontLoadTitle"] = new[] { "Načítanie fontu herného EXE", "Game EXE font load", "Načtení fontu herního EXE" },
-        ["NoGlyphChanges"] = new[] { "Neboli upravené žiadne znaky.", "No glyphs have been modified.", "Nebyly upraveny žádné znaky." },
-        ["FontChangesApplied"] = new[] { "Zmeny fontu boli aplikované.\nZáloha: {0}", "Font changes applied.\nBackup: {0}", "Změny fontu byly aplikovány.\nZáloha: {0}" },
-        ["ApplyFontTitle"] = new[] { "Aplikovať zmeny fontu", "Apply font changes", "Použít změny fontu" },
-        ["FontCopySaved"] = new[] { "Upravená kópia uložená:\n{0}", "Modified copy saved:\n{0}", "Upravená kopie uložena:\n{0}" },
-        ["SaveFontCopyTitle"] = new[] { "Uložiť kópiu fontu", "Save font copy", "Uložit kopii fontu" },
-        ["ImportFontTitle"] = new[] { "Import fontu", "Import font", "Import fontu" },
-        ["FontExported"] = new[] { "Font bol exportovaný.\n\n{0}\n\n2048 bajtov / 256×8 znakov\nSHA-256: {1}", "Font exported.\n\n{0}\n\n2048 bytes / 256×8 glyphs\nSHA-256: {1}", "Font byl exportován.\n\n{0}\n\n2048 bajtů / 256×8 znaků\nSHA-256: {1}" },
-        ["ExportFontTitle"] = new[] { "Export fontu", "Export font", "Export fontu" },
-        ["ConfirmApplyFont"] = new[] { "Aplikovať {0} upravených znakov do:\n{1}\n\nNajprv sa vytvorí časová záloha.", "Apply {0} modified glyph(s) to:\n{1}\n\nA timestamped backup will be created first.", "Použít {0} upravených znaků do:\n{1}\n\nNejprve se vytvoří časová záloha." },
-        ["SaveModifiedRunVga"] = new[] { "Uložiť upravenú kópiu herného EXE", "Save modified game EXE copy", "Uložit upravenou kopii herního EXE" },
-        ["ImportFontDialog"] = new[] { "Importovať 256-znakový Elvira font do UPRAVENÉHO", "Import 256-glyph Elvira font into EDITED", "Importovat 256znakový Elvira font do UPRAVENÉHO" },
-        ["ExportFontDialog"] = new[] { "Exportovať UPRAVENÝ 256-znakový Elvira font", "Export EDITED 256-glyph Elvira font", "Exportovat UPRAVENÝ 256znakový Elvira font" },
-        ["ExportedFontStatus"] = new[] { "Exportovaný UPRAVENÝ font: {0} | 2048 bajtov | SHA-256 {1}", "Exported EDITED font: {0} | 2048 bytes | SHA-256 {1}", "Exportovaný UPRAVENÝ font: {0} | 2048 bajtů | SHA-256 {1}" },
-        ["AllFiles"] = new[] { "Všetky súbory", "All files", "Všechny soubory" },
-        ["DosExecutable"] = new[] { "DOS spustiteľný súbor", "DOS executable", "DOS spustitelný soubor" },
-        ["SupportedFonts"] = new[] { "Podporované fonty", "Supported fonts", "Podporované fonty" },
-        ["DosBitmapFont"] = new[] { "DOS bitmapový font", "DOS bitmap font", "DOS bitmapový font" },
-        ["ElviraRawFont"] = new[] { "Elvira raw font", "Elvira raw font", "Elvira raw font" },
-        ["VectorFonts"] = new[] { "Vektorové fonty", "Vector fonts", "Vektorové fonty" },
-        ["V5RunVgaExecutable"] = new[] { "V5 RUNVGA spustiteľný súbor", "V5 RUNVGA executable", "V5 RUNVGA spustitelný soubor" },
-        ["NoEditedPng"] = new[] { "Nie sú pripravené žiadne editované PNG.", "No edited PNG files are prepared.", "Nejsou připravené žádné upravené PNG soubory." },
-        ["VectorFontTitle"] = new[] { "Vektorový font", "Vector font", "Vektorový font" },
-        ["NoRunVga"] = new[] { "Nie je načítaný herný EXE.", "No game EXE loaded.", "Není načten herní EXE." },
-        ["AllByteSlots"] = new[] { "Všetky bajtové pozície 0x00-0xFF (náhľad znakov hry)", "All byte slots 0x00-0xFF (game glyph preview)", "Všechny bajtové pozice 0x00-0xFF (náhled znaků hry)" },
-        ["RealBitmapPreview"] = new[] { "SKUTOČNÝ NÁHĽAD BITMAPY", "REAL BITMAP PREVIEW", "SKUTEČNÝ NÁHLED BITMAPY" },
-        ["FullCharacterSet"] = new[] { "Celá znaková sada...", "Full character set...", "Celá znaková sada..." },
-        ["SideBySide"] = new[] { "Vedľa seba", "Side by side", "Vedle sebe" },
-        ["Original"] = new[] { "Originál", "Original", "Originál" },
-        ["Edited"] = new[] { "Upravený", "Edited", "Upravený" },
-        ["GlyphNote"] = new[] { "Každý znak je uložený ako 8 bajtov. Obnovený DOS renderer zobrazuje aktívnu oblasť 6×8 (bity 7..2). Dva pravé stĺpce sú pre renderer neaktívne a sú zobrazené sivou.", "Each glyph is stored as 8 bytes. The recovered DOS renderer displays a 6×8 active area (bits 7..2). The two rightmost columns are renderer-inactive and are shown in gray.", "Každý znak je uložen jako 8 bajtů. Obnovený DOS renderer zobrazuje aktivní oblast 6×8 (bity 7..2). Dva pravé sloupce jsou pro renderer neaktivní a jsou zobrazeny šedě." },
-        ["AdvancedColumns"] = new[] { "Pokročilé: povoliť úpravu dvoch stĺpcov neaktívnych pre renderer", "Advanced: allow editing the two renderer-inactive columns", "Pokročilé: povolit úpravu dvou sloupců neaktivních pro renderer" },
-        ["OriginalReadOnly"] = new[] { "ORIGINÁL (iba na čítanie)", "ORIGINAL (read-only)", "ORIGINÁL (jen pro čtení)" },
-        ["EditedCaps"] = new[] { "UPRAVENÝ", "EDITED", "UPRAVENÝ" },
-        ["ResetGlyph"] = new[] { "Obnoviť znak", "Reset glyph", "Obnovit znak" },
-        ["CopyHex"] = new[] { "Kopírovať HEX", "Copy HEX", "Kopírovat HEX" },
-        ["OriginalHex"] = new[] { "Originál HEX:", "Original HEX:", "Originál HEX:" },
-        ["EditedHex"] = new[] { "Upravený HEX:", "Edited HEX:", "Upravený HEX:" },
-        ["Source"] = new[] { "Zdroj", "Source", "Zdroj" },
-        ["Layout"] = new[] { "Rozloženie", "Layout", "Rozložení" },
-        ["Loaded"] = new[] { "Načítané", "Loaded", "Načteno" },
-        ["LoadedFromRunVga"] = new[] { "načítané z herného EXE", "loaded from game EXE", "načteno z herního EXE" },
-        ["HistoricalFallback"] = new[] { "iba historická náhrada", "historical fallback only", "pouze historická náhrada" },
-        ["NotPresentLoaded"] = new[] { "nie je prítomné/načítané", "not present/loaded", "není přítomno/načteno" },
-        ["LoadFontPreview"] = new[] { "Načítajte font pre náhľad.", "Load a font to preview it.", "Načtěte font pro náhled." },
-        ["OriginalVsEdited"] = new[] { "Originál vs. upravený — vybraný znak", "Original vs Edited — selected glyph", "Originál vs. upravený — vybraný znak" },
-        ["FontInContext"] = new[] { "Font v kontexte — vykreslený z bitmapovej tabuľky", "Font in context — rendered from bitmap table", "Font v kontextu — vykreslený z bitmapové tabulky" },
-        ["PixelNote"] = new[] { "1 pixel = 1 DOS pixel. V hre sa vykresľuje iba ľavých 6 stĺpcov.", "1 pixel = 1 DOS pixel. Only the left 6 columns are rendered.", "1 pixel = 1 DOS pixel. Ve hře se vykresluje pouze levých 6 sloupců." },
-        ["GlyphLetterDigit"] = new[] { "Písmeno / číslica", "Letter / digit", "Písmeno / číslice" },
-        ["GlyphPunctuation"] = new[] { "Interpunkcia", "Punctuation", "Interpunkce" },
-        ["GlyphSymbol"] = new[] { "Symbol", "Symbol", "Symbol" },
-        ["GlyphControl"] = new[] { "Riadiaci / netlačiteľný", "Control / non-printable", "Řídicí / netisknutelný" },
-        ["GlyphWhitespace"] = new[] { "Medzera", "Whitespace", "Mezera" },
-        ["GlyphCp852"] = new[] { "Pozícia CP852", "CP852 slot", "Pozice CP852" },
-        ["ReservedHudEraseGlyph"] = new[] { "0x81 — REZERVOVANÝ: úplný mazací glyph HUD", "0x81 — RESERVED: HUD full-cell erase glyph", "0x81 — REZERVOVANÝ: úplný mazací glyph HUD" },
-        ["ReservedHudEraseGlyphList"] = new[] { "Rezervovaný: úplné mazanie HUD", "Reserved: HUD full-cell erase", "Rezervovaný: úplné mazání HUD" },
-        ["ReservedHudEraseGlyphTip"] = new[] { "Originálny EXE zobrazuje historickú 6×6 masku; nové V5/V2 výstupy používajú úplnú 6×8 masku pre redraw HUD. Editor glyph chráni pred úpravou a importom.", "Original EXEs display the historical 6×6 mask; new V5/V2 outputs use a full 6×8 mask for HUD redraw. The editor protects this glyph from editing and import.", "Originální EXE zobrazuje historickou masku 6×6; nové výstupy V5/V2 používají úplnou masku 6×8 pro redraw HUD. Editor glyph chrání před úpravou a importem." },
-        ["FontReadyHint"] = new[] { "Načítajte herný EXE na úpravu skutočných bajtov znakov. O-súbory sa vytvoria až pri prvej trvalej úprave.", "Load a game EXE to edit real glyph bytes. O-file backups are created only on the first persistent modification.", "Načtěte herní EXE pro úpravu skutečných bajtů znaků. Zálohy O-souborů vzniknou až při první trvalé úpravě." },
-        ["EditedEmptyHint"] = new[] { "UPRAVENÝ je prázdny. Použite Kopírovať Originál → Upravený alebo Importovať font... na vytvorenie pracovnej kópie.", "EDITED is empty. Use Copy Original → Edited or Import font... to start a working copy.", "UPRAVENÝ je prázdný. Použijte Kopírovat Originál → Upravený nebo Importovat font... pro vytvoření pracovní kopie." },
-        ["CopiedOriginal"] = new[] { "Skopírovaných {0} znakov z ORIGINÁLU do UPRAVENÉHO. Zdroj zostáva nezmenený až do Aplikovať alebo Uložiť kópiu.", "Copied {0} ORIGINAL glyphs into EDITED. Source remains unchanged until Apply or Save copy.", "Zkopírováno {0} znaků z ORIGINÁLU do UPRAVENÉHO. Zdroj zůstává nezměněn až do Použít nebo Uložit kopii." },
-        ["ImportedSuffix"] = new[] { " Originál zostáva nezmenený; importované dáta sú iba v UPRAVENOM, kým nepoužijete Aplikovať alebo Uložiť kópiu.", " Original remains unchanged; imported data is only in EDITED until you Apply or Save copy.", " Originál zůstává nezměněn; importovaná data jsou pouze v UPRAVENÉM, dokud nepoužijete Použít nebo Uložit kopii." },
-        ["GlyphShiftInfo"] = new[] { "Posun X:{0} Y:{1} | mimo 8×8: {2} px", "Shift X:{0} Y:{1} | outside 8×8: {2} px", "Posun X:{0} Y:{1} | mimo 8×8: {2} px" },
-        ["GlyphShiftLeft"] = new[] { "Posunúť celý upravený znak o 1 pixel doľava", "Move the whole edited glyph 1 pixel left", "Posunout celý upravený znak o 1 pixel doleva" },
-        ["GlyphShiftRight"] = new[] { "Posunúť celý upravený znak o 1 pixel doprava", "Move the whole edited glyph 1 pixel right", "Posunout celý upravený znak o 1 pixel doprava" },
-        ["GlyphShiftUp"] = new[] { "Posunúť celý upravený znak o 1 pixel nahor", "Move the whole edited glyph 1 pixel up", "Posunout celý upravený znak o 1 pixel nahoru" },
-        ["GlyphShiftDown"] = new[] { "Posunúť celý upravený znak o 1 pixel nadol", "Move the whole edited glyph 1 pixel down", "Posunout celý upravený znak o 1 pixel dolů" },
-        ["GlyphClipTitle"] = new[] { "Pixely mimo 8×8", "Pixels outside 8×8", "Pixely mimo 8×8" },
-        ["GlyphClipWarning"] = new[] { "{0} pixelov v {1} upravených znakoch je momentálne mimo výslednej oblasti 8×8. Pri operácii „{2}“ sa až teraz orežú a neuložia. Posúvanie šípkami je nedeštruktívne a dovtedy sa žiadne pixely nestrácajú.\n\nPokračovať?", "{0} pixels in {1} edited glyphs are currently outside the final 8×8 area. The “{2}” operation will clip them now and they will not be saved. Arrow movement is non-destructive and no pixels are lost before this step.\n\nContinue?", "{0} pixelů v {1} upravených znacích je momentálně mimo výslednou oblast 8×8. Při operaci „{2}“ se až nyní oříznou a neuloží. Posouvání šipkami je nedestruktivní a do té doby se žádné pixely neztrácejí.\n\nPokračovat?" },
-
-        // Full character set viewer
-        ["FullSetTitle"] = new[] { "π1 Celá znaková sada CP852", "π1 Full CP852 Character Set", "π1 Celá znaková sada CP852" },
-        ["FullSetHeading"] = new[] { "CELÁ ZNAKOVÁ SADA 0x00-0xFF", "FULL CHARACTER SET 0x00-0xFF", "CELÁ ZNAKOVÁ SADA 0x00-0xFF" },
-        ["LayoutLabel"] = new[] { "Rozloženie", "Layout", "Rozložení" },
-        ["LayoutWide"] = new[] { "32 × 8 (široké)", "32 × 8 (wide)", "32 × 8 (široké)" },
-        ["LayoutClassic"] = new[] { "16 × 16 (klasické)", "16 × 16 (classic)", "16 × 16 (klasické)" },
-        ["LayoutUltra"] = new[] { "64 × 4 (ultraširoké)", "64 × 4 (ultrawide)", "64 × 4 (ultraširoké)" },
-        ["ViewerHint"] = new[] { "Kliknutím vyberiete znak v hlavnom editore. Sivé stĺpce 7–8 sú uložené v 8×8 fonte, ale v obnovenom Elvira DOS rendereri sú neaktívne.", "Click a glyph to select it in the main editor. Gray columns 7–8 are stored in the 8×8 font but are renderer-inactive in the recovered Elvira DOS renderer.", "Kliknutím vyberete znak v hlavním editoru. Šedé sloupce 7–8 jsou uloženy v 8×8 fontu, ale v obnoveném Elvira DOS rendereru jsou neaktivní." },
-        ["ViewerWarning"] = new[] { "⚠ Pixely v sivých stĺpcoch sa pri importe/exporte zachovajú, ale v hre nemusia byť viditeľné.", "⚠ Pixels in gray columns are preserved on import/export, but may not be visible in-game.", "⚠ Pixely v šedých sloupcích se při importu/exportu zachovají, ale ve hře nemusí být viditelné." },
-        ["VectorTitle"] = new[] { "Rasterizovať vektorový font do CP852 8×8 (Elvira používa ľavých 6 stĺpcov)", "Rasterize vector font to CP852 8×8 (Elvira uses left 6 columns)", "Rasterizovat vektorový font do CP852 8×8 (Elvira používá levých 6 sloupců)" },
-        ["VectorSource"] = new[] { "Zdroj", "Source", "Zdroj" },
-        ["VectorFamily"] = new[] { "Rodina fontu", "Font family", "Rodina fontu" },
-        ["VectorPixelSize"] = new[] { "Veľkosť pixelu", "Pixel size", "Velikost pixelu" },
-        ["VectorXOffset"] = new[] { "Posun X", "X offset", "Posun X" },
-        ["VectorYOffset"] = new[] { "Posun Y", "Y offset", "Posun Y" },
-        ["VectorDiacritics"] = new[] { "Diakritika", "Diacritics", "Diakritika" },
-        ["VectorCompose"] = new[] { "Skladať + opticky zarovnať CP852 diakritiku (odporúčané)", "Compose + optically align CP852 diacritics (recommended)", "Skládat + opticky zarovnat CP852 diakritiku (doporučeno)" },
-        ["VectorInfo"] = new[] { "Unicode znaky sa rasterizujú do celého uloženého glyphu 8×8. Editor zachováva všetkých 8 stĺpcov; stĺpce 7–8 sú sivé, pretože obnovený Elvira DOS renderer zobrazuje iba ľavých 6 stĺpcov. Pixely v sivých stĺpcoch sa zachovajú v EXE/font súbore, ale v hre nemusia byť viditeľné. Skladaný režim zachová baseline základného písmena a diakritiku CP852 pridáva samostatne.", "Unicode glyphs are rasterized into the full stored 8×8 glyph. The editor preserves all 8 columns; columns 7–8 are shown in gray because the recovered Elvira DOS renderer displays only the left 6 columns. Pixels that land in the gray columns are kept in the EXE/font file but may be invisible in-game. Composed mode keeps the base-letter baseline and adds CP852 diacritics separately.", "Unicode znaky se rasterizují do celého uloženého glyphu 8×8. Editor zachovává všech 8 sloupců; sloupce 7–8 jsou šedé, protože obnovený Elvira DOS renderer zobrazuje pouze levých 6 sloupců. Pixely v šedých sloupcích se zachovají v EXE/font souboru, ale ve hře nemusí být viditelné. Skládaný režim zachová baseline základního písmene a diakritiku CP852 přidává samostatně." },
-        ["VectorImportEdited"] = new[] { "Importovať do UPRAVENÉHO", "Import to EDITED", "Importovat do UPRAVENÉHO" },
-        ["Cancel"] = new[] { "Zrušiť", "Cancel", "Zrušit" }
+        "sk" => UiLanguage.Slovak,
+        "cs" => UiLanguage.Czech,
+        _ => UiLanguage.English
     };
-
-    public static string Get(string key)
+    public static string LocaleId => Service.CurrentLocaleId;
+    public static IReadOnlyList<UiLocaleDescriptor> AvailableLocales => JsonLocales.AvailableLocales;
+    public static IReadOnlyList<UiLocaleDiscoveryDiagnostic> LocaleDiagnostics => JsonLocales.Diagnostics;
+    public static event EventHandler<UiLocaleChangedEventArgs>? LocaleChanged
     {
-        if (!T.TryGetValue(key, out var arr)) return key;
-        int i = _language switch { UiLanguage.Slovak => 0, UiLanguage.English => 1, UiLanguage.Czech => 2, _ => 1 };
-        return arr[i];
+        add => Service.LocaleChanged += value;
+        remove => Service.LocaleChanged -= value;
+    }
+    public static event EventHandler? LocalesChanged;
+
+    public static void SetLanguage(UiLanguage language) => Service.SetLocale(language switch
+    {
+        UiLanguage.Slovak => "sk",
+        UiLanguage.Czech => "cs",
+        _ => "en"
+    });
+    public static void SetLocale(string localeId) => Service.SetLocale(localeId);
+    internal static void RefreshLocaleCatalog(string? localeDirectory = null)
+    {
+        JsonLocales = JsonUiLocaleProvider.Discover(localeDirectory ?? DefaultLocaleDirectory);
+        LocalesChanged?.Invoke(null, EventArgs.Empty);
+    }
+    public static string Get(string key)
+        => Service.Get(key);
+
+    internal static string Get(string localeId, string key) =>
+        JsonUiLocaleProvider.IsSemanticKey(key) ? JsonLocales.Resolve(localeId, key).Value : key;
+
+    private static string Lookup(string localeId, string key)
+    {
+        return JsonUiLocaleProvider.IsSemanticKey(key) ? JsonLocales.Resolve(localeId, key).Value : key;
     }
 
     public static string GlyphDescription(string english) => english switch

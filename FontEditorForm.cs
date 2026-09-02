@@ -2,8 +2,8 @@ namespace ElviraVgaEditor;
 
 internal sealed class FontEditorForm : Form
 {
-    /// <summary>Raised after a supported EXE is opened so the host can switch the whole application context.</summary>
-    public event Action<string, ElviraGame>? GameExecutableOpened;
+    // Used by the host only to prevent an installation switch from silently discarding work.
+    internal bool HasPendingEditedGlyphs => _glyphs.Any(glyph => glyph.HasEdited);
     private List<GlyphModel> _glyphs = GlyphRepository.CreateAllCp852Slots().ToList();
     private FontLoadResult? _loaded;
     private readonly ListBox _list = new();
@@ -14,7 +14,9 @@ internal sealed class FontEditorForm : Form
     private readonly Label _editedHex = new();
     private readonly RichTextBox _status = new();
     private readonly Label _footerStatus = new();
+    private readonly Label _variantInfo = new();
     private readonly Label _sourceInfo = new();
+    private readonly Label _projectVariantInfo = new();
     private readonly CheckBox _advanced = new();
     private readonly Button _apply = new();
     private readonly Button _saveCopy = new();
@@ -32,14 +34,38 @@ internal sealed class FontEditorForm : Form
     private readonly ToolTip _toolTip = new();
     private readonly Button _open = new();
     private readonly BitmapFontPreviewControl _preview = new();
+    private readonly Label _glyphHeading = new();
     private readonly ComboBox _previewMode = new();
     private readonly Button _fullCharacterSet = new();
     private GlyphModel? _current;
     private readonly string? _initialGameDirectory;
     private readonly Font _listFont = new("Consolas", 9.5f);
+    private bool _isLoadingFont;
+    private string? _lastAutoLoadedPath;
+    private VariantEntry? _boundVariant;
+    private string? _boundVariantPath;
+    private bool _isManualSource;
+    private readonly FontVariantService _fontVariants = new();
+    private ProjectContext? _fontProject;
+    private VariantContext? _fontVariant;
+    private FontProjectState? _fontProjectState;
+    private string _fontProjectCode = ProjectVariantOwnership.OriginalCode;
+
+    // Narrow diagnostics used by the non-interactive regression smoke only.
+    internal int SourceLoadCount { get; private set; }
+    internal int PreviewRebuildCount { get; private set; }
+    internal int ControlTreeCount => CountControls(this);
+    internal string? CurrentSourcePath => _loaded?.SourcePath;
+    internal string? BoundVariantExecutablePath => _boundVariantPath;
+    internal bool IsManualSource => _isManualSource;
+    internal bool IsApplyEnabledForTest => _apply.Enabled;
+    internal bool HasFontVariantPresentationForTest => _projectVariantInfo.Parent is not null;
+    internal VariantContext? BoundProjectVariantForTest => _fontVariant;
+    internal int ProjectEditCountForTest => _fontProjectState?.Edits.Count ?? 0;
 
     public FontEditorForm(string? initialGameDirectory = null)
     {
+        AutoScaleMode = AutoScaleMode.Dpi;
         _initialGameDirectory = initialGameDirectory;
         Text = UiText.Get("FontTitle");
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
@@ -51,7 +77,6 @@ internal sealed class FontEditorForm : Form
         BuildUi();
         ApplyLanguage();
         PopulateList();
-        Shown += (_, _) => TryAutoLoadRunVga();
     }
 
     public void LoadFromGameDirectory(string? gameDirectory)
@@ -64,8 +89,74 @@ internal sealed class FontEditorForm : Form
         if (!File.Exists(candidate))
             return;
 
+        if (_isLoadingFont || IsAlreadyAutoLoaded(candidate)) return;
         try { LoadRunVga(candidate, showErrors: false); }
         catch { }
+    }
+
+    /// <summary>
+    /// Binds the normal Font Editor source to the already-active text variant.
+    /// The explicit ExeFile stored in the entry is deliberately the only filename
+    /// used here; data-file, language and code naming must not influence this target.
+    /// </summary>
+    internal bool BindVariant(VariantEntry variant, string installationDirectory, bool showErrors)
+    {
+        ArgumentNullException.ThrowIfNull(variant);
+        if (string.IsNullOrWhiteSpace(installationDirectory)) return false;
+
+        _boundVariant = variant;
+        _boundVariantPath = Path.Combine(Path.GetFullPath(installationDirectory), variant.ExeFile);
+        _isManualSource = false;
+        UpdateVariantContext();
+        if (!File.Exists(_boundVariantPath))
+        {
+            ClearLoadedFont();
+            string message = string.Format(UiText.Get("VariantExecutableMissing"), variant.ExeFile);
+            _sourceInfo.Text = message;
+            SetStatusText(message);
+            if (showErrors)
+                MessageBox.Show(this, message, UiText.Get("FontLoadTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
+        if (_isLoadingFont || IsAlreadyAutoLoaded(_boundVariantPath)) return true;
+        LoadRunVga(_boundVariantPath, showErrors);
+        return _loaded is not null;
+    }
+
+    /// <summary>Shows the project/variant projection only. It does not apply
+    /// glyph bytes, invoke a bootstrap service, or create project storage.</summary>
+    internal void BindProjectVariant(ProjectContext? project, VariantContext? variant) =>
+        BindProjectVariant(project, variant, ProjectVariantOwnership.OriginalCode);
+
+    internal void BindProjectVariant(ProjectContext? project, VariantContext? variant, string projectVariantCode)
+    {
+        if (project is null || variant is null || !ReferenceEquals(project, variant.Project))
+        {
+            _fontProject = null; _fontVariant = null; _fontProjectState = null; _fontProjectCode = ProjectVariantOwnership.OriginalCode;
+            UpdateFontProjectPresentation();
+            return;
+        }
+        _fontProject = project; _fontVariant = variant; _fontProjectCode = ProjectVariantOwnership.NormalizeCode(project, projectVariantCode);
+        FontProjectLoadResult loaded = _fontVariants.Load(project, _fontProjectCode);
+        _fontProjectState = loaded.IsSuccess ? loaded.State : null;
+        UpdateFontProjectPresentation();
+    }
+
+    /// <summary>Returns the embedded editor to the neutral no-installation
+    /// presentation without writing a project or touching an executable.</summary>
+    internal void ClearActiveProjectBinding()
+    {
+        _boundVariant = null;
+        _boundVariantPath = null;
+        _isManualSource = false;
+        _fontProject = null;
+        _fontVariant = null;
+        _fontProjectState = null;
+        _fontProjectCode = ProjectVariantOwnership.OriginalCode;
+        ClearLoadedFont();
+        UpdateVariantContext();
+        UpdateFontProjectPresentation();
     }
 
     protected override void Dispose(bool disposing)
@@ -79,47 +170,60 @@ internal sealed class FontEditorForm : Form
     {
         SuspendLayout();
 
-        var top = new Panel { Dock = DockStyle.Top, Height = 88, Padding = new Padding(10, 8, 10, 4) };
+        var top = new Panel { Dock = DockStyle.Top, Height = 116, Padding = new Padding(10, 8, 10, 4) };
         _open.Text = UiText.Get("OpenGameExe");
-        _open.SetBounds(10, 8, 150, 30);
+        _open.SetBounds(10, 8, 170, 30);
         _open.Click += (_, _) => OpenGameExe();
 
-        _apply.Text = UiText.Get("ApplyToExe");
-        _apply.SetBounds(170, 8, 120, 30);
-        _apply.Enabled = false;
-        _apply.Click += (_, _) => ApplyToExe();
-
-        _saveCopy.Text = UiText.Get("SaveCopyAs");
-        _saveCopy.SetBounds(300, 8, 130, 30);
-        _saveCopy.Enabled = false;
-        _saveCopy.Click += (_, _) => SaveCopy();
-
-        _createExtendedCp852.Text = "Activate CP852 Patch";
-        _createExtendedCp852.SetBounds(440, 8, 190, 30);
-        _createExtendedCp852.Enabled = false;
-        _createExtendedCp852.Click += (_, _) => CreateExtendedCp852();
-
         _copyOriginalToEdited.Text = UiText.Get("CopyOriginalEdited");
-        _copyOriginalToEdited.SetBounds(640, 8, 170, 30);
+        _copyOriginalToEdited.SetBounds(190, 8, 250, 30);
         _copyOriginalToEdited.TextAlign = ContentAlignment.MiddleCenter;
         _copyOriginalToEdited.UseCompatibleTextRendering = false;
         _copyOriginalToEdited.Enabled = false;
         _copyOriginalToEdited.Click += (_, _) => CopyOriginalToEdited();
 
         _importFont.Text = UiText.Get("ImportFont");
-        _importFont.SetBounds(820, 8, 120, 30);
+        _importFont.SetBounds(450, 8, 150, 30);
         _importFont.Enabled = false;
         _importFont.Click += (_, _) => ImportFont();
 
         _exportFont.Text = UiText.Get("ExportFont");
-        _exportFont.SetBounds(950, 8, 120, 30);
+        _exportFont.SetBounds(610, 8, 140, 30);
         _exportFont.Enabled = false;
         _exportFont.Click += (_, _) => ExportFont();
 
-        _sourceInfo.SetBounds(1080, 7, 550, 58);
+        _createExtendedCp852.Text = UiText.Get("ActivateCp852Patch");
+        _createExtendedCp852.SetBounds(10, 45, 225, 30);
+        _createExtendedCp852.Enabled = false;
+        _createExtendedCp852.Click += (_, _) => CreateExtendedCp852();
+
+        _apply.Text = UiText.Get("ApplyToExe");
+        _apply.SetBounds(245, 45, 145, 30);
+        _apply.Enabled = false;
+        _apply.Click += (_, _) => ApplyToExe();
+
+        _saveCopy.Text = UiText.Get("SaveCopyAs");
+        _saveCopy.SetBounds(400, 45, 170, 30);
+        _saveCopy.Enabled = false;
+        _saveCopy.Click += (_, _) => SaveCopy();
+
+        _variantInfo.SetBounds(780, 5, 620, 20);
+        _variantInfo.AutoEllipsis = true;
+        _variantInfo.Font = new Font(Font, FontStyle.Bold);
+        _variantInfo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+
+        _sourceInfo.SetBounds(780, 27, 620, 55);
         _sourceInfo.Text = UiText.Get("NoRunVga");
         _sourceInfo.AutoEllipsis = true;
-        top.Controls.AddRange(new Control[] { _open, _apply, _saveCopy, _createExtendedCp852, _copyOriginalToEdited, _importFont, _exportFont, _sourceInfo });
+        _sourceInfo.Font = new Font(Font, FontStyle.Bold);
+        _sourceInfo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _projectVariantInfo.SetBounds(780, 84, 620, 22);
+        _projectVariantInfo.AutoEllipsis = true;
+        _projectVariantInfo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _projectVariantInfo.ForeColor = SystemColors.ControlText;
+        foreach (Button button in new[] { _open, _copyOriginalToEdited, _importFont, _exportFont, _createExtendedCp852, _apply, _saveCopy })
+            ConfigureCenteredButton(button);
+        top.Controls.AddRange(new Control[] { _open, _apply, _saveCopy, _createExtendedCp852, _copyOriginalToEdited, _importFont, _exportFont, _variantInfo, _sourceInfo, _projectVariantInfo });
 
         var left = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
         var previewHost = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 8, 10, 10), BackColor = SystemColors.Control };
@@ -132,19 +236,18 @@ internal sealed class FontEditorForm : Form
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 430));
+        // Leave enough room for localized glyph classifications instead of
+        // truncating them behind the fixed thumbnail/code columns.
+        contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 560));
         contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 430));
         contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var heading = new Label
-        {
-            Text = UiText.Get("AllByteSlots"),
-            Tag = "AllByteSlots",
-            Dock = DockStyle.Top,
-            Height = 30,
-            Font = new Font(Font, FontStyle.Bold)
-        };
+        _glyphHeading.Text = UiText.Get("AllByteSlots");
+        _glyphHeading.Tag = "AllByteSlots";
+        _glyphHeading.Dock = DockStyle.Top;
+        _glyphHeading.Height = 30;
+        _glyphHeading.Font = new Font(Font, FontStyle.Bold);
 
         var jumpBar = new FlowLayoutPanel
         {
@@ -172,7 +275,7 @@ internal sealed class FontEditorForm : Form
         _list.DrawItem += DrawGlyphListItem;
         left.Controls.Add(_list);
         left.Controls.Add(jumpBar);
-        left.Controls.Add(heading);
+        left.Controls.Add(_glyphHeading);
 
         // Keep the full-character-set button visible even when the right preview pane is narrow.
         // The previous build used a fixed X coordinate (250), which could place the button
@@ -300,6 +403,8 @@ internal sealed class FontEditorForm : Form
         _shiftRight.Click += (_, _) => ShiftCurrentGlyph(1, 0);
         _shiftUp.Click += (_, _) => ShiftCurrentGlyph(0, -1);
         _shiftDown.Click += (_, _) => ShiftCurrentGlyph(0, 1);
+        foreach (Button button in new[] { _reset, _copyHex, _shiftLeft, _shiftUp, _shiftDown, _shiftRight, _fullCharacterSet })
+            ConfigureCenteredButton(button);
 
         _shiftInfo.SetBounds(700, 604, 240, 24);
         _shiftInfo.AutoEllipsis = true;
@@ -344,6 +449,16 @@ internal sealed class FontEditorForm : Form
         Controls.Add(_footerStatus);
         Controls.Add(top);
         ResumeLayout(true);
+    }
+
+    private static void ConfigureCenteredButton(Button button)
+    {
+        button.AutoSize = false;
+        button.Height = 32;
+        button.MinimumSize = new Size(0, 32);
+        button.Padding = new Padding(6, 1, 6, 1);
+        button.TextAlign = ContentAlignment.MiddleCenter;
+        button.UseCompatibleTextRendering = false;
     }
 
     private void DrawGlyphListItem(object? sender, DrawItemEventArgs e)
@@ -396,16 +511,6 @@ internal sealed class FontEditorForm : Form
         g.DrawRectangle(borderPen, x0, y0, w, h);
     }
 
-    private void TryAutoLoadRunVga()
-    {
-        if (string.IsNullOrWhiteSpace(_initialGameDirectory)) return;
-        string candidate = Path.Combine(_initialGameDirectory, "RUNVGA.EXE");
-        if (!File.Exists(candidate)) candidate = Path.Combine(_initialGameDirectory, "RUNIT.EXE");
-        if (!File.Exists(candidate)) return;
-        try { LoadRunVga(candidate, showErrors: false); }
-        catch { }
-    }
-
     private void OpenGameExe()
     {
         using var dlg = new OpenFileDialog
@@ -416,15 +521,26 @@ internal sealed class FontEditorForm : Form
             InitialDirectory = Directory.Exists(_initialGameDirectory) ? _initialGameDirectory : null
         };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        // This is an inspection/source override only. It never mutates the active
+        // VariantEntry and opening it must not redirect the text/variant context.
         LoadRunVga(dlg.FileName, showErrors: true);
+        if (_loaded is not null)
+        {
+            _isManualSource = true;
+            UpdateVariantContext();
+        }
     }
 
     private void LoadRunVga(string path, bool showErrors)
     {
+        if (_isLoadingFont) return;
+        _isLoadingFont = true;
         try
         {
             Cursor = Cursors.WaitCursor;
+            SourceLoadCount++;
             _loaded = RunVgaFontService.LoadRunVga(path);
+            _lastAutoLoadedPath = Path.GetFullPath(path);
             _glyphs = _loaded.Glyphs;
             PopulateList();
             _apply.Enabled = false;
@@ -437,13 +553,8 @@ internal sealed class FontEditorForm : Form
             _importFont.Enabled = _loaded.HasFullCp852Font;
             _exportFont.Enabled = false;
 
-            string layout = LocalizedLayout(_loaded.Layout);
-            string nativeRange = LocalizedNativeRange(_loaded.Layout);
-            string game = _loaded.Game == ElviraGame.Elvira2 ? "Elvira II" : _loaded.Game == ElviraGame.Elvira1 ? "Elvira I" : "Unknown";
-            _sourceInfo.Text = $"{game}   |   {UiText.Get("Source")}: {Path.GetFileName(path)}   |   {UiText.Get("Layout")}: {layout}   |   Offset: {(_loaded.FontOffset >= 0 ? $"0x{_loaded.FontOffset:X}" : "n/a")}   |   {LocalizedSlotSummary(_loaded)}{nativeRange}";
-            SetStatusText(BuildLocalizedDetectionSummary() + " " + UiText.Get("EditedEmptyHint"));
-            if (_loaded.Game is ElviraGame.Elvira1 or ElviraGame.Elvira2)
-                GameExecutableOpened?.Invoke(path, _loaded.Game);
+            _sourceInfo.Text = BuildSourceSummary(_loaded, path);
+            SetStatusText(UiText.Get("EditedEmptyHint"));
         }
         catch (Exception ex)
         {
@@ -454,7 +565,7 @@ internal sealed class FontEditorForm : Form
             _copyOriginalToEdited.Enabled = false;
             _importFont.Enabled = false;
             _exportFont.Enabled = false;
-            _sourceInfo.Text = UiText.Language == UiLanguage.Slovak ? "Načítanie herného EXE zlyhalo." : UiText.Language == UiLanguage.Czech ? "Načtení herního EXE selhalo." : "Game EXE load failed.";
+            _sourceInfo.Text = UiText.Get("Font.LoadFailed");
             SetStatusText(ex.Message);
             if (showErrors)
                 MessageBox.Show(this, ex.Message, UiText.Get("FontLoadTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -462,7 +573,48 @@ internal sealed class FontEditorForm : Form
         finally
         {
             Cursor = Cursors.Default;
+            _isLoadingFont = false;
         }
+    }
+
+    private bool IsAlreadyAutoLoaded(string path)
+    {
+        try
+        {
+            string full = Path.GetFullPath(path);
+            return _lastAutoLoadedPath is not null && full.Equals(_lastAutoLoadedPath, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    private void ClearLoadedFont()
+    {
+        _loaded = null;
+        _lastAutoLoadedPath = null;
+        _glyphs = GlyphRepository.CreateAllCp852Slots().ToList();
+        _current = null;
+        _apply.Enabled = false;
+        _saveCopy.Enabled = false;
+        _createExtendedCp852.Enabled = false;
+        _copyOriginalToEdited.Enabled = false;
+        _importFont.Enabled = false;
+        _exportFont.Enabled = false;
+        _glyphHeading.Text = UiText.Get("AllByteSlots");
+        PopulateList();
+        SelectGlyph();
+        UpdatePreview();
+    }
+
+    private void UpdateVariantContext()
+    {
+        if (_boundVariant is null)
+        {
+            _variantInfo.Text = string.Empty;
+            return;
+        }
+
+        string text = $"{UiText.Get("Variant")}: {_boundVariant.DisplayName} | {UiText.Get("Source")}: {_boundVariant.ExeFile}";
+        _variantInfo.Text = _isManualSource ? text + $" ({UiText.Get("ManualSource")})" : text;
     }
 
     private void PopulateList()
@@ -471,6 +623,8 @@ internal sealed class FontEditorForm : Form
         _list.BeginUpdate();
         _list.Items.Clear();
         bool fullCp852 = _loaded?.HasFullCp852Font == true;
+        if (_loaded is not null)
+            _glyphHeading.Text = string.Format(UiText.Get("FontGlyphRange"), _loaded.FirstByteValue, _loaded.LastByteValue);
         for (int i = fullCp852 ? 0x20 : 0; i < _glyphs.Count; i++)
             if (!fullCp852 || i <= 0xFF) _list.Items.Add(i);
         _list.EndUpdate();
@@ -514,6 +668,7 @@ internal sealed class FontEditorForm : Form
         _reset.Enabled = _current.IsLoadedFromSource && !reserved;
         _copyHex.Enabled = _current.HasEdited;
         SetShiftButtonsEnabled(_current.HasEdited && !reserved);
+        UpdateFontProjectPresentation();
         UpdateMatricesOnly();
     }
 
@@ -539,6 +694,37 @@ internal sealed class FontEditorForm : Form
             : string.Format(UiText.Get("GlyphShiftInfo"), 0, 0, 0);
         SetShiftButtonsEnabled(_current.HasEdited && !reserved);
         UpdatePreview();
+    }
+
+    private void UpdateFontProjectPresentation()
+    {
+        if (_fontProject is null || _fontVariant is null || _fontProjectState is null)
+        {
+            _projectVariantInfo.Text = UiText.Get("Font.ProjectUnavailable");
+            return;
+        }
+        int code = _current?.ByteValue ?? 0x20;
+        FontSlotProjection slot = _fontVariants.GetSlotProjection(_fontVariant, code);
+        if (slot.Status == FontApplicabilityStatus.Protected)
+        {
+            _projectVariantInfo.Text = string.Format(UiText.Get("Font.ProtectedGlyph"), _fontVariant.DisplayName);
+            return;
+        }
+        if (slot.Status == FontApplicabilityStatus.Unsupported)
+        {
+            _projectVariantInfo.Text = string.Format(UiText.Get("Font.UnsupportedGlyph"), _fontVariant.DisplayName);
+            return;
+        }
+        FontProjectEdit? edit = _fontProjectState.Edits.SingleOrDefault(value => value.Identity.ByteValue == code);
+        string scope = edit is null ? UiText.Get("Font.NoProjectEdit") : edit.Scope == FontEditScope.Shared ? UiText.Get("Font.SharedProjectGlyph") : UiText.Get("Font.CurrentRuntimeProjectGlyph");
+        string bank = slot.Bank switch
+        {
+            FontRuntimeBank.Low => UiText.Get("Font.LowBank"),
+            FontRuntimeBank.High => UiText.Get("Font.HighBank"),
+            FontRuntimeBank.Full => UiText.Get("Font.FullBank"),
+            _ => UiText.Get("Font.Bank")
+        };
+        _projectVariantInfo.Text = _fontVariant.DisplayName + " — " + scope + "; " + bank;
     }
 
     private void EditedMatrixOnPixelToggled(object? sender, GlyphPixelToggleEventArgs e)
@@ -603,7 +789,7 @@ internal sealed class FontEditorForm : Form
         {
             ProductionDeploymentResult result = GamePatchDeploymentService.Deploy(_loaded, _glyphs);
             LoadRunVga(result.ActiveExecutable, showErrors: true);
-            MessageBox.Show(this, $"Patched active executable: {result.ActiveExecutable}\nOriginal backup: {result.OriginalExecutable}\n\nGAMEPC was not modified.", UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, string.Format(UiText.Get("Font.PatchedExecutable"), result.ActiveExecutable, result.OriginalExecutable), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
@@ -639,13 +825,14 @@ internal sealed class FontEditorForm : Form
         if (_loaded is null) return;
         if (_loaded.Game is ElviraGame.Elvira1 or ElviraGame.Elvira2)
         {
-            if (!ConfirmClipBeforeOutput("Activate CP852 Patch")) return;
-            if (MessageBox.Show(this, "Create/replace the active CP852 executable from the verified original O-file source? Existing O-files are never overwritten.", UiText.Get("FontTitle"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (!ConfirmClipBeforeOutput(UiText.Get("Font.ActivateCp852"))) return;
+            if (MessageBox.Show(this, UiText.Get("Font.ConfirmActivate"), UiText.Get("FontTitle"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             try
             {
                 ProductionDeploymentResult result = GamePatchDeploymentService.Deploy(_loaded, _glyphs);
                 LoadRunVga(result.ActiveExecutable, showErrors: true);
-                MessageBox.Show(this, $"Activated {(_loaded?.Game == ElviraGame.Elvira2 ? "Elvira II V2 split-font" : "Elvira I V5")} CP852 patch.\n\nOriginal EXE: {result.OriginalExecutable}\nGAMEPC was not modified.", UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                string profile = _loaded?.Game == ElviraGame.Elvira2 ? UiText.Get("Font.Elvira2V2Profile") : UiText.Get("Font.Elvira1V5Profile");
+                MessageBox.Show(this, string.Format(UiText.Get("Font.Activated"), profile, result.OriginalExecutable), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error); }
             return;
@@ -659,25 +846,24 @@ internal sealed class FontEditorForm : Form
         RunVgaBootstrapState state = RunVgaBootstrapService.DetectState(_loaded.SourcePath);
         if (state == RunVgaBootstrapState.ExtendedCp852V5)
         {
-            MessageBox.Show(this, "This executable is already Extended CP852 / V5.", UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, UiText.Get("Font.AlreadyV5"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         if (state is not (RunVgaBootstrapState.OriginalPacked or RunVgaBootstrapState.UnpackedBaseline))
         {
-            MessageBox.Show(this, "This RUNVGA is not the exact supported English original or BAM/V3 baseline. No bytes were changed.", UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, UiText.Get("Font.UnsupportedRunVga"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        string sourceKind = state == RunVgaBootstrapState.OriginalPacked ? "the verified packed original" : "the verified unpacked BAM/V3 baseline";
+        string sourceKind = state == RunVgaBootstrapState.OriginalPacked ? UiText.Get("Font.VerifiedPackedOriginal") : UiText.Get("Font.VerifiedUnpackedBaseline");
         DialogResult answer = MessageBox.Show(this,
-            $"Create a new Extended CP852 / V5 executable from {sourceKind}?\n\n" +
-            "The source RUNVGA.EXE will not be modified. The new executable uses the currently edited 256-slot font when present; otherwise it uses the editor's current default font slots.",
-            "Create Extended CP852 / V5", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            string.Format(UiText.Get("Font.ConfirmCreateV5"), sourceKind),
+            UiText.Get("Font.CreateV5Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (answer != DialogResult.Yes) return;
 
         using var dlg = new SaveFileDialog
         {
-            Title = "Save Extended CP852 / V5 RUNVGA",
+            Title = UiText.Get("Font.SaveV5Title"),
             Filter = $"{UiText.Get("DosExecutable")} (*.EXE)|*.EXE|{UiText.Get("AllFiles")} (*.*)|*.*",
             FileName = "RUNVGA_EXTENDED_CP852_V5.EXE",
             InitialDirectory = Path.GetDirectoryName(_loaded.SourcePath),
@@ -690,12 +876,12 @@ internal sealed class FontEditorForm : Form
             RunVgaBootstrapResult result = RunVgaBootstrapService.CreateExtendedCp852(_loaded.SourcePath, dlg.FileName, _glyphs);
             LoadRunVga(result.OutputPath, showErrors: true);
             MessageBox.Show(this,
-                $"Extended CP852 / V5 executable created safely:\n{result.OutputPath}\n\nSHA-256: {result.Sha256}\nFont source: {(result.UsedEditedFont ? "current edited glyphs" : "current default glyph slots")}.",
-                "Create Extended CP852 / V5", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                string.Format(UiText.Get("Font.V5Created"), result.OutputPath, result.Sha256, result.UsedEditedFont ? UiText.Get("Font.CurrentEditedGlyphs") : UiText.Get("Font.DefaultGlyphSlots")),
+                UiText.Get("Font.CreateV5Title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Create Extended CP852 / V5", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, ex.Message, UiText.Get("Font.CreateV5Title"), MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {
@@ -708,20 +894,20 @@ internal sealed class FontEditorForm : Form
         if (_loaded is null) return;
         if (state == RunItBootstrapState.ExtendedCp852)
         {
-            MessageBox.Show(this, "This Elvira II RUNIT executable is already Extended CP852.", UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, UiText.Get("Font.AlreadyRunIt"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         if (state is not (RunItBootstrapState.OriginalPacked or RunItBootstrapState.CanonicalUnpackedAscii98))
         {
-            MessageBox.Show(this, "Unsupported or modified RUNIT.EXE. No bytes were changed.", UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, UiText.Get("Font.UnsupportedRunIt"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        string sourceKind = state == RunItBootstrapState.OriginalPacked ? "the verified packed Elvira II original" : "the canonical unpacked Elvira II baseline";
-        if (MessageBox.Show(this, $"Create a new Elvira II Extended CP852 executable from {sourceKind}?\n\nThe source RUNIT.EXE will not be modified. The new executable uses current edited glyphs when present; otherwise it uses safe default slots.",
-            "Create Elvira II Extended CP852", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        string sourceKind = state == RunItBootstrapState.OriginalPacked ? UiText.Get("Font.VerifiedPackedRunIt") : UiText.Get("Font.CanonicalUnpackedRunIt");
+        if (MessageBox.Show(this, string.Format(UiText.Get("Font.ConfirmCreateRunIt"), sourceKind),
+            UiText.Get("Font.CreateRunItTitle"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         using var dlg = new SaveFileDialog
         {
-            Title = "Save Elvira II Extended CP852 RUNIT",
+            Title = UiText.Get("Font.SaveRunItTitle"),
             Filter = $"{UiText.Get("DosExecutable")} (*.EXE)|*.EXE|{UiText.Get("AllFiles")} (*.*)|*.*",
             FileName = "RUNIT_EXTENDED_CP852.EXE",
             InitialDirectory = Path.GetDirectoryName(_loaded.SourcePath),
@@ -733,12 +919,12 @@ internal sealed class FontEditorForm : Form
             Cursor = Cursors.WaitCursor;
             RunItBootstrapResult result = RunItBootstrapService.CreateExtendedCp852(_loaded.SourcePath, dlg.FileName, _glyphs);
             LoadRunVga(result.OutputPath, showErrors: true);
-            MessageBox.Show(this, $"Elvira II Extended CP852 executable created safely:\n{result.OutputPath}\n\nSHA-256: {result.Sha256}\n\nIf saved under another name, DOSBox/GOG launch configuration must execute that filename.",
-                "Create Elvira II Extended CP852", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, string.Format(UiText.Get("Font.RunItCreated"), result.OutputPath, result.Sha256),
+                UiText.Get("Font.CreateRunItTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Create Elvira II Extended CP852", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, ex.Message, UiText.Get("Font.CreateRunItTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally { Cursor = Cursors.Default; }
     }
@@ -865,6 +1051,7 @@ internal sealed class FontEditorForm : Form
 
     private void UpdatePreview()
     {
+        PreviewRebuildCount++;
         int code = _current?.ByteValue ?? 65;
         FontPreviewMode mode = _previewMode.SelectedIndex switch
         {
@@ -874,6 +1061,9 @@ internal sealed class FontEditorForm : Form
         };
         _preview.SetPreview(_glyphs, code, mode);
     }
+
+    private static int CountControls(Control root) =>
+        1 + root.Controls.Cast<Control>().Sum(CountControls);
 
     public void ApplyLanguage()
     {
@@ -902,17 +1092,22 @@ internal sealed class FontEditorForm : Form
 
         if (_loaded is null)
         {
-            _sourceInfo.Text = UiText.Get("NoRunVga");
+            _glyphHeading.Text = UiText.Get("AllByteSlots");
+            if (_boundVariant is null)
+                _sourceInfo.Text = UiText.Get("NoRunVga");
+            UpdateVariantContext();
             SetStatusText(UiText.Get("FontReadyHint"));
         }
         else
         {
-            string layout = LocalizedLayout(_loaded.Layout);
-            string nativeRange = LocalizedNativeRange(_loaded.Layout);
-            string game = _loaded.Game == ElviraGame.Elvira2 ? "Elvira II" : _loaded.Game == ElviraGame.Elvira1 ? "Elvira I" : "Unknown";
-            _sourceInfo.Text = $"{game}   |   {UiText.Get("Source")}: {Path.GetFileName(_loaded.SourcePath)}   |   {UiText.Get("Layout")}: {layout}   |   Offset: {(_loaded.FontOffset >= 0 ? $"0x{_loaded.FontOffset:X}" : "n/a")}   |   {LocalizedSlotSummary(_loaded)}{nativeRange}";
-            if (!_glyphs.Any(g => g.HasEdited))
-                SetStatusText(BuildLocalizedDetectionSummary() + " " + UiText.Get("EditedEmptyHint"));
+            _glyphHeading.Text = string.Format(UiText.Get("FontGlyphRange"), _loaded.FirstByteValue, _loaded.LastByteValue);
+            _sourceInfo.Text = BuildSourceSummary(_loaded, _loaded.SourcePath);
+            UpdateVariantContext();
+            // A loaded V5/V2 source keeps the protected 0x81 glyph initialized
+            // in-memory. That is not a user working copy and must not prevent
+            // the localized empty-editor guidance from being refreshed.
+            if (!_glyphs.Any(g => g.HasEdited && !IsReservedHudEraseGlyph(g)))
+                SetStatusText(UiText.Get("EditedEmptyHint"));
         }
 
         _list.Invalidate();
@@ -932,43 +1127,22 @@ internal sealed class FontEditorForm : Form
         }
     }
 
-    private static string LocalizedLayout(RunVgaFontLayout layout) => (UiText.Language, layout) switch
+    private static string LocalizedLayout(RunVgaFontLayout layout) => layout switch
     {
-        (UiLanguage.Slovak, RunVgaFontLayout.OriginalPackedAscii80) => "Pôvodný PACKED ASCII font (80 znakov)",
-        (UiLanguage.Slovak, RunVgaFontLayout.OriginalPackedAscii98) => "Pôvodný / PACKED font (98 znakov)",
-        (UiLanguage.Slovak, RunVgaFontLayout.OriginalAscii98) => "Pôvodný ASCII font (98 znakov)",
-        (UiLanguage.Slovak, RunVgaFontLayout.ExtendedCp852V5) => "V5 rozšírený CP852 font (224 slotov; 223 editovateľných; 0x81 rezervovaný)",
-        (UiLanguage.Slovak, RunVgaFontLayout.ExtendedCp852RunIt) => "Elvira II split CP852 font (224 slotov; 223 editovateľných; 0x81 rezervovaný)",
-        (UiLanguage.Czech, RunVgaFontLayout.OriginalPackedAscii80) => "Původní PACKED ASCII font (80 znaků)",
-        (UiLanguage.Czech, RunVgaFontLayout.OriginalPackedAscii98) => "Původní / PACKED font (98 znaků)",
-        (UiLanguage.Czech, RunVgaFontLayout.OriginalAscii98) => "Původní ASCII font (98 znaků)",
-        (UiLanguage.Czech, RunVgaFontLayout.ExtendedCp852V5) => "V5 rozšířený CP852 font (224 slotů; 223 editovatelných; 0x81 rezervovaný)",
-        (UiLanguage.Czech, RunVgaFontLayout.ExtendedCp852RunIt) => "Elvira II split CP852 font (224 slotů; 223 editovatelných; 0x81 rezervovaný)",
-        (_, RunVgaFontLayout.OriginalPackedAscii80) => "Original PACKED ASCII 80-glyph",
-        (_, RunVgaFontLayout.OriginalPackedAscii98) => "Original / Packed 98-glyph",
-        (_, RunVgaFontLayout.OriginalAscii98) => "Original ASCII 98-glyph",
-        (_, RunVgaFontLayout.ExtendedCp852V5) => "V5 extended CP852 (224 slots; 223 editable glyphs; 0x81 reserved)",
-        (_, RunVgaFontLayout.ExtendedCp852RunIt) => "Elvira II split CP852 (224 slots; 223 editable glyphs; 0x81 reserved)",
-        _ => UiText.Language == UiLanguage.Slovak ? "Neznáme / nepodporované" : UiText.Language == UiLanguage.Czech ? "Neznámé / nepodporované" : "Unknown / unsupported"
+        RunVgaFontLayout.OriginalPackedAscii80 => UiText.Get("Font.Layout.OriginalPackedAscii80"),
+        RunVgaFontLayout.OriginalPackedAscii98 => UiText.Get("Font.Layout.OriginalPackedAscii98"),
+        RunVgaFontLayout.OriginalAscii98 => UiText.Get("Font.Layout.OriginalAscii98"),
+        RunVgaFontLayout.ExtendedCp852V5 => UiText.Get("Font.Layout.ExtendedCp852V5"),
+        RunVgaFontLayout.ExtendedCp852RunIt => UiText.Get("Font.Layout.ExtendedCp852RunIt"),
+        _ => UiText.Get("Font.Layout.Unknown")
     };
 
-    private static string LocalizedNativeRange(RunVgaFontLayout layout) => (UiText.Language, layout) switch
+    private static string LocalizedNativeRange(RunVgaFontLayout layout) => layout switch
     {
-        (UiLanguage.Slovak, RunVgaFontLayout.OriginalPackedAscii80) => " | Natívny packed rozsah: 0x2F-0x7E (vrátane 0-9/A-Z/a-z)",
-        (UiLanguage.Slovak, RunVgaFontLayout.OriginalPackedAscii98) => " | Natívny rozsah: 0x20-0x81",
-        (UiLanguage.Slovak, RunVgaFontLayout.OriginalAscii98) => " | Natívny rozsah: 0x20-0x81 (vrátane číslic/A-Z/a-z)",
-        (UiLanguage.Slovak, RunVgaFontLayout.ExtendedCp852V5) or
-        (UiLanguage.Slovak, RunVgaFontLayout.ExtendedCp852RunIt) => " | Editovateľné: 0x20-0x80, 0x82-0xFF; Rezervované: 0x81 (mazanie HUD)",
-        (UiLanguage.Czech, RunVgaFontLayout.OriginalPackedAscii80) => " | Nativní packed rozsah: 0x2F-0x7E (včetně 0-9/A-Z/a-z)",
-        (UiLanguage.Czech, RunVgaFontLayout.OriginalPackedAscii98) => " | Nativní rozsah: 0x20-0x81",
-        (UiLanguage.Czech, RunVgaFontLayout.OriginalAscii98) => " | Nativní rozsah: 0x20-0x81 (včetně číslic/A-Z/a-z)",
-        (UiLanguage.Czech, RunVgaFontLayout.ExtendedCp852V5) or
-        (UiLanguage.Czech, RunVgaFontLayout.ExtendedCp852RunIt) => " | Editovatelné: 0x20-0x80, 0x82-0xFF; Rezervováno: 0x81 (mazání HUD)",
-        (_, RunVgaFontLayout.OriginalPackedAscii80) => " | Native packed range: 0x2F-0x7E (0-9/A-Z/a-z included)",
-        (_, RunVgaFontLayout.OriginalPackedAscii98) => " | Native range: 0x20-0x81",
-        (_, RunVgaFontLayout.OriginalAscii98) => " | Native range: 0x20-0x81 (digits/A-Z/a-z included)",
-        (_, RunVgaFontLayout.ExtendedCp852V5) or
-        (_, RunVgaFontLayout.ExtendedCp852RunIt) => " | Editable: 0x20-0x80, 0x82-0xFF; Reserved: 0x81 (HUD erase)",
+        RunVgaFontLayout.OriginalPackedAscii80 => UiText.Get("Font.Range.OriginalPackedAscii80"),
+        RunVgaFontLayout.OriginalPackedAscii98 => UiText.Get("Font.Range.OriginalPackedAscii98"),
+        RunVgaFontLayout.OriginalAscii98 => UiText.Get("Font.Range.OriginalAscii98"),
+        RunVgaFontLayout.ExtendedCp852V5 or RunVgaFontLayout.ExtendedCp852RunIt => UiText.Get("Font.Range.ExtendedCp852"),
         _ => string.Empty
     };
 
@@ -977,30 +1151,40 @@ internal sealed class FontEditorForm : Form
         if (loaded.ReservedGlyphSlots.Count == 0)
             return $"{UiText.Get("Loaded")}: {loaded.PhysicalSlotCount}";
 
-        return UiText.Language switch
-        {
-            UiLanguage.Slovak => $"Fontové sloty: {loaded.PhysicalSlotCount}; editovateľné glyfy: {loaded.EditableGlyphCount}; rezervované: 0x81",
-            UiLanguage.Czech => $"Fontové sloty: {loaded.PhysicalSlotCount}; editovatelné glyfy: {loaded.EditableGlyphCount}; rezervováno: 0x81",
-            _ => $"Font slots: {loaded.PhysicalSlotCount}; editable glyphs: {loaded.EditableGlyphCount}; reserved: 0x81"
-        };
+        return string.Format(UiText.Get("Font.SlotSummary"), loaded.PhysicalSlotCount, loaded.EditableGlyphCount);
+    }
+
+    private static string BuildSourceSummary(FontLoadResult loaded, string path)
+    {
+        string game = loaded.Game == ElviraGame.Elvira2 ? "Elvira II" : loaded.Game == ElviraGame.Elvira1 ? "Elvira I" : "Unknown";
+        return string.Format(
+            UiText.Get("FontSourceSummary"),
+            UiText.Get("Source"),
+            Path.GetFileName(path),
+            UiText.Get("FontMode"),
+            $"{game} — {LocalizedLayout(loaded.Layout)}",
+            LocalizedSlotSummary(loaded));
     }
 
     private string BuildLocalizedDetectionSummary()
     {
         if (_loaded is null) return UiText.Get("FontReadyHint");
-        return UiText.Language switch
-        {
-            UiLanguage.Slovak => $"Rozpoznaný font {_loaded.Game}: {_loaded.Layout}; {LocalizedSlotSummary(_loaded)}; offset {(_loaded.FontOffset >= 0 ? $"0x{_loaded.FontOffset:X}" : "n/a")}.",
-            UiLanguage.Czech => $"Rozpoznaný font {_loaded.Game}: {_loaded.Layout}; {LocalizedSlotSummary(_loaded)}; offset {(_loaded.FontOffset >= 0 ? $"0x{_loaded.FontOffset:X}" : "n/a")}.",
-            _ => $"Detected {_loaded.Game} font: {_loaded.Layout}; {LocalizedSlotSummary(_loaded)}; offset {(_loaded.FontOffset >= 0 ? $"0x{_loaded.FontOffset:X}" : "n/a")}.",
-        };
+        return string.Format(UiText.Get("Font.DetectedSummary"), _loaded.Game, LocalizedLayout(_loaded.Layout), LocalizedSlotSummary(_loaded));
     }
 
     private void UpdateFontStatusSummary()
     {
-        int edited = _glyphs.Count(g => g.HasEdited && g.IsModified);
-        int shifted = _glyphs.Count(g => g.HasEdited && (g.ShiftX != 0 || g.ShiftY != 0));
-        _footerStatus.Text = string.Format(UiText.Get("FontStatusSummary"), _glyphs.Count, edited, shifted);
+        if (_loaded is null)
+        {
+            _footerStatus.Text = string.Empty;
+            return;
+        }
+
+        _footerStatus.Text = string.Format(
+            UiText.Get("FontFooterSummary"),
+            _loaded.PhysicalSlotCount,
+            _loaded.EditableGlyphCount,
+            _loaded.ReservedGlyphSlots.Count);
     }
 
     private void SetStatusText(string text, string? boldToken = null)

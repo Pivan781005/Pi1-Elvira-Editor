@@ -1,0 +1,160 @@
+{
+  "topics": [
+    {
+      "id": "getting-started",
+      "group": "Všeobecné",
+      "title": "Začíname",
+      "body": "1. Vyberte podporovanú inštaláciu pomocou **Nájsť hry...** alebo **Vybrať adresár...**.\n2. Inštaláciu výslovne aktivujte. Editor sa spúšťa bez aktívnej hry.\n3. Vyberte požadovaný **Aktívny variant**: Elvira I VGA, Elvira I EGA alebo Elvira II VGA.\n4. Vyberte **edíciu**: Original (EN) je iba na čítanie; edície typu SK/S1 vlastnia oddelený upraviteľný stav projektu.\n5. Upravujte Grafiku, Herný text, Runtime UI alebo Písmo a potom použite **Uložiť do projektu**. Tým sa nemení čistá hra ani nevytvárajú spustiteľné súbory.\n6. **Zostaviť variant...** otvorí cieľ pre aktívny runtime a edíciu; variant zostavte/znovu zostavte, overte manifest/pripravenosť a až potom použite **Spustiť** alebo **Ladiť**.\n\nNa exportované PNG spriteov nepoužívajte Microsoft Paint, pretože môže zmeniť priehľadné pixely na nepriehľadnú bielu; použite editor zachovávajúci RGBA, napríklad FireAlpaca, Paint.NET alebo GIMP. Zmena jazyka rozhrania hru nikdy neaktivuje, nezostavuje, nespúšťa ani neupravuje."
+    },
+    {
+      "id": "active-variant",
+      "group": "Všeobecné",
+      "title": "Aktívny variant",
+      "body": "**Inštalácia** a **Aktívny variant** sú dve odlišné voľby. Elvira I podporuje **VGA / RUNVGA** a **EGA / RUNEGA**. Elvira II podporuje **VGA / RUNIT**.\n\nZmena aktívneho variantu prepne kontext používaný v častiach Grafika, Herný text, Runtime UI, Písmo a Mody/spúšťač. Samotný výber variantu nič nezostavuje a hru nespúšťa."
+    },
+    {
+      "id": "variant-manager",
+      "group": "Všeobecné",
+      "title": "Správca variantov",
+      "body": "Správca variantov zobrazuje podporované runtime varianty, ich výstupný adresár vlastnený editorom, stav vlastníctva, stav zostavenia a pripravenosť na spustenie.\n\nPoužite ho na kontrolu, či výstup chýba, je neúplný, pripravený alebo nebezpečný. Cudzí, neplatný alebo editorom nevlastnený adresár sa iba nahlási a zachová; editor ho nesmie potichu prevziať ani odstrániť."
+    },
+    {
+      "id": "build-status",
+      "group": "Všeobecné",
+      "title": "Stav zostavenia",
+      "body": "**Chýba** — výstupný adresár variantu vlastnený editorom neexistuje.\n\n**Neplatné** — aktuálny kontext alebo výstupný adresár nie je vhodný na bezpečné zostavenie.\n\n**Neúplné** — vlastnený výstup existuje, ale chýbajú povinné výsledky zostavenia.\n\n**Pripravené** — vlastnený výstup obsahuje požadovaný spustiteľný súbor a logické herné dáta a prešiel kontrolou pripravenosti.\n\nSamotná existencia adresára neznamená, že variant je pripravený."
+    },
+    {
+      "id": "variant-manifest",
+      "group": "Všeobecné",
+      "title": "Manifest variantu",
+      "body": "Dokončené zostavenie variantu vlastneného editorom vytvorí vo výstupe súbor **variant-manifest.json**. Obsahuje identitu baseline, informáciu o zostavenom runtime, stav zostavenia a deterministické SHA-256 identity vytvorených artefaktov.\n\nManifest slúži na diagnostiku. Jeho samotná existencia neznamená stav Pripravené; rozhodujú Stav zostavenia a kontroly pripravenosti."
+    },
+    {
+      "id": "localization",
+      "group": "Všeobecné",
+      "title": "Jazyk rozhrania",
+      "body": "Jazyk rozhrania je nezávislý od kódovania herného textu, zvoleného prekladu, profilu písma aj aktívneho runtime variantu.\n\nAngličtina je kanonický jazyk rozhrania. Slovenčina a čeština používajú vlastné locale súbory a pri budúcom chýbajúcom kľúči môžu použiť anglickú náhradu. Prepnutie jazyka obnoví rozhranie, Pomoc a O programe bez zmeny projektu alebo hry."
+    },
+    {
+      "id": "recovery-safety",
+      "group": "Všeobecné",
+      "title": "Obnova a bezpečnosť",
+      "body": "Obnova a bezpečnosť overuje zachytenú čistú baseline inštalácie a odlišuje výstupy vlastnené editorom od externých zmien.\n\nObnovovacie akcie sú vždy výslovné. Editor môže obnoviť známe meniteľné súbory z oblasti baseline a spravovať adresáre variantov, ktoré preukázateľne vlastní. Neočakávané externé súbory alebo cudzie adresáre iba nahlási a zachová."
+    },
+    {
+      "id": "restore-semantics",
+      "group": "Všeobecné",
+      "title": "Čo znamená obnova",
+      "body": "Pred potvrdením vždy skontrolujte náhľad obnovovacích akcií.\n\n**Obnoviť** vráti známy editorom spravovaný meniteľný obsah do zachyteného baseline stavu. **Znovu zostaviť** vytvorí nanovo výstup variantu vlastneného editorom. **Odstrániť vlastný variant** odstráni iba výstup, ktorý prejde kontrolou vlastníctva.\n\nSúbory, pri ktorých editor nevie preukázať vlastníctvo, sa potichu neodstraňujú."
+    },
+    {
+      "id": "legacy-import",
+      "group": "Všeobecné",
+      "title": "Manuálne otvorenie / starší import",
+      "body": "Manuálne otvorenie, Uložiť ako a import zostávajú dostupné pre kompatibilné dáta typu GAMEPC a podporované zdroje EXE/písma. Ide o kompatibilné nástroje pre vedomú manuálnu prácu.\n\nPri bežnej projektovej práci používajte aktívny variant a kontrolované zostavenie variantu. Otvorenie alebo náhľad zdroja považujte za operáciu iba na čítanie, kým výslovne nezvolíte uloženie, aplikovanie alebo zostavenie."
+    },
+    {
+      "id": "recommended-workflow",
+      "group": "Všeobecné",
+      "title": "Odporúčaný pracovný postup",
+      "body": "**Vybrať inštaláciu → Vybrať aktívny variant → Upraviť projekt → Skontrolovať Stav zostavenia → Zostaviť variant → Overiť pripravenosť/manifest → Spustiť alebo Ladiť.**\n\nPôvodnú inštaláciu zachovávajte ako referenčnú baseline. Generované runtime výstupy patria do variantov vlastnených editorom. Ak Obnova a bezpečnosť hlási neočakávaný súbor, pred pokračovaním ho preverte."
+    },
+    {
+      "id": "troubleshooting",
+      "group": "Všeobecné",
+      "title": "Riešenie problémov a známe obmedzenia",
+      "body": "Ak hra nie je dostupná, výslovne overte požadovanú inštaláciu. Nepodporované alebo zmenené EXE zostávajú iba na čítanie, pokiaľ pre ne neexistuje podporovaná produkčná cesta.\n\nNáhradný PNG musí zachovať rozmery obrázka a používať iba farby z aktívnej 16-farebnej palety. PNG s inými farbami treba pred nahradením opraviť.\n\nZnak **0x81** je enginom rezervovaný na mazanie buniek HUD a editor ho chráni pred bežnou úpravou písma.\n\nNiektoré mapovania Runtime UI sú zámerne neúplné; editor ich musí blokovať namiesto odhadovania. Podrobnosti sú v časti Runtime UI."
+    },
+    {
+      "id": "graphics-e1-vga",
+      "group": "Grafika",
+      "title": "Elvira I — VGA",
+      "body": "Ako aktívny variant vyberte **Elvira I VGA / RUNVGA**. Zvoľte požadovaný VGA zdroj, paletu a položku obrázka a pred úpravou skontrolujte náhľad.\n\nPomocou **Exportovať PNG...** vytvorte kópiu na úpravu. Zachovajte pôvodné rozmery a používajte iba farby z aktívnej 16-farebnej palety. **Nahradiť PNG...** načíta upravený obrázok do projektu; pred uložením projektu alebo zostavením variantu skontrolujte náhľad.\n\nVizuálne podobná RGB farba nemusí patriť do palety — vyžadujú sa presné farby palety."
+    },
+    {
+      "id": "graphics-e1-ega",
+      "group": "Grafika",
+      "title": "Elvira I — EGA",
+      "body": "Pred úpravou vyberte **Elvira I EGA / RUNEGA**. Grafika používa globálny Aktívny variant a zobrazí iba zdroje platné pre daný kontext.\n\nVGA a EGA považujte za samostatné runtime ciele. Nepoužívajte medzi nimi zameniteľne názvy EXE ani runtime predpoklady. Export a nahradenie obrázka musia zachovať rozmery zdroja a obmedzenia aktívnej palety."
+    },
+    {
+      "id": "graphics-e2-vga",
+      "group": "Grafika",
+      "title": "Elvira II — VGA",
+      "body": "Elvira II používa profil **VGA / RUNIT**. Pred úpravou grafiky vyberte Elvira II VGA, aby projekt používal správny herný kontext.\n\nPostup je rovnaký: skontrolovať zdroj a paletu, exportovať PNG, upraviť bez zmeny rozmerov, zachovať všetky farby v aktívnej 16-farebnej palete, nahradiť PNG, skontrolovať náhľad a až potom výslovne uložiť alebo zostaviť."
+    },
+    {
+      "id": "text-e1",
+      "group": "Herný text",
+      "title": "Elvira I",
+      "body": "Herný text upravuje kompatibilný obsah typu **GAMEPC** pri zachovaní logického poradia reťazcov a potrebnej netextovej štruktúry.\n\nStĺpce **Originál B**, **Preklad B** a **Rozdiel** zobrazujú počty zakódovaných bajtov na kontrolu. Sú informatívne; editor nesmie predstierať nepreukázaný pevný limit dĺžky textu.\n\nPri prekladovom projekte pracujte v zvolenom projektovom/variantnom kontexte a ukladajte vedome. Manuálne Otvoriť/Uložiť ako používajte iba vtedy, keď zámerne potrebujete starší manuálny postup."
+    },
+    {
+      "id": "text-e2",
+      "group": "Herný text",
+      "title": "Elvira II",
+      "body": "Elvira II používa rovnaký projektový model textov typu GAMEPC v kontexte **Elvira II VGA / RUNIT**. Vyhľadávanie, úpravy a kontrola zakódovaných bajtov fungujú rovnako ako pri Elvire I.\n\nHerný text oddeľujte od Runtime UI: texty GAMEPC a texty uložené v EXE sú dva rozdielne zdroje a zostavujú sa v rozdielnych krokoch."
+    },
+    {
+      "id": "runtime-ui-e1-vga",
+      "group": "Runtime UI",
+      "title": "Elvira I — VGA / RUNVGA",
+      "body": "Úpravy Runtime UI sú projektový stav oddelený od textov GAMEPC. Uloženie projektového stavu Runtime UI nesmie prepísať GAMEPC.\n\nPri RUNVGA zatiaľ nie je pre každý záznam preukázané úplné produkčné mapovanie rozsahu/kapacity. Záznamy bez overeného mapovania zostávajú **MappingIncomplete** a nesmú sa patchovať odhadom.\n\nDostupné záznamy môžete prezerať a kontrolovať, ale MappingIncomplete je zámerná bezpečnostná blokácia."
+    },
+    {
+      "id": "runtime-ui-e1-ega",
+      "group": "Runtime UI",
+      "title": "Elvira I — EGA / RUNEGA",
+      "body": "RUNEGA používa vlastné overené mapovanie Runtime UI nezávislé od RUNVGA. Pred kontrolou alebo úpravou vyberte Elvira I EGA.\n\nTexty Runtime UI môžu mať pevné rozloženie a obmedzenia interakcie. Preklad musí zostať v overenej kapacite záznamu a zachovať pôvodné správanie menu/hotspotov. Najprv uložte projektový stav; zmeny EXE patria do kontrolovaného zostavenia."
+    },
+    {
+      "id": "runtime-ui-e2",
+      "group": "Runtime UI",
+      "title": "Elvira II — RUNIT",
+      "body": "Runtime UI v RUNIT je oddelené od GAMEPC. Trasa **SAVE_FAILURE** má preukázaný produkčný rozsah a možno ju overovať voči známej kapacite.\n\nPresné presmerované trasy **LOAD_FAILURE**, **FILE_NOT_FOUND** a **TRY_ANOTHER_DISK** zatiaľ nie sú preukázané. Tieto záznamy zostávajú **MappingIncomplete** a nesmú sa patchovať, kým nebudú runtime trasy overené."
+    },
+    {
+      "id": "font-e1-vga",
+      "group": "Písmo",
+      "title": "Elvira I — VGA / RUNVGA",
+      "body": "RUNVGA podporuje overený workflow rozšíreného písma CP852. Môžete prezerať zdrojové písmo, upravovať pracovnú kópiu, importovať/exportovať bitmapové písmo alebo rasterizovať vhodné vektorové písmo do herného úložiska 8×8.\n\nObnovený renderer zobrazuje ľavých 6 stĺpcov; dva pravé uložené stĺpce sú pre renderer neaktívne. Znak **0x81** je rezervovaný na mazanie HUD a je chránený vo všetkých podporovaných výstupných cestách.\n\nVýstup EXE vytvárajte iba podporovanou výslovnou produkčnou/build akciou."
+    },
+    {
+      "id": "font-e1-ega",
+      "group": "Písmo",
+      "title": "Elvira I — EGA / RUNEGA",
+      "body": "RUNEGA má vlastný podporovaný profil písma a treba ho spracúvať oddelene od RUNVGA. Pred načítaním alebo použitím projektového písma vyberte Elvira I EGA.\n\nPlatia rovnaké princípy CP852: zachovať overené pravidlá uloženia/rozloženia a znak **0x81** ponechať rezervovaný pre engine.\n\nPoznámka ku kompatibilite: správne vykresľovanie RUNEGA bolo overené v DOSBox 0.74-2 a DOSBox Staging; DOSBox-X môže v niektorých konfiguráciách zobrazovať odlišné znaky."
+    },
+    {
+      "id": "font-e2",
+      "group": "Písmo",
+      "title": "Elvira II — RUNIT",
+      "body": "Podporovaný rozšírený profil CP852 pre RUNIT používa overené delené uloženie LOW/HIGH. Neznáme alebo zmenené EXE zostávajú iba na čítanie, pokiaľ nezodpovedajú podporovanému produkčnému zdroju.\n\nZnak **0x81** zostáva chráneným znakom na mazanie HUD. Upravené znaky alebo bezpečné predvolené pozície sa použijú iba pri výslovnej podporovanej výstupnej/build akcii."
+    },
+    {
+      "id": "mods-launcher-e1",
+      "group": "Mody, spúšťanie a ladenie",
+      "title": "Elvira I — Mody a spúšťač",
+      "body": "Mody a spúšťač sledujú zvolený runtime variant Elviry I. Použite ich na kontrolu pripravenosti variantu a nastavenie spúšťača pre požadovaný zostavený výstup.\n\nObnova spúšťača je kontrolovaná obnovovacia akcia. Ručne zmenené alebo cudzie súbory spúšťača nepovažujte bez kontroly za vlastníctvo editora."
+    },
+    {
+      "id": "run-debug-e1",
+      "group": "Mody, spúšťanie a ladenie",
+      "title": "Elvira I — Spustiť / Ladiť",
+      "body": "**Spustiť** a **Ladiť** vyžadujú pripravené zostavenie Elvira I VGA alebo EGA vlastnené editorom. Samotný výber variantu nikdy nespustí proces.\n\nPred spustením skontrolujte Stav zostavenia, pripravenosť a očakávaný EXE/dátový výstup. Ak je stav Chýba, Neplatné alebo Neúplné, najprv ho vyriešte."
+    },
+    {
+      "id": "mods-launcher-e2",
+      "group": "Mody, spúšťanie a ladenie",
+      "title": "Elvira II — Mody a spúšťač",
+      "body": "Elvira II používa profil VGA / RUNIT. Spúšťanie nastavujte iba pre overený výstup vlastnený editorom a pred vytvorením alebo aktualizáciou konfigurácie spúšťača skontrolujte pripravenosť.\n\nNeznáme súbory alebo cudzie adresáre musia zostať mimo vlastníctva editora."
+    },
+    {
+      "id": "run-debug-e2",
+      "group": "Mody, spúšťanie a ladenie",
+      "title": "Elvira II — Spustiť / Ladiť",
+      "body": "Spustiť/Ladiť je dostupné iba vtedy, keď je zostavenie Elvira II VGA pripravené. Manifest je užitočný na diagnostiku, ale sám osebe neoprávňuje spustenie.\n\nObnovenie stavu je iba na čítanie: nesmie hru zostavovať, meniť ani spúšťať."
+    }
+  ]
+}

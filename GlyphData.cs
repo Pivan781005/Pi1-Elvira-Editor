@@ -46,6 +46,11 @@ internal sealed class GlyphModel
     public void ReplaceEdited(ReadOnlySpan<byte> bitmap)
     {
         if (bitmap.Length != 8) throw new ArgumentException("Elvira glyphs must contain exactly 8 bytes.", nameof(bitmap));
+        // 0x81 is an engine-owned HUD full-cell erase pass, not an editable
+        // CP852 character. Keep this guard below the UI level so import, copy,
+        // reset and any future model caller cannot introduce unsafe bytes.
+        if (ByteValue == FontSlotMetadata.HudEraseGlyph)
+            bitmap = FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes;
         _editedPixels.Clear();
         ShiftX = 0;
         ShiftY = 0;
@@ -70,7 +75,7 @@ internal sealed class GlyphModel
 
     public void ShiftEdited(int dx, int dy)
     {
-        if (!HasEdited) return;
+        if (!HasEdited || ByteValue == FontSlotMetadata.HudEraseGlyph) return;
         checked
         {
             ShiftX += dx;
@@ -80,13 +85,14 @@ internal sealed class GlyphModel
 
     public void ResetShift()
     {
+        if (ByteValue == FontSlotMetadata.HudEraseGlyph) return;
         ShiftX = 0;
         ShiftY = 0;
     }
 
     public void ToggleEditedPixel(int viewRow, int viewColumn)
     {
-        if (!HasEdited) return;
+        if (!HasEdited || ByteValue == FontSlotMetadata.HudEraseGlyph) return;
         int logicalX = viewColumn - ShiftX;
         int logicalY = viewRow - ShiftY;
         var p = (logicalX, logicalY);

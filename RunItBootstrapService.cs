@@ -24,7 +24,6 @@ internal static class RunItBootstrapService
     internal const int HighFontSize = 0x3F0;
     private const byte GoldenHighFontSeed = 0x29;
     private const byte GoldenHighFontStep = 0x49;
-    internal const int ReservedHudEraseGlyph = 0x81;
     internal const int HelperOffset = 0x28870;
     internal const int HelperSize = 81;
     internal const int RendererOffset = 0x7B89;
@@ -33,10 +32,6 @@ internal static class RunItBootstrapService
     internal const string CanonicalSha256 = "7FDE00D641D3BDE82B1732DAD59D21CE19F48573CBEFAD6C64C11754660EB415";
     internal const string CanonicalModuleSha256 = "65413F0A3D99FB20AF1C1B4F2E6A5BDD99768EAA6C6A833C215E3F432F9F4FF4";
     internal const string OriginalFontSha256 = "68C1F23840028438CD9975C5CD79F1861AAF7A009B6F5C65D95CE0B243DDB893";
-    // This is an engine-reserved LOW-table mask, not CP852 ü. Patched V2 outputs use the
-    // full 6×8 renderer-cell mask so shifted HUD glyphs cannot leave top/bottom ghost pixels.
-    internal static readonly byte[] ReservedHudEraseGlyphBytes = FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes;
-
     // Original renderer lookup / loop prefix at physical 0x7B89.
     internal static readonly byte[] OriginalRenderer = Convert.FromHexString("B60080EA20D1E2D1E2D1E2BECA2A03F28E061206");
     // Exact V2 thunk. It transfers HIGH codes to SS:03F0 and falls through to the old loop for LOW codes.
@@ -90,7 +85,8 @@ internal static class RunItBootstrapService
         // LOW direct byte mapping: character 0x20..0x81 -> original native 98x8 table.
         Array.Copy(fontImage, 0x20 * 8, result, OriginalFontOffset, OriginalFontGlyphCount * 8);
         // Preserve the patched full-cell erase mask even if a caller supplies a malformed image.
-        Array.Copy(ReservedHudEraseGlyphBytes, 0, result, OriginalFontOffset + (ReservedHudEraseGlyph - 0x20) * 8, ReservedHudEraseGlyphBytes.Length);
+        Array.Copy(FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes, 0, result,
+            OriginalFontOffset + (FontSlotMetadata.HudEraseGlyph - 0x20) * 8, RunVgaFontService.GlyphBytes);
         // HIGH direct byte mapping: character 0x82..0xFF -> initialized initial-stack segment.
         Array.Copy(fontImage, HighFirstByte * 8, result, HighFontOffset, HighFontSize);
         Array.Copy(HighRendererHelper, 0, result, HelperOffset, HelperSize);
@@ -114,11 +110,11 @@ internal static class RunItBootstrapService
         for (int index = 0; index < HighFontSize; index++)
             image[HighFirstByte * 8 + index] = unchecked((byte)(GoldenHighFontSeed + index * GoldenHighFontStep));
 
-        usedEdited = glyphs.Any(g => g.HasEdited && g.ByteValue != ReservedHudEraseGlyph);
+        usedEdited = glyphs.Any(g => g.HasEdited && g.ByteValue != FontSlotMetadata.HudEraseGlyph);
         foreach (GlyphModel glyph in glyphs)
         {
             if (glyph.ByteValue is < 0x20 or > 0xFF || !glyph.HasEdited) continue;
-            if (glyph.ByteValue == ReservedHudEraseGlyph) continue;
+            if (glyph.ByteValue == FontSlotMetadata.HudEraseGlyph) continue;
             byte[] bitmap = glyph.HasEdited ? glyph.Edited : glyph.Original;
             if (bitmap.Length != 8) throw new InvalidDataException($"Glyph 0x{glyph.ByteValue:X2} is not an 8-row bitmap.");
             Array.Copy(bitmap, 0, image, glyph.ByteValue * 8, 8);
@@ -194,7 +190,7 @@ internal static class RunItBootstrapService
     internal static void ValidateExtended(byte[] data)
     {
         if (!IsExtended(data)) throw new InvalidDataException("Generated V2 split-font RUNIT.EXE failed structural validation.");
-        if (!At(data, OriginalFontOffset + (ReservedHudEraseGlyph - 0x20) * 8, ReservedHudEraseGlyphBytes))
+        if (!At(data, OriginalFontOffset + (FontSlotMetadata.HudEraseGlyph - 0x20) * 8, FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes))
             throw new InvalidDataException("Generated V2 split-font RUNIT.EXE does not preserve the reserved Elvira II HUD erase glyph 0x81.");
     }
 

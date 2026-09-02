@@ -1,33 +1,53 @@
 using System.Drawing.Imaging;
+using System.Drawing.Drawing2D;
 using System.Text.RegularExpressions;
 
 namespace ElviraVgaEditor;
 
 internal sealed class MainForm : Form
 {
+    // The path remains an internal state holder so existing editor backends need no path plumbing rewrite.
+    // The user-facing control is cmbInstallations; its display text is never parsed.
     private readonly TextBox txtGameDir = new();
+    private readonly ComboBox cmbInstallations = new();
+    private readonly Button btnFindGames = new();
     private readonly Button btnBrowseGame = new();
     private readonly ComboBox cmbZone = new();
-    private readonly ComboBox cmbPalette = new();
+    private readonly Panel panelPaletteSelector = new();
+    private readonly Panel panelPaletteSwatches = new();
+    private readonly Label lblPaletteMode = new();
+    private readonly ComboBox cmbPaletteManual = new();
+    private readonly Button btnPaletteAdvanced = new();
     private readonly Label lblPaletteCaption = new();
     private readonly Label lblLanguageCaption = new();
+    private readonly Label lblInstallationCaption = new();
+    private readonly Label lblActiveVariantCaption = new();
+    private readonly ComboBox cmbActiveVariant = new();
+    private readonly Label lblActiveProjectCaption = new();
+    private readonly ComboBox cmbActiveProject = new();
+    private readonly Button btnBuildActiveVariant = new();
+    private readonly Label lblVgaFileCaption = new();
     private readonly Button btnReload = new();
     private readonly DataGridView grid = new();
-    private readonly PictureBox preview = new();
+    private readonly PixelPerfectPictureBox preview = new();
     private readonly Panel previewScroll = new();
     private readonly Panel previewViewport = new();
     private readonly ComboBox cmbPreviewZoom = new();
     private readonly Button btnReloadPreview = new();
     private readonly Label lblPreviewZoom = new();
     private readonly Label lblMeta = new();
-    private readonly Label lblStatus = new();
+    private readonly StatusStrip statusBar = new();
+    private readonly ToolStripStatusLabel lblStatus = new();
     private readonly Button btnAbout = new();
+    private readonly Button btnHelp = new();
     private readonly Button btnSpriteEditor = new();
     private readonly Button btnTextEditor = new();
     private readonly Button btnFontEditor = new();
+    private readonly Button btnModsLauncher = new();
     private readonly ComboBox cmbUiLanguage = new();
     private readonly ComboBox cmbGameProfile = new();
     private readonly Label lblGameProfile = new();
+    private readonly Label lblDetectedGameCaption = new();
     private readonly Label lblDetectedGame = new();
     private readonly TabControl tabs = new();
     private readonly TabPage tabVga = new();
@@ -35,6 +55,8 @@ internal sealed class MainForm : Form
     private readonly TabPage tabFont = new();
     private readonly TabPage tabMods = new();
     private FontEditorForm? _embeddedFontEditor;
+    private HelpViewerForm? _helpViewer;
+    private AboutViewerForm? _aboutViewer;
 
     private readonly DataGridView textGrid = new();
     private readonly TextBox txtSearch = new();
@@ -44,23 +66,57 @@ internal sealed class MainForm : Form
     private readonly Button btnSaveTexts = new();
     private readonly Button btnSaveAsDataFile = new();
     private readonly Button btnCreateDataVariant = new();
+    private readonly Button btnExportTranslations = new();
+    private readonly Button btnImportTranslations = new();
     private readonly Label lblTextStatus = new();
     private readonly Label lblTextSource = new();
+    private readonly Label lblTextOverview = new();
     private readonly ComboBox cmbTextContext = new();
+    private readonly Label lblTranslationVariantCaption = new();
+    private readonly ComboBox cmbTranslationVariant = new();
     private readonly Label lblTextValidation = new();
     private readonly CheckBox chkOnlyTextRisks = new();
     private readonly CheckBox chkIgnoreTextWarning = new();
-    private bool _updatingIgnoreCheck;
     private TextDiagnosticStore? _textDiagnosticStore;
     private readonly Label lblSearchCaption = new();
     private readonly Label lblEncodingCaption = new();
     private readonly Label lblTextContextCaption = new();
     private readonly ToolTip textToolTip = new();
+    private readonly ToolTip installationToolTip = new();
+    private readonly TabControl textDomainTabs = new();
+    private readonly TabPage tabGameTextDomain = new();
+    private readonly TabPage tabRuntimeUiDomain = new();
+    private readonly DataGridView runtimeUiGrid = new();
+    private readonly Button btnReloadRuntimeUi = new();
+    private readonly Button btnSaveRuntimeUi = new();
+    private readonly Button btnResetRuntimeUi = new();
+    private readonly Label lblRuntimeUiStatus = new();
+    private readonly Label lblRuntimeUiRuntime = new();
+    private readonly RuntimeUiTextService _runtimeUiTexts = new();
+    private readonly RuntimeUiLayoutValidationService _runtimeUiLayouts;
+    private ProjectContext? _runtimeUiProject;
+    private VariantContext? _runtimeUiVariant;
+    private RuntimeUiTextState? _runtimeUiState;
+    private bool _applyingUiLanguage;
+    private bool _runtimeUiRefreshing;
+    private bool _runtimeUiDirty;
     private bool _refreshingTextGrid;
     private bool _textGridRefreshQueued;
     private string? _currentDataFilePath;
+    private GamePcOriginalReference? _gamePcOriginal;
+    private VariantContext? _textVariant;
+    private readonly TranslationProjectService _translationProjects = new();
+    private TranslationProjectState? _translationProjectState;
+    private string _activeTranslationCode = "EN";
+    private bool _refreshingTranslationVariantSelector;
+    private bool _refreshingActiveProjectSelector;
+    private WorkflowStatus? _workflowStatus;
 
     private readonly DataGridView variantGrid = new();
+    private readonly DataGridView variantManagerGrid = new();
+    private readonly Label lblVariantManagerTitle = new();
+    private readonly Label lblVariantManagerHint = new();
+    private bool _refreshingVariantManager;
     private readonly Button btnVariantAdd = new();
     private readonly Button btnVariantEdit = new();
     private readonly Button btnVariantRemove = new();
@@ -68,30 +124,229 @@ internal sealed class MainForm : Form
     private readonly Button btnVariantMoveDown = new();
     private readonly Button btnVariantToggleEnabled = new();
     private readonly Button btnVariantOpenDataFile = new();
-    private readonly Label lblLauncherPlaceholder = new();
+    private readonly Label lblLauncherFile = new();
+    private readonly TextBox txtLauncherFile = new();
+    private readonly Button btnSelectLauncherFile = new();
+    private readonly Label lblModderName = new();
+    private readonly TextBox txtModderName = new();
+    private readonly Button btnPreviewLauncher = new();
+    private readonly Button btnGenerateLauncher = new();
+    private readonly Button btnRestoreLauncher = new();
+    private readonly Label lblDefaultVariant = new();
+    private readonly Label lblLauncherReadiness = new();
+    private readonly Button btnRunVariant = new();
+    private readonly Button btnDebugVariant = new();
+    private readonly Label lblRecoveryTitle = new();
+    private readonly Label lblRecoveryStatus = new();
+    private readonly Button btnVerifyPristine = new();
+    private readonly Button btnRestoreBaselineLauncher = new();
+    private readonly Button btnRebuildOwnedVariant = new();
+    private readonly Button btnRemoveOwnedVariant = new();
+    private readonly Button btnReverseAllPreview = new();
+    private readonly ComboBox cmbDefaultVariant = new();
     private VariantCatalog? _variantCatalog;
+    private VariantContext? _modsVariant;
+    private readonly VariantDirectoryService _variantDirectories = new();
+    private readonly CompositeBuildService _compositeBuilds;
+    private readonly VariantLauncherService _variantLauncher;
+    private readonly VariantBuildStatusService _variantBuildStatus;
+    private readonly VariantExecutionService _variantExecution = new(debug: VariantDebugConfiguration.FromEnvironment());
+    private readonly RecoverySafetyService _recoverySafety;
+    // Set only by the explicit installation activation boundary.  Tabs consume
+    // these immutable contexts; they never create an installation context.
+    private ProjectContext? _activeProject;
+    private VariantContext? _activeVariant;
+    private IReadOnlyList<VariantContext> _availableActiveVariants = [];
+    private readonly Dictionary<string, ProjectContext> _openedProjects = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly List<GamePcStringEntry> _gamePcEntries = new();
     private readonly Dictionary<int, string> _gamePcEdits = new();
+    // The working buffer intentionally contains saved translation edits so the
+    // Text grid can render them.  Keep a separate saved snapshot: a difference
+    // from Original is not, by itself, an unsaved editor change.
+    private readonly Dictionary<int, string> _savedGamePcEdits = new();
     private readonly SplitContainer mainSplit = new();
+    private TableLayoutPanel? _graphicsToolbar;
+    private FlowLayoutPanel? _graphicsActionRow;
     private readonly Button btnReplace = new();
     private readonly Button btnClearEdit = new();
     private readonly Button btnExport = new();
     private readonly Button btnDeploy = new();
     private readonly Button btnRestore = new();
-    private readonly CheckBox chkZoom = new();
+    private readonly CheckBox chkPixelPerfect = new();
+    private readonly Label lblGraphicsVariant = new();
+    private readonly ComboBox cmbGraphicsScope = new();
+    private readonly Button btnSaveGraphicsProject = new();
+    private readonly GraphicsVariantService _graphicsVariants = new();
+    private ProjectContext? _graphicsProject;
+    private VariantContext? _graphicsVariant;
+    private GraphicsProjectState? _graphicsProjectState;
+    private string _graphicsProjectCode = ProjectVariantOwnership.OriginalCode;
+    private bool _graphicsProjectDirty;
 
     private string? _currentVga;
     private byte[]? _currentData;
     private ParsedTable? _table;
     private readonly Dictionary<int, string> _edits = new();
     private readonly List<ElviraPaletteBank> _paletteBanks = new();
-    private Color[] _activePalette = ElviraPaletteLoader.DiagnosticPalette();
+    private readonly Elvira1PaletteResolver _elvira1PaletteResolver = new();
+    private readonly Elvira2PaletteResolver _elvira2PaletteResolver = new();
+    private int? _manualPaletteBank;
+    private string? _pairedPaletteResource;
+    private string? _pairedPalettePath;
+    private bool _paletteAdvancedVisible;
+    private bool _updatingPaletteControl;
+    private bool _graphicsStatusIsError;
+    private readonly ToolTip paletteToolTip = new();
     private ElviraGameProfile _detectedProfile = ElviraGameProfile.Unknown;
+    private readonly InstallationSettingsStore _installationSettings = new();
+    private readonly List<GameInstallation> _installations = new();
+    private bool _refreshingInstallationSelector;
+    private bool _refreshingActiveVariantSelector;
+    private bool _applyingInstallation;
+    private string? _lastInstallationActivationFailure;
+    private bool _refreshingGraphicsGrid;
+    private bool _applyingPreviewZoom;
+
+    // These objects are reused for the lifetime of the form. Recreating GDI
+    // fonts/bitmaps for every workflow or tab refresh caused cumulative GDI
+    // pressure during long edition-switching sessions.
+    private readonly Dictionary<Button, ModeButtonFonts> _modeButtonFonts = new();
+    private Font? _statusRegularFont;
+    private Font? _statusEmphasisFont;
+    private Font? _variantMissingFont;
+    private Bitmap? _statusInfoImage;
+    private Bitmap? _statusSuccessImage;
+    private Bitmap? _statusWarningImage;
+    private Bitmap? _statusErrorImage;
+
+    // Narrow context-synchronization diagnostics used only by the non-interactive
+    // post-freeze regression. They do not participate in normal editor behavior.
+    internal int ApplyInstallationRequestedCount { get; private set; }
+    internal int ApplyInstallationEffectiveCount { get; private set; }
+    internal int ApplyInstallationSuppressedCount { get; private set; }
+    internal int GraphicsLoadCount { get; private set; }
+    internal int TextLoadCount { get; private set; }
+    internal int ModsRefreshCount { get; private set; }
+    internal int RuntimeUiLoadCount { get; private set; }
+    internal int FontBindCount { get; private set; }
+    internal int WorkflowRefreshCount { get; private set; }
+    internal int PreviewRenderCount { get; private set; }
+    internal int ControlTreeCount => CountControls(this);
+    internal bool HasTextDomainSplitForTest => textDomainTabs.TabPages.Contains(tabGameTextDomain) && textDomainTabs.TabPages.Contains(tabRuntimeUiDomain);
+    internal bool HasRuntimeUiViewForTest => runtimeUiGrid.Columns.Contains("LogicalId") && runtimeUiGrid.Columns.Contains("Override") && btnSaveRuntimeUi.Parent is not null;
+    internal bool HasGraphicsVariantPresentationForTest => lblGraphicsVariant.Parent is not null && cmbGraphicsScope.Items.Count == 3 && btnSaveGraphicsProject.Parent is not null;
+    internal bool HasActiveInstallationForTest => _activeProject is not null && _activeVariant is not null;
+    internal bool IsNeutralInstallationStateForTest => _activeProject is null && _activeVariant is null &&
+        string.IsNullOrWhiteSpace(txtGameDir.Text) && cmbInstallations.SelectedIndex < 0 &&
+        _gamePcEntries.Count == 0 && _runtimeUiProject is null && _graphicsProject is null;
+    internal bool IsFontLoadedForTest => _embeddedFontEditor?.CurrentSourcePath is not null;
+    internal string InstallationStatusForTest => lblStatus.Text ?? string.Empty;
+    internal int InstallationOptionCountForTest => cmbInstallations.Items.Count;
+    internal ElviraGameProfile ActiveGameForTest => _activeProject?.GameProfile ?? ElviraGameProfile.Unknown;
+    internal bool HasLoadedGraphicsForTest => _graphicsProject is not null && cmbZone.Items.Count > 0;
+    internal bool HasLoadedTextForTest => _gamePcEntries.Count > 0;
+    internal bool HasLoadedRuntimeUiForTest => _runtimeUiProject is not null && _runtimeUiVariant is not null;
+    internal string WindowTitleForTest => Text;
+    internal bool HasNeutralTextActionStateForTest =>
+        btnOpenDataFile.Enabled && !btnReloadTexts.Enabled && !btnSaveTexts.Enabled &&
+        !btnSaveAsDataFile.Enabled && !btnCreateDataVariant.Enabled &&
+        !btnExportTranslations.Enabled && !btnImportTranslations.Enabled;
+    internal bool HasActiveTextActionStateForTest =>
+        btnOpenDataFile.Enabled && btnReloadTexts.Enabled && btnSaveTexts.Enabled &&
+        btnSaveAsDataFile.Enabled && btnCreateDataVariant.Enabled &&
+        btnExportTranslations.Enabled && btnImportTranslations.Enabled;
+    internal bool HasActiveOriginalTextActionStateForTest =>
+        btnOpenDataFile.Enabled && btnReloadTexts.Enabled && !btnSaveTexts.Enabled &&
+        btnSaveAsDataFile.Enabled && btnCreateDataVariant.Enabled &&
+        btnExportTranslations.Enabled && btnImportTranslations.Enabled;
+    internal bool HasNeutralGraphicsPresentationForTest =>
+        _activeProject is null && _currentVga is null && _table is null &&
+        !btnReload.Enabled && !btnReplace.Enabled && !btnExport.Enabled && !btnRestore.Enabled &&
+        !btnDeploy.Enabled && !btnReloadPreview.Enabled &&
+        cmbGraphicsScope.SelectedIndex < 0 && !cmbGraphicsScope.Enabled &&
+        lblGraphicsVariant.Text == UiText.Get("Graphics.ProjectUnavailable") + ": —" &&
+        lblPaletteMode.Text == "—" && !panelPaletteSwatches.Enabled;
+    internal bool HasActiveGraphicsPresentationForTest =>
+        _activeProject is not null && _graphicsProject is not null && _currentVga is not null &&
+        btnReload.Enabled && cmbGraphicsScope.SelectedIndex >= 0 &&
+        lblGraphicsVariant.Text != UiText.Get("Graphics.ProjectUnavailable") + ": —";
+    internal string TextNavigationCaptionForTest => btnTextEditor.Text;
+    internal bool IsDirectGameDeployHiddenForTest => btnDeploy.Parent is null && !btnDeploy.Enabled;
+    internal void ActivateTextModeForTest() => SwitchMode(tabText);
+    internal void ActivateGraphicsModeForTest() => SwitchMode(tabVga);
+    internal bool HasGraphicsValidationErrorForTest => _graphicsStatusIsError;
+    internal void RecordGraphicsValidationErrorForTest() => SetGraphicsStatus(UiText.Get("Graphics.PngPaletteInvalid"), true);
+    internal void ApplyRelevantGraphicsInputChangeForTest() => ClearStaleGraphicsError();
+    internal void RecordSuccessfulReplacementForTest() => SetGraphicsStatus(UiText.Get("ReplacementLoaded"), false);
+    internal bool IsVariantAddEnabledForTest => btnVariantAdd.Enabled;
+    internal bool HasNeutralStartupPresentationForTest =>
+        IsNeutralInstallationStateForTest &&
+        lblDetectedGame.Text == UiText.Get(UiLocalizationKeys.NoGameSelected) &&
+        lblStatus.Text == NeutralInstallationPrompt &&
+        lblStatus.ForeColor == SystemColors.ControlText &&
+        HasNeutralGraphicsPresentationForTest &&
+        !lblTextOverview.Text.Contains(GamePcOriginalService.OriginalFileName, StringComparison.OrdinalIgnoreCase);
+    internal string NeutralStartupDiagnosticForTest =>
+        $"project={_activeProject is not null};variant={_activeVariant is not null};detected='{lblDetectedGame.Text}';status='{lblStatus.Text}';graphics='{lblGraphicsVariant.Text}';palette='{lblPaletteMode.Text}';actions={btnReload.Enabled}/{btnReplace.Enabled}/{btnExport.Enabled}/{btnRestore.Enabled}/{btnDeploy.Enabled}/{btnReloadPreview.Enabled};text='{lblTextOverview.Text}'";
+    internal string UiStateDiagnosticForTest =>
+        $"neutral={HasNeutralStartupPresentationForTest};text={HasNeutralTextActionStateForTest};variantAdd={btnVariantAdd.Enabled};" +
+        $"textActions={btnOpenDataFile.Enabled}/{btnReloadTexts.Enabled}/{btnSaveTexts.Enabled}/{btnSaveAsDataFile.Enabled}/{btnCreateDataVariant.Enabled}/{btnExportTranslations.Enabled}/{btnImportTranslations.Enabled}; " +
+        NeutralStartupDiagnosticForTest;
+    internal string? FontSourceForTest => _embeddedFontEditor?.CurrentSourcePath;
+    internal string? LastInstallationActivationFailureForTest => _lastInstallationActivationFailure;
+    internal string ModsPresentationForTest => lblLauncherReadiness.Text;
+    internal ProjectContext? ActiveProjectForTest => _activeProject;
+    internal VariantContext? ActiveVariantForTest => _activeVariant;
+    internal IReadOnlyList<VariantContext> AvailableActiveVariantsForTest => _availableActiveVariants;
+    internal bool VariantAwareTabsUseActiveVariantForTest =>
+        (_graphicsVariant is null || ReferenceEquals(_graphicsVariant, _activeVariant)) &&
+        (_runtimeUiVariant is null || ReferenceEquals(_runtimeUiVariant, _activeVariant)) &&
+        (_embeddedFontEditor is null || ReferenceEquals(_embeddedFontEditor.BoundProjectVariantForTest, _activeVariant)) &&
+        (_textVariant is null || ReferenceEquals(_textVariant, _activeVariant)) &&
+        (_modsVariant is null || ReferenceEquals(_modsVariant, _activeVariant));
+    internal bool HasVariantManagerForTest => variantManagerGrid.Parent is not null && variantManagerGrid.Columns.Count == 7;
+    internal IReadOnlyList<VariantManagerRow> VariantManagerRowsForTest => variantManagerGrid.Rows.Cast<DataGridViewRow>()
+        .Select(row => row.Tag as VariantManagerRow).Where(row => row is not null).Cast<VariantManagerRow>().ToArray();
+    internal IReadOnlyList<string> UiLocaleIdsForTest => cmbUiLanguage.Items.OfType<UiLocaleDescriptor>().Select(locale => locale.Id).ToArray();
+    internal string TextOverviewForTest => lblTextOverview.Text;
+    internal bool TextOverviewFitsForTest
+    {
+        get
+        {
+            Size measured = TextRenderer.MeasureText(lblTextOverview.Text, lblTextOverview.Font,
+                new Size(lblTextOverview.ClientSize.Width, int.MaxValue), TextFormatFlags.WordBreak);
+            return measured.Width <= lblTextOverview.ClientSize.Width && measured.Height <= lblTextOverview.ClientSize.Height;
+        }
+    }
+    internal IReadOnlyList<string> TextTranslationCodesForTest => cmbTranslationVariant.Items.OfType<TextTranslationSelection>().Select(item => item.Code).ToArray();
+    internal string ActiveProjectCodeForTest => _activeTranslationCode;
+    internal IReadOnlyList<string> ActiveEditionCodesForTest => cmbActiveProject.Items.OfType<TextTranslationSelection>().Select(item => item.Code).ToArray();
+    internal bool TextEditionSelectorVisibleForTest => cmbTranslationVariant.Parent?.Visible == true;
+    internal string WorkflowStatusForTest => _workflowStatus?.Text ?? string.Empty;
+    internal IReadOnlyDictionary<int, string> TextEditsForTest => new Dictionary<int, string>(_gamePcEdits);
+    internal bool HasUnsavedTextChangesForTest => HasUnsavedTextChanges;
+    internal int CurrentGraphicsEditCountForTest => _edits.Count;
+    internal int GraphicsProjectStateEditCountForTest => _graphicsProjectState?.Edits.Count ?? 0;
+    internal int AppliedGraphicsEditCountForTest => _edits.Count;
+    internal int RuntimeUiOverrideCountForTest => _runtimeUiState?.Overrides.Count ?? 0;
+    internal int EmbeddedFontProjectEditCountForTest => _embeddedFontEditor?.ProjectEditCountForTest ?? 0;
+    internal IReadOnlyList<VariantEntry> TranslationCatalogEntriesForTest => variantGrid.Rows.Cast<DataGridViewRow>()
+        .Select(row => row.Tag as VariantEntry).Where(entry => entry is not null).Cast<VariantEntry>().ToArray();
 
     public MainForm()
     {
-        Text = UiText.Get("AppTitle");
+        _runtimeUiLayouts = new RuntimeUiLayoutValidationService(_runtimeUiTexts);
+        _compositeBuilds = new CompositeBuildService(new DisposableVariantBuildService(_variantDirectories), _variantDirectories,
+            stepProvider: CreateActiveProjectBuildSteps,
+            runtimeArtifactProvider: GetActiveProjectRuntimeArtifacts,
+            projectVariantProvider: (_, _) => _activeTranslationCode);
+        _variantLauncher = new VariantLauncherService(_variantDirectories, _compositeBuilds);
+        _variantBuildStatus = new VariantBuildStatusService(_compositeBuilds, _variantLauncher);
+        _recoverySafety = new RecoverySafetyService(_variantDirectories, _compositeBuilds);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        KeyPreview = true;
+        Text = AppInfo.ProductTitle;
         Width = 1450;
         Height = 900;
         StartPosition = FormStartPosition.CenterScreen;
@@ -101,20 +356,31 @@ internal sealed class MainForm : Form
 
         UiText.SetLanguage(UiLanguage.English);
         BuildUi();
+        UiText.LocaleChanged += OnUiLocaleChanged;
+        UiText.LocalesChanged += OnUiLocalesChanged;
+        Disposed += (_, _) =>
+        {
+            UiText.LocaleChanged -= OnUiLocaleChanged;
+            UiText.LocalesChanged -= OnUiLocalesChanged;
+            DisposePresentationResources();
+        };
+        KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.F1) return;
+            OpenHelp();
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        };
         cmbGameProfile.SelectedIndex = 0;
 
-        txtGameDir.Text = @"C:\Games\GOG\Elvira";
         Shown += (_, _) =>
         {
             // The editor is intended as a workspace application; always start maximized.
             WindowState = FormWindowState.Maximized;
             UiText.SetLanguage(UiLanguage.English);
-            if (cmbUiLanguage.Items.Count > 1)
-                cmbUiLanguage.SelectedIndex = 1;
+            RefreshUiLocaleSelector();
             ApplyLanguage();
-            ScanGameFolder();
-
-LoadGamePcTexts();
+            InitializeInstallations();
 
             BeginInvoke(new Action(() =>
             {
@@ -151,67 +417,144 @@ LoadGamePcTexts();
         e.DrawFocusRectangle();
     }
 
+    private static void ConfigureCenteredButton(Button button)
+    {
+        button.AutoSize = false;
+        button.Height = 32;
+        button.MinimumSize = new Size(0, 32);
+        button.Padding = new Padding(6, 1, 6, 1);
+        button.TextAlign = ContentAlignment.MiddleCenter;
+        button.UseCompatibleTextRendering = false;
+    }
+
+    private static void ConfigureComboLabel(Label label, int width)
+    {
+        label.AutoSize = false;
+        label.Size = new Size(width, 26);
+        label.TextAlign = ContentAlignment.MiddleLeft;
+        label.Anchor = AnchorStyles.Left;
+    }
+
+    private void OpenHelp()
+    {
+        try
+        {
+            if (_helpViewer is not null && !_helpViewer.IsDisposed)
+            {
+                _helpViewer.SetLanguage(UiText.Language);
+                _helpViewer.Activate();
+                return;
+            }
+
+            _helpViewer = new HelpViewerForm(UiText.Language);
+            _helpViewer.FormClosed += (_, _) => _helpViewer = null;
+            _helpViewer.Show(this);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, UiText.Get("Help"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void OpenAbout()
+    {
+        try
+        {
+            if (_aboutViewer is not null && !_aboutViewer.IsDisposed)
+            {
+                _aboutViewer.SetLanguage(UiText.Language);
+                _aboutViewer.Activate();
+                return;
+            }
+
+            _aboutViewer = new AboutViewerForm(UiText.Language);
+            _aboutViewer.FormClosed += (_, _) => _aboutViewer = null;
+            _aboutViewer.Show(this);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, UiText.Get("About"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
     private void BuildTextEditorUi()
     {
         var topText = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 136,
-            Padding = new Padding(6)
+            Height = 168,
+            Padding = new Padding(8)
         };
 
         lblTextSource.AutoSize = false;
-        lblTextSource.SetBounds(8, 8, 310, 28);
+        lblTextSource.SetBounds(8, 6, 430, 28);
         lblTextSource.TextAlign = ContentAlignment.MiddleLeft;
         lblTextSource.Font = new Font(Font, FontStyle.Bold);
 
+        lblTextOverview.SetBounds(445, 4, 620, 54);
+        lblTextOverview.TextAlign = ContentAlignment.MiddleLeft;
+        lblTextOverview.Font = new Font(Font, FontStyle.Bold);
+
         btnOpenDataFile.Text = UiText.Get("OpenDataFile");
-        btnOpenDataFile.SetBounds(325, 6, 135, 28);
+        btnOpenDataFile.SetBounds(8, 64, 210, 32);
         btnOpenDataFile.Click += (_, _) => OpenTextDataFile();
 
         lblSearchCaption.Text = UiText.Get("Search");
-        lblSearchCaption.AutoSize = true;
-        lblSearchCaption.SetBounds(8, 47, 55, 20);
+        lblSearchCaption.AutoSize = false;
+        lblSearchCaption.SetBounds(8, 104, 55, 26);
+        lblSearchCaption.TextAlign = ContentAlignment.MiddleLeft;
 
-        txtSearch.SetBounds(65, 42, 260, 26);
+        txtSearch.SetBounds(65, 104, 260, 26);
         txtSearch.TextChanged += (_, _) => RefreshTextGrid();
 
         lblEncodingCaption.Text = UiText.Get("Encoding");
-        lblEncodingCaption.AutoSize = true;
-        lblEncodingCaption.SetBounds(340, 47, 75, 20);
+        lblEncodingCaption.AutoSize = false;
+        lblEncodingCaption.SetBounds(340, 104, 75, 26);
+        lblEncodingCaption.TextAlign = ContentAlignment.MiddleLeft;
 
         cmbTextEncoding.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbTextEncoding.Items.AddRange(new object[] { "CP852", "Windows-1250", "Latin1/Raw" });
         cmbTextEncoding.SelectedIndex = 0;
-        cmbTextEncoding.SetBounds(420, 42, 130, 26);
+        cmbTextEncoding.SetBounds(420, 104, 130, 26);
         cmbTextEncoding.SelectedIndexChanged += (_, _) => RefreshTextGrid();
 
         btnReloadTexts.Text = UiText.Get("ReloadTexts");
-        btnReloadTexts.SetBounds(470, 6, 90, 28);
+        btnReloadTexts.SetBounds(228, 64, 100, 32);
         btnReloadTexts.Click += (_, _) => LoadGamePcTexts();
 
-        btnSaveTexts.Text = UiText.Get("SaveTexts");
-        btnSaveTexts.SetBounds(570, 6, 80, 28);
+        btnSaveTexts.Text = UiText.Get("SaveToProject");
+        btnSaveTexts.SetBounds(338, 64, 145, 32);
         btnSaveTexts.Click += (_, _) => SaveGamePcTexts();
 
         btnSaveAsDataFile.Text = UiText.Get("SaveAsDataFile");
-        btnSaveAsDataFile.SetBounds(660, 6, 105, 28);
+        btnSaveAsDataFile.SetBounds(493, 64, 125, 32);
         btnSaveAsDataFile.Click += (_, _) => SaveTextDataFileAs(createVariant: false);
 
         btnCreateDataVariant.Text = UiText.Get("CreateVariant");
-        btnCreateDataVariant.SetBounds(775, 6, 125, 28);
+        btnCreateDataVariant.SetBounds(628, 64, 160, 32);
+        btnExportTranslations.SetBounds(798, 64, 100, 32);
+        btnImportTranslations.SetBounds(908, 64, 100, 32);
+        btnExportTranslations.Text = UiText.Get("ExportTranslation");
+        btnImportTranslations.Text = UiText.Get("ImportTranslation");
+        btnExportTranslations.Click += (_, _) => ExportTranslations();
+        btnImportTranslations.Click += (_, _) => ImportTranslations();
+        foreach (Button button in new[] { btnOpenDataFile, btnReloadTexts, btnSaveTexts, btnSaveAsDataFile, btnCreateDataVariant, btnExportTranslations, btnImportTranslations })
+            ConfigureCenteredButton(button);
         btnCreateDataVariant.Click += (_, _) => SaveTextDataFileAs(createVariant: true);
 
         lblTextContextCaption.Text = UiText.Get("TextContext");
         chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
         chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
         lblTextContextCaption.AutoSize = true;
-        lblTextContextCaption.SetBounds(8, 82, 90, 20);
+        lblTextContextCaption.TextAlign = ContentAlignment.MiddleLeft;
+        lblTextContextCaption.Margin = new Padding(0, 5, 10, 0);
 
         cmbTextContext.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbTextContext.Items.AddRange(new object[] { UiText.Get("ContextAuto"), UiText.Get("ContextGeneric"), UiText.Get("ContextNpc") });
         cmbTextContext.SelectedIndex = 0;
-        cmbTextContext.SetBounds(100, 77, 210, 26);
+        cmbTextContext.Width = 230;
+        cmbTextContext.Height = 28;
+        cmbTextContext.Margin = Padding.Empty;
         cmbTextContext.SelectedIndexChanged += (_, _) =>
         {
             RefreshTextGrid();
@@ -220,30 +563,51 @@ LoadGamePcTexts();
         };
 
         lblTextValidation.AutoSize = false;
-        lblTextValidation.SetBounds(325, 80, 900, 22);
+        lblTextValidation.SetBounds(600, 104, 340, 22);
         lblTextValidation.TextAlign = ContentAlignment.MiddleLeft;
 
         chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
         chkOnlyTextRisks.AutoSize = true;
-        chkOnlyTextRisks.SetBounds(8, 108, 210, 22);
+        chkOnlyTextRisks.SetBounds(300, 136, 210, 22);
+        chkOnlyTextRisks.Visible = false;
+        chkOnlyTextRisks.Enabled = false;
+        chkOnlyTextRisks.Checked = false;
         chkOnlyTextRisks.CheckedChanged += (_, _) => RefreshTextGrid();
 
         chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
         chkIgnoreTextWarning.AutoSize = true;
-        chkIgnoreTextWarning.SetBounds(235, 108, 250, 22);
-        chkIgnoreTextWarning.CheckedChanged += (_, _) =>
+        chkIgnoreTextWarning.SetBounds(525, 136, 250, 22);
+        chkIgnoreTextWarning.Visible = false;
+        chkIgnoreTextWarning.Enabled = false;
+
+        var textContextGroup = new FlowLayoutPanel
         {
-            if (_updatingIgnoreCheck || _refreshingTextGrid || ActiveGameProfile != ElviraGameProfile.Elvira1) return;
-            if (textGrid.CurrentRow?.Tag is not GamePcStringEntry selectedEntry) return;
-            _textDiagnosticStore?.SetIgnored(selectedEntry.Index, chkIgnoreTextWarning.Checked);
-            QueueTextGridRefresh(selectedEntry.Index);
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Location = new Point(1020, 67),
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
+        textContextGroup.Controls.AddRange(new Control[] { lblTextContextCaption, cmbTextContext });
+
+        lblTranslationVariantCaption.Text = UiText.Get("Edition") + ":";
+        lblTranslationVariantCaption.AutoSize = true;
+        lblTranslationVariantCaption.TextAlign = ContentAlignment.MiddleLeft;
+        lblTranslationVariantCaption.Margin = new Padding(0, 5, 10, 0);
+
+        cmbTranslationVariant.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbTranslationVariant.Width = 230;
+        cmbTranslationVariant.Height = 28;
+        cmbTranslationVariant.Margin = Padding.Empty;
+        cmbTranslationVariant.SelectedIndexChanged += (_, _) => SelectTranslationFromSelector();
 
         topText.Controls.AddRange(new Control[]
         {
-            lblTextSource, btnOpenDataFile, btnReloadTexts, btnSaveTexts, btnSaveAsDataFile, btnCreateDataVariant,
-            lblSearchCaption, txtSearch, lblEncodingCaption, cmbTextEncoding,
-            lblTextContextCaption, cmbTextContext, lblTextValidation, chkOnlyTextRisks, chkIgnoreTextWarning
+            lblTextSource, lblTextOverview, btnOpenDataFile, btnReloadTexts, btnSaveTexts, btnSaveAsDataFile, btnCreateDataVariant,
+            btnExportTranslations, btnImportTranslations, lblSearchCaption, txtSearch, lblEncodingCaption, cmbTextEncoding,
+            textContextGroup, lblTextValidation, chkOnlyTextRisks, chkIgnoreTextWarning
         });
 
         textGrid.Dock = DockStyle.Fill;
@@ -254,26 +618,34 @@ LoadGamePcTexts();
         textGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         textGrid.ShowCellToolTips = true;
         textGrid.Columns.Add("Index", UiText.Get("TextIndex"));
-        textGrid.Columns.Add("Offset", UiText.Get("TextOffset"));
-        textGrid.Columns.Add("Length", UiText.Get("Length"));
-        textGrid.Columns.Add("Bytes", UiText.Get("Bytes"));
-        textGrid.Columns.Add("DosLimit", UiText.Get("DosLimit"));
-        textGrid.Columns.Add("Text", UiText.Get("Text"));
+        textGrid.Columns.Add("OriginalBytes", UiText.Get("OriginalBytes"));
+        textGrid.Columns.Add("TranslationBytes", UiText.Get("TranslationBytes"));
+        textGrid.Columns.Add("ByteDifference", UiText.Get("Difference"));
+        textGrid.Columns.Add("DosLimit", UiText.Get("Runtime"));
+        textGrid.Columns.Add("OriginalText", UiText.Get("OriginalText"));
+        textGrid.Columns.Add("Translation", UiText.Get("Translation"));
         textGrid.Columns["Index"].Width = 70;
-        textGrid.Columns["Offset"].Width = 110;
-        textGrid.Columns["Length"].Width = 80;
-        textGrid.Columns["Bytes"].Width = 75;
+        textGrid.Columns["OriginalBytes"].Width = 85;
+        textGrid.Columns["TranslationBytes"].Width = 95;
+        textGrid.Columns["ByteDifference"].Width = 65;
         textGrid.Columns["DosLimit"].Width = 110;
-        textGrid.Columns["Text"].MinimumWidth = 500;
-        textGrid.Columns["Text"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        textGrid.Columns["DosLimit"].HeaderCell.ToolTipText = UiText.Get("RuntimeDiagnosticTooltip");
+        textGrid.Columns["OriginalText"].ReadOnly = true;
+        textGrid.Columns["OriginalText"].MinimumWidth = 320;
+        textGrid.Columns["OriginalText"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        textGrid.Columns["Translation"].MinimumWidth = 320;
+        textGrid.Columns["Translation"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
         textGrid.CellEndEdit += (_, e) =>
         {
             if (_refreshingTextGrid || e.RowIndex < 0) return;
+            if (ProjectVariantOwnership.IsOriginal(_activeTranslationCode)) return;
             var row = textGrid.Rows[e.RowIndex];
             if (row.Tag is not GamePcStringEntry entry) return;
-            string value = row.Cells["Text"].Value?.ToString() ?? "";
+            if (textGrid.Columns[e.ColumnIndex].Name != "Translation") return;
+            string value = row.Cells["Translation"].Value?.ToString() ?? "";
             _gamePcEdits[entry.Index] = value;
             row.DefaultCellStyle.BackColor = Color.LightGoldenrodYellow;
+            RefreshWorkflowStatus();
 
             // DataGridView is still finishing its current-cell transition while
             // CellEndEdit is raised. Rebuilding rows synchronously here can
@@ -294,9 +666,9 @@ LoadGamePcTexts();
         textGrid.CellToolTipTextNeeded += (_, e) =>
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
-            if (textGrid.Columns[e.ColumnIndex].Name != "Text" && textGrid.Columns[e.ColumnIndex].Name != "DosLimit") return;
+            if (textGrid.Columns[e.ColumnIndex].Name != "Translation" && textGrid.Columns[e.ColumnIndex].Name != "DosLimit") return;
             var row = textGrid.Rows[e.RowIndex];
-            string value = row.Cells["Text"].Value?.ToString() ?? string.Empty;
+            string value = row.Cells["Translation"].Value?.ToString() ?? string.Empty;
             if (row.Tag is GamePcStringEntry entry)
                 e.ToolTipText = BuildDialogueTooltip(entry, value);
             else
@@ -313,29 +685,148 @@ LoadGamePcTexts();
         var textHost = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(0, 75, 0, 0)
+            Padding = Padding.Empty
         };
 
         textHost.Controls.Add(textGrid);
         textHost.Controls.Add(topText);
         textHost.Controls.Add(lblTextStatus);
-        tabText.Controls.Add(textHost);
+        tabGameTextDomain.Controls.Add(textHost);
+        BuildRuntimeUiTextUi();
+        textDomainTabs.Dock = DockStyle.Fill;
+        textDomainTabs.TabPages.Clear();
+        textDomainTabs.TabPages.Add(tabGameTextDomain);
+        textDomainTabs.TabPages.Add(tabRuntimeUiDomain);
+        tabText.Controls.Add(textDomainTabs);
+    }
+
+    private void BuildRuntimeUiTextUi()
+    {
+        var toolbar = new Panel { Dock = DockStyle.Top, Height = 74, Padding = new Padding(8) };
+        lblRuntimeUiRuntime.AutoSize = false;
+        lblRuntimeUiRuntime.SetBounds(8, 5, 850, 25);
+        lblRuntimeUiRuntime.Font = new Font(Font, FontStyle.Bold);
+        lblRuntimeUiRuntime.TextAlign = ContentAlignment.MiddleLeft;
+        btnReloadRuntimeUi.Text = UiText.Get("RuntimeUi.Reload");
+        btnReloadRuntimeUi.SetBounds(8, 35, 140, 30);
+        btnReloadRuntimeUi.Click += (_, _) => LoadRuntimeUiText();
+        btnSaveRuntimeUi.Text = UiText.Get("SaveToProject");
+        btnSaveRuntimeUi.SetBounds(158, 35, 140, 30);
+        btnSaveRuntimeUi.Click += (_, _) => SaveRuntimeUiText();
+        btnResetRuntimeUi.Text = UiText.Get("RuntimeUi.ResetOverride");
+        btnResetRuntimeUi.SetBounds(308, 35, 140, 30);
+        btnResetRuntimeUi.Click += (_, _) => ResetSelectedRuntimeUiOverride();
+        foreach (Button button in new[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi }) ConfigureCenteredButton(button);
+        toolbar.Controls.AddRange(new Control[] { lblRuntimeUiRuntime, btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi });
+
+        runtimeUiGrid.Dock = DockStyle.Fill;
+        runtimeUiGrid.AllowUserToAddRows = false;
+        runtimeUiGrid.AllowUserToDeleteRows = false;
+        runtimeUiGrid.RowHeadersVisible = false;
+        runtimeUiGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        runtimeUiGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        runtimeUiGrid.Columns.Add("LogicalId", UiText.Get("RuntimeUi.Record"));
+        runtimeUiGrid.Columns.Add("Original", UiText.Get("RuntimeUi.OriginalText"));
+        runtimeUiGrid.Columns.Add("Override", UiText.Get("RuntimeUi.ProjectOverride"));
+        runtimeUiGrid.Columns.Add("Status", UiText.Get("RuntimeUi.Validation"));
+        runtimeUiGrid.Columns.Add("Detail", UiText.Get("RuntimeUi.Details"));
+        runtimeUiGrid.Columns["LogicalId"].Width = 155;
+        runtimeUiGrid.Columns["Original"].Width = 190;
+        runtimeUiGrid.Columns["Override"].MinimumWidth = 260;
+        runtimeUiGrid.Columns["Override"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        runtimeUiGrid.Columns["Status"].Width = 150;
+        runtimeUiGrid.Columns["Detail"].Width = 360;
+        runtimeUiGrid.Columns["LogicalId"].ReadOnly = true;
+        runtimeUiGrid.Columns["Original"].ReadOnly = true;
+        runtimeUiGrid.Columns["Status"].ReadOnly = true;
+        runtimeUiGrid.Columns["Detail"].ReadOnly = true;
+        runtimeUiGrid.CellEndEdit += (_, e) => ApplyRuntimeUiGridEdit(e.RowIndex, e.ColumnIndex);
+        runtimeUiGrid.SelectionChanged += (_, _) => UpdateRuntimeUiActions();
+
+        lblRuntimeUiStatus.Dock = DockStyle.Bottom;
+        lblRuntimeUiStatus.Height = 28;
+        lblRuntimeUiStatus.Padding = new Padding(6, 6, 0, 0);
+        var host = new Panel { Dock = DockStyle.Fill, Padding = Padding.Empty };
+        host.Controls.Add(runtimeUiGrid);
+        host.Controls.Add(toolbar);
+        host.Controls.Add(lblRuntimeUiStatus);
+        tabRuntimeUiDomain.Controls.Add(host);
     }
 
     private void BuildModsLauncherUi()
     {
+        var authoring = new Panel { Dock = DockStyle.Top, Height = 416, Padding = new Padding(8) };
+        lblLauncherFile.SetBounds(8, 7, 104, 26); lblLauncherFile.TextAlign = ContentAlignment.MiddleLeft; txtLauncherFile.SetBounds(118, 7, 175, 26);
+        btnSelectLauncherFile.SetBounds(300, 7, 105, 32);
+        lblModderName.SetBounds(425, 7, 104, 26); lblModderName.TextAlign = ContentAlignment.MiddleLeft; txtModderName.SetBounds(535, 7, 190, 26);
+        lblDefaultVariant.SetBounds(8, 42, 104, 26); lblDefaultVariant.TextAlign = ContentAlignment.MiddleLeft; cmbDefaultVariant.SetBounds(118, 42, 175, 26);
+        cmbDefaultVariant.DropDownStyle = ComboBoxStyle.DropDownList; cmbDefaultVariant.DisplayMember = nameof(VariantEntry.DisplayName);
+        btnPreviewLauncher.SetBounds(8, 78, 145, 32); btnGenerateLauncher.SetBounds(161, 78, 275, 32); btnRestoreLauncher.SetBounds(444, 78, 245, 32);
+        btnRunVariant.SetBounds(8, 114, 145, 30); btnDebugVariant.SetBounds(161, 114, 145, 30);
+        ConfigureCenteredButton(btnRunVariant); ConfigureCenteredButton(btnDebugVariant);
+        btnRunVariant.Text = UiText.Get("Execution.Run"); btnDebugVariant.Text = UiText.Get("Execution.Debug");
+        btnRunVariant.Click += (_, _) => ExecuteActiveVariant(VariantExecutionMode.Run);
+        btnDebugVariant.Click += (_, _) => ExecuteActiveVariant(VariantExecutionMode.Debug);
+        lblLauncherReadiness.SetBounds(8, 150, 850, 28); lblLauncherReadiness.TextAlign = ContentAlignment.MiddleLeft;
+        lblRecoveryTitle.SetBounds(8, 184, 850, 22); lblRecoveryTitle.Text = UiText.Get("Recovery.Title"); lblRecoveryTitle.Font = new Font(Font, FontStyle.Bold);
+        btnVerifyPristine.SetBounds(8, 210, 145, 30); btnRestoreBaselineLauncher.SetBounds(161, 210, 210, 30);
+        btnRebuildOwnedVariant.SetBounds(379, 210, 165, 30); btnRemoveOwnedVariant.SetBounds(552, 210, 165, 30); btnReverseAllPreview.SetBounds(725, 210, 155, 30);
+        btnVerifyPristine.Text = UiText.Get("Recovery.VerifyPristine"); btnRestoreBaselineLauncher.Text = UiText.Get("Recovery.RestoreLauncher");
+        btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
+        btnSaveGraphicsProject.Text = UiText.Get("SaveToProject");
+        foreach (Button button in new[] { btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview }) ConfigureCenteredButton(button);
+        btnVerifyPristine.Click += (_, _) => VerifyPristineInstallation();
+        btnRestoreBaselineLauncher.Click += (_, _) => RestoreBaselineLauncher();
+        btnRebuildOwnedVariant.Click += (_, _) => RebuildOwnedVariant();
+        btnRemoveOwnedVariant.Click += (_, _) => RemoveOwnedVariantDirectory();
+        btnReverseAllPreview.Click += (_, _) => PreviewReverseAllChanges();
+        lblRecoveryStatus.SetBounds(8, 246, 880, 28); lblRecoveryStatus.TextAlign = ContentAlignment.MiddleLeft;
+        lblVariantManagerTitle.SetBounds(8, 278, 250, 24); lblVariantManagerTitle.Font = new Font(Font, FontStyle.Bold);
+        lblVariantManagerHint.SetBounds(260, 278, 640, 24); lblVariantManagerHint.TextAlign = ContentAlignment.MiddleLeft;
+        lblVariantManagerTitle.Text = UiText.Get("VariantManager.Title");
+        lblVariantManagerHint.Text = UiText.Get("VariantManager.SelectHint");
+        variantManagerGrid.SetBounds(8, 304, 880, 102);
+        variantManagerGrid.AllowUserToAddRows = false;
+        variantManagerGrid.AllowUserToDeleteRows = false;
+        variantManagerGrid.AllowUserToResizeRows = false;
+        variantManagerGrid.RowHeadersVisible = false;
+        variantManagerGrid.ReadOnly = true;
+        variantManagerGrid.MultiSelect = false;
+        variantManagerGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        variantManagerGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        variantManagerGrid.BackgroundColor = SystemColors.Window;
+        variantManagerGrid.BorderStyle = BorderStyle.FixedSingle;
+        variantManagerGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Active", HeaderText = UiText.Get("VariantManager.Active"), Width = 50 });
+        variantManagerGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Variant", HeaderText = UiText.Get("VariantManager.Variant"), Width = 125 });
+        variantManagerGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Runtime", HeaderText = UiText.Get("VariantManager.Runtime"), Width = 110 });
+        variantManagerGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Directory", HeaderText = UiText.Get("VariantManager.Directory"), Width = 85 });
+        variantManagerGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Ownership", HeaderText = UiText.Get("VariantManager.Ownership"), Width = 145 });
+        variantManagerGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "BuildStatus", HeaderText = UiText.Get("VariantManager.BuildStatus"), Width = 100 });
+        variantManagerGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Readiness", HeaderText = UiText.Get("VariantManager.Readiness"), Width = 170 });
+        variantManagerGrid.SelectionChanged += (_, _) => SelectVariantManagerRow();
+        foreach (Button button in new[] { btnSelectLauncherFile, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher })
+        {
+            ConfigureCenteredButton(button);
+        }
+        btnSelectLauncherFile.Click += (_, _) => SelectLauncherFile();
+        btnPreviewLauncher.Click += (_, _) => PreviewLauncher();
+        btnGenerateLauncher.Click += (_, _) => GenerateLauncher();
+        btnRestoreLauncher.Click += (_, _) => RestoreLauncher();
+        SetModsLauncherControls(active: false);
+        authoring.Controls.AddRange(new Control[] { lblLauncherFile, txtLauncherFile, btnSelectLauncherFile, lblModderName, txtModderName, lblDefaultVariant, cmbDefaultVariant, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher, btnRunVariant, btnDebugVariant, lblLauncherReadiness, lblRecoveryTitle, btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview, lblRecoveryStatus, lblVariantManagerTitle, lblVariantManagerHint, variantManagerGrid });
         var actions = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 72,
+            Height = 76,
             Padding = new Padding(8),
             WrapContents = true
         };
 
         foreach (Button button in new[] { btnVariantAdd, btnVariantEdit, btnVariantRemove, btnVariantMoveUp, btnVariantMoveDown, btnVariantToggleEnabled, btnVariantOpenDataFile })
         {
-            button.AutoSize = true;
-            button.Height = 28;
+            button.AutoSize = false;
+            button.Width = button == btnVariantOpenDataFile ? 270 : button == btnVariantMoveDown ? 125 : button == btnVariantMoveUp ? 115 : 95;
+            ConfigureCenteredButton(button);
             actions.Controls.Add(button);
         }
         btnVariantAdd.Click += (_, _) => AddVariant();
@@ -364,34 +855,66 @@ LoadGamePcTexts();
         variantGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Enabled", Width = 85 });
         variantGrid.SelectionChanged += (_, _) => UpdateVariantActions();
 
-        lblLauncherPlaceholder.Dock = DockStyle.Bottom;
-        lblLauncherPlaceholder.Height = 34;
-        lblLauncherPlaceholder.Padding = new Padding(8, 8, 0, 0);
-        lblLauncherPlaceholder.ForeColor = SystemColors.GrayText;
-
-        var host = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 75, 0, 0) };
+        var host = new Panel { Dock = DockStyle.Fill, Padding = Padding.Empty };
         host.Controls.Add(variantGrid);
         host.Controls.Add(actions);
-        host.Controls.Add(lblLauncherPlaceholder);
+        host.Controls.Add(authoring);
         tabMods.Controls.Add(host);
     }
 
     private VariantCatalog EnsureVariantCatalog()
     {
-        string directory = Path.GetFullPath(txtGameDir.Text.Trim());
+        if (_activeProject is null)
+            throw new InvalidOperationException("No game installation is active.");
+        string directory = _activeProject.GameRoot;
         if (_variantCatalog is null || !_variantCatalog.InstallationDirectory.Equals(directory, StringComparison.OrdinalIgnoreCase))
-            _variantCatalog = VariantConfigurationService.Load(directory);
+            _variantCatalog = VariantConfigurationService.Load(directory, ActiveGameProfile);
         return _variantCatalog;
     }
 
     private VariantEntry? SelectedVariant => variantGrid.CurrentRow?.Tag as VariantEntry;
+
+    private IEnumerable<VariantEntry> GetVariantGridEntries(VariantCatalog catalog)
+    {
+        var entries = catalog.Entries.ToDictionary(entry => entry.DataFile, StringComparer.OrdinalIgnoreCase);
+        int nextOrder = entries.Count == 0 ? 1 : entries.Values.Max(entry => entry.Order) + 1;
+
+        // text-translations.json is the authority for editable translation
+        // projects.  A missing GAMEPCxx build artifact must not make the
+        // project disappear from the launcher/catalog presentation.
+        foreach (TranslationProjectVariant translation in (_translationProjectState?.Variants ?? []).OrderBy(item => item.Code, StringComparer.Ordinal))
+        {
+            int order = entries.TryGetValue(translation.DataFile, out VariantEntry? existing) ? existing.Order : nextOrder++;
+            entries[translation.DataFile] = new VariantEntry(translation.DisplayName, translation.DataFile, true, order, translation.Code, translation.ExeFile);
+        }
+
+        return entries.Values.OrderBy(entry => entry.Order).ThenBy(entry => entry.DataFile, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private bool TryGetProjectTranslation(VariantEntry? entry, out TranslationProjectVariant translation)
+    {
+        translation = null!;
+        if (entry is null || _translationProjectState is null) return false;
+        translation = _translationProjectState.Variants.SingleOrDefault(item =>
+            item.Code.Equals(entry.Code, StringComparison.OrdinalIgnoreCase) ||
+            item.DataFile.Equals(entry.DataFile, StringComparison.OrdinalIgnoreCase))!;
+        return translation is not null;
+    }
+
+    private string CurrentTranslationDataFileForPresentation()
+    {
+        TranslationProjectVariant? selected = _translationProjectState?.Variants.SingleOrDefault(item =>
+            item.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase));
+        return selected?.DataFile ?? Path.GetFileName(CurrentDataFilePath);
+    }
 
     private void RefreshVariantGrid(string? selectDataFile = null)
     {
         VariantCatalog catalog = EnsureVariantCatalog();
         string? selected = selectDataFile ?? SelectedVariant?.DataFile;
         variantGrid.Rows.Clear();
-        foreach (VariantEntry entry in catalog.Entries)
+        DataGridViewRow? selectedRow = null;
+        foreach (VariantEntry entry in GetVariantGridEntries(catalog))
         {
             VariantEntryStatus status = catalog.GetStatus(entry);
             int rowIndex = variantGrid.Rows.Add(entry.Order, entry.DisplayName, entry.DataFile,
@@ -403,20 +926,333 @@ LoadGamePcTexts();
             {
                 row.DefaultCellStyle.BackColor = Color.LemonChiffon;
                 row.Cells["Status"].Style.ForeColor = Color.DarkOrange;
-                row.Cells["Status"].Style.Font = new Font(variantGrid.Font, FontStyle.Bold);
+                _variantMissingFont ??= new Font(variantGrid.Font, FontStyle.Bold);
+                row.Cells["Status"].Style.Font = _variantMissingFont;
             }
             if (!entry.Enabled)
                 row.DefaultCellStyle.ForeColor = SystemColors.GrayText;
             if (!string.IsNullOrWhiteSpace(selected) && entry.DataFile.Equals(selected, StringComparison.OrdinalIgnoreCase))
-                row.Selected = true;
+                selectedRow = row;
+        }
+        if (selectedRow is not null)
+        {
+            selectedRow.Selected = true;
+            variantGrid.CurrentCell = selectedRow.Cells[0];
         }
         UpdateVariantActions();
     }
 
     private void OpenModsLauncher()
     {
-        EnsureVariantCatalog();
-        RefreshVariantGrid(Path.GetFileName(CurrentDataFilePath));
+        ModsRefreshCount++;
+        if (_activeProject is null || _activeVariant is null)
+        {
+            _modsVariant = null;
+            RefreshVariantManager();
+            variantGrid.Rows.Clear();
+            cmbDefaultVariant.Items.Clear();
+            txtLauncherFile.Text = string.Empty;
+            txtModderName.Text = string.Empty;
+            lblLauncherReadiness.Text = NeutralInstallationPrompt;
+            SetModsLauncherControls(active: false);
+            SetRecoverySafetyControls(active: false);
+            UpdateVariantActions();
+            return;
+        }
+        VariantCatalog catalog = EnsureVariantCatalog();
+        _modsVariant = _activeVariant;
+        RefreshVariantManager();
+        SetModsLauncherControls(active: true);
+        txtLauncherFile.Text = catalog.LauncherAuthoring.LauncherFile;
+        txtModderName.Text = catalog.LauncherAuthoring.ModderName;
+        cmbDefaultVariant.Items.Clear();
+        foreach (VariantEntry entry in catalog.Entries) cmbDefaultVariant.Items.Add(entry);
+        VariantEntry? defaultEntry = catalog.FindByDataFile(catalog.LauncherAuthoring.DefaultVariant);
+        if (defaultEntry is not null) cmbDefaultVariant.SelectedItem = defaultEntry;
+        RefreshVariantGrid(CurrentTranslationDataFileForPresentation());
+        VariantLaunchTarget target = _variantLauncher.Resolve(_activeProject, _activeVariant);
+        LauncherRedirectionPlan plan = _variantLauncher.CreateRedirectionPlan(_activeProject, _activeVariant);
+        lblLauncherReadiness.Text = string.Format(UiText.Get("Launcher.Readiness"), target.GameId, target.VariantId, target.Ownership,
+            target.BuildConfigured ? UiText.Get("Launcher.Configured") : UiText.Get("Launcher.Incomplete"), target.Readiness, plan.Detail);
+        // Root launcher replacement remains a future authorized operation;
+        // R6Q presents the plan but cannot write either real launcher.
+        btnGenerateLauncher.Enabled = false;
+        btnRestoreLauncher.Enabled = false;
+        btnRunVariant.Enabled = _variantExecution.IsAvailable(target, VariantExecutionMode.Run);
+        btnDebugVariant.Enabled = _variantExecution.IsAvailable(target, VariantExecutionMode.Debug);
+        UpdateRecoverySafetyPresentation();
+    }
+
+    private void RefreshVariantManager()
+    {
+        _refreshingVariantManager = true;
+        try
+        {
+            variantManagerGrid.Rows.Clear();
+            if (_activeProject is null || _activeVariant is null)
+            {
+                variantManagerGrid.Enabled = false;
+                return;
+            }
+
+            variantManagerGrid.Enabled = true;
+            foreach (VariantContext variant in _availableActiveVariants)
+            {
+                VariantBuildStatusProjection status = _variantBuildStatus.Inspect(_activeProject, variant);
+                VariantLaunchTarget target = status.Target;
+                var row = new VariantManagerRow(variant, target.Ownership, target.Readiness, target.VariantRoot,
+                    status.Status, status.ConfiguredCapabilities, status.CapabilityCount);
+                int index = variantManagerGrid.Rows.Add(
+                    ReferenceEquals(variant, _activeVariant) ? "✓" : string.Empty,
+                    variant.DisplayName,
+                    UiText.Get("VariantManager.Runtime." + variant.RuntimeKind),
+                    variant.DirectoryKey,
+                    UiText.Get("VariantManager.Ownership." + target.Ownership),
+                    UiText.Get("VariantManager.BuildStatus." + status.Status),
+                    UiText.Get("VariantManager.Readiness." + target.Readiness));
+                DataGridViewRow gridRow = variantManagerGrid.Rows[index];
+                gridRow.Tag = row;
+                if (status.Status != VariantBuildStatus.Ready)
+                    gridRow.DefaultCellStyle.ForeColor = status.Status == VariantBuildStatus.Missing ? SystemColors.GrayText : Color.DarkOrange;
+                if (ReferenceEquals(variant, _activeVariant))
+                {
+                    gridRow.Selected = true;
+                    variantManagerGrid.CurrentCell = gridRow.Cells[0];
+                }
+            }
+        }
+        finally { _refreshingVariantManager = false; }
+    }
+
+    private void SelectVariantManagerRow()
+    {
+        if (_refreshingVariantManager || variantManagerGrid.CurrentRow?.Tag is not VariantManagerRow row ||
+            _activeProject is null || !ReferenceEquals(row.Variant.Project, _activeProject))
+            return;
+        SetActiveVariant(row.Variant);
+    }
+
+    private LauncherSettings CurrentLauncherSettings() => LauncherService.ValidateSettings(new LauncherSettings(txtLauncherFile.Text, txtModderName.Text, (cmbDefaultVariant.SelectedItem as VariantEntry)?.DataFile ?? string.Empty));
+
+    private void SetModsLauncherControls(bool active)
+    {
+        btnVariantAdd.Enabled = active;
+        txtLauncherFile.Enabled = active;
+        txtModderName.Enabled = active;
+        cmbDefaultVariant.Enabled = active;
+        btnSelectLauncherFile.Enabled = active;
+        btnPreviewLauncher.Enabled = active;
+        // Root replacement and restoration are deliberately not R6Q actions.
+        btnGenerateLauncher.Enabled = false;
+        btnRestoreLauncher.Enabled = false;
+        btnRunVariant.Enabled = false;
+        btnDebugVariant.Enabled = false;
+    }
+
+    private void SetRecoverySafetyControls(bool active)
+    {
+        btnVerifyPristine.Enabled = active;
+        btnRestoreBaselineLauncher.Enabled = false;
+        btnRebuildOwnedVariant.Enabled = false;
+        btnRemoveOwnedVariant.Enabled = false;
+        btnReverseAllPreview.Enabled = active;
+        lblRecoveryStatus.Text = active ? string.Empty : UiText.Get(UiLocalizationKeys.NoGameSelected) + " " + UiText.Get(UiLocalizationKeys.RecoveryActionsUnavailable);
+    }
+
+    private void UpdateRecoverySafetyPresentation()
+    {
+        if (_activeProject is null || _activeVariant is null) { SetRecoverySafetyControls(active: false); return; }
+        RecoverySafetyInspection inspection = _recoverySafety.Inspect(_activeProject);
+        VariantDirectoryOperationResult ownership = _variantDirectories.ValidateOwnedVariantDirectory(_activeProject, _activeVariant);
+        bool owned = ownership.Status == VariantDirectoryOperationStatus.AlreadyValid;
+        lblRecoveryStatus.Text = string.Format(UiText.Get("Recovery.Status"), inspection.Baseline.Status,
+            inspection.ReversePreview.OwnedVariants.Count, inspection.ReversePreview.ForeignOrInvalidVariants.Count, inspection.ReversePreview.Detail);
+        btnVerifyPristine.Enabled = true;
+        btnRestoreBaselineLauncher.Enabled = inspection.ReversePreview.LauncherBackupAvailable;
+        btnRebuildOwnedVariant.Enabled = owned && inspection.Baseline.Status == BaselineValidationStatus.MatchesBaseline;
+        btnRemoveOwnedVariant.Enabled = owned;
+        btnReverseAllPreview.Enabled = true;
+    }
+
+    private void VerifyPristineInstallation()
+    {
+        if (_activeProject is null) return;
+        RecoverySafetyInspection inspection = _recoverySafety.Inspect(_activeProject);
+        SetStatus(string.Format(UiText.Get("Recovery.PristineVerification"), inspection.Baseline.Status), inspection.Baseline.Status != BaselineValidationStatus.MatchesBaseline);
+        UpdateRecoverySafetyPresentation();
+    }
+
+    private void RestoreBaselineLauncher()
+    {
+        if (_activeProject is null || MessageBox.Show(this, UiText.Get("Recovery.ConfirmRestoreLauncher"), UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        RecoverySafetyOperationResult result = _recoverySafety.RestoreOriginalLauncher(_activeProject);
+        SetStatus(result.Detail, !result.Succeeded); UpdateRecoverySafetyPresentation();
+    }
+
+    private void RebuildOwnedVariant()
+    {
+        if (_activeProject is null || _activeVariant is null || MessageBox.Show(this, UiText.Get("Recovery.ConfirmRebuildVariant"), UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        RecoverySafetyOperationResult result = _recoverySafety.RebuildOwnedVariant(_activeProject, _activeVariant);
+        if (result.Succeeded)
+            SetWorkflowStatus(WorkflowStatusSeverity.Success, string.Format(UiText.Get("Workflow.BuiltEditionReady"), ActiveEditionDisplayName()));
+        else
+            SetStatus(result.Detail, error: true);
+        RefreshVariantManager();
+        UpdateRecoverySafetyPresentation();
+    }
+
+    /// <summary>Build input is deliberately taken from the active project
+    /// editors, never from launcher-default selection or a DataFile-only row.</summary>
+    private IReadOnlyList<ICompositeBuildStep> CreateActiveProjectBuildSteps(ProjectContext project, VariantContext variant)
+    {
+        if (!ReferenceEquals(project, _activeProject) || !ReferenceEquals(variant, _activeVariant)) return [];
+        TranslationProjectVariant translation = GetActiveTranslationForBuild(project, variant);
+        GraphicsProjectState graphics = ReferenceEquals(_graphicsProject, project) && _graphicsProjectState is not null
+            ? _graphicsProjectState
+            : RequireGraphicsState(project, _activeTranslationCode);
+        RuntimeUiTextState runtimeUi = ReferenceEquals(_runtimeUiProject, project) && _runtimeUiState is not null
+            ? _runtimeUiState
+            : RequireRuntimeUiState(project, _activeTranslationCode);
+        FontProjectState font = RequireFontState(project, _activeTranslationCode);
+        return ActiveProjectCompositeBuildFactory.Create(_variantDirectories, _translationProjects, _graphicsVariants,
+            new ActiveProjectBuildInput(translation, graphics, runtimeUi, font.Edits.Count != 0));
+    }
+
+    private IReadOnlyList<string> GetActiveProjectRuntimeArtifacts(ProjectContext project, VariantContext variant)
+    {
+        if (!ReferenceEquals(project, _activeProject) || !ReferenceEquals(variant, _activeVariant))
+            return [variant.GeneratedExecutableName, variant.LogicalDataFileName];
+        TranslationProjectVariant translation = GetActiveTranslationForBuild(project, variant);
+        return [ActiveProjectBuildIdentity.ExecutableName(variant, translation), translation.DataFile];
+    }
+
+    private TranslationProjectVariant GetActiveTranslationForBuild(ProjectContext project, VariantContext variant)
+    {
+        TranslationProjectState state = _translationProjectState ?? RequireTranslationState(project);
+        if (_activeTranslationCode.Equals("EN", StringComparison.OrdinalIgnoreCase))
+            return new TranslationProjectVariant("English", "EN", variant.LogicalDataFileName, variant.SourceExecutableName, new Dictionary<int, string>());
+        return state.Variants.SingleOrDefault(item => item.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidDataException("The active translation selection is not present in the project.");
+    }
+
+    private GraphicsProjectState RequireGraphicsState(ProjectContext project, string projectVariantCode)
+    {
+        GraphicsProjectLoadResult loaded = _graphicsVariants.Load(project, projectVariantCode);
+        if (!loaded.IsSuccess) throw new InvalidDataException(loaded.Detail ?? "Graphics project data is invalid.");
+        return loaded.State!;
+    }
+
+    private RuntimeUiTextState RequireRuntimeUiState(ProjectContext project, string projectVariantCode)
+    {
+        RuntimeUiTextLoadResult loaded = _runtimeUiTexts.Load(project, projectVariantCode);
+        if (!loaded.IsSuccess) throw new InvalidDataException(loaded.Detail ?? "Runtime UI project data is invalid.");
+        return loaded.State!;
+    }
+
+    private FontProjectState RequireFontState(ProjectContext project, string projectVariantCode)
+    {
+        FontProjectLoadResult loaded = new FontVariantService().Load(project, projectVariantCode);
+        if (!loaded.IsSuccess) throw new InvalidDataException(loaded.Detail ?? "Font project data is invalid.");
+        return loaded.State!;
+    }
+
+    private TranslationProjectState RequireTranslationState(ProjectContext project)
+    {
+        TranslationProjectLoadResult loaded = _translationProjects.Load(project);
+        if (!loaded.IsSuccess) throw new InvalidDataException(loaded.Detail ?? "Translation project data is invalid.");
+        return loaded.State!;
+    }
+
+    private void RemoveOwnedVariantDirectory()
+    {
+        if (_activeProject is null || _activeVariant is null || MessageBox.Show(this, UiText.Get("Recovery.ConfirmRemoveVariant"), UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        RecoverySafetyOperationResult result = _recoverySafety.RemoveOwnedVariant(_activeProject, _activeVariant);
+        SetStatus(result.Detail, !result.Succeeded); UpdateRecoverySafetyPresentation();
+    }
+
+    private void PreviewReverseAllChanges()
+    {
+        if (_activeProject is null) return;
+        RestorePlan plan = _recoverySafety.CreateRestorePlan(_activeProject);
+        string summary = string.Format(UiText.Get("Recovery.PreviewSummary"),
+            plan.Items.Count(item => item.Kind == RestorePlanItemKind.RestoreMutable),
+            plan.Items.Count(item => item.Kind == RestorePlanItemKind.RemoveOwnedVariant),
+            plan.Items.Count(item => item.Kind == RestorePlanItemKind.RemoveKnownEditorArtifact),
+            plan.Items.Count(item => item.Kind == RestorePlanItemKind.ExternalDifferencePreserved),
+            plan.Items.Count(item => item.Kind == RestorePlanItemKind.Blocked));
+        if (plan.IsBlocked)
+        {
+            MessageBox.Show(this, summary + "\r\n" + UiText.Get("Recovery.BlockedNoAction"), UiText.Get("Recovery.Title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (MessageBox.Show(this, summary + "\r\n\r\n" + UiText.Get("Recovery.ConfirmExecute"), UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        RestorePlanExecutionResult result = _recoverySafety.ExecuteRestorePlan(_activeProject, plan);
+        SetStatus(result.Detail, !result.Succeeded); UpdateRecoverySafetyPresentation();
+    }
+
+    private void ExecuteActiveVariant(VariantExecutionMode mode)
+    {
+        VariantLaunchTarget target = _variantLauncher.Resolve(_activeProject, _activeVariant);
+        VariantExecutionResult result = _variantExecution.Execute(target, mode);
+        if (!result.Started) SetStatus(result.Detail, true);
+    }
+
+    private ElviraGameProfile LauncherGameProfile()
+    {
+        ElviraGameProfile game = ActiveGameProfile;
+        if (game is not (ElviraGameProfile.Elvira1 or ElviraGameProfile.Elvira2))
+            throw new InvalidDataException(UiText.Get("LauncherGameUnknown"));
+        return game;
+    }
+
+    private void SelectLauncherFile()
+    {
+        VariantCatalog catalog = EnsureVariantCatalog();
+        using var dialog = new OpenFileDialog { Title = UiText.Get("SelectLauncher"), InitialDirectory = catalog.InstallationDirectory, Filter = "DOS batch files (*.BAT)|*.BAT", CheckFileExists = false, FileName = txtLauncherFile.Text };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        string directory = Path.GetDirectoryName(Path.GetFullPath(dialog.FileName)) ?? string.Empty;
+        if (!directory.Equals(catalog.InstallationDirectory, StringComparison.OrdinalIgnoreCase) || !LauncherService.IsValidLauncherFileName(Path.GetFileName(dialog.FileName)))
+        { ShowVariantError(UiText.Get("LauncherPathError")); return; }
+        txtLauncherFile.Text = Path.GetFileName(dialog.FileName);
+    }
+
+    private void PreviewLauncher()
+    {
+        try
+        {
+            string text = LauncherService.BuildPreview(LauncherGameProfile(), EnsureVariantCatalog(), CurrentLauncherSettings(), UiText.Language, DateTime.Now);
+            using var dialog = new Form { Text = UiText.Get("PreviewLauncher"), StartPosition = FormStartPosition.CenterParent, Size = new Size(850, 650) };
+            dialog.Controls.Add(new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, Font = new Font(FontFamily.GenericMonospace, 9), Text = text });
+            dialog.ShowDialog(this);
+        }
+        catch (Exception ex) { ShowVariantError(ex.Message); }
+    }
+
+    private void GenerateLauncher()
+    {
+        try
+        {
+            VariantCatalog catalog = EnsureVariantCatalog(); LauncherSettings settings = CurrentLauncherSettings();
+            string active = Path.Combine(catalog.InstallationDirectory, settings.LauncherFile);
+            bool external = LauncherService.ActiveLauncherIsExternallyModified(active);
+            if (external && MessageBox.Show(this, UiText.Get("LauncherExternalConfirm"), UiText.Get("Warning"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            LauncherService.Generate(LauncherGameProfile(), catalog, settings, UiText.Language, external);
+            catalog.LauncherAuthoring = settings; VariantConfigurationService.Save(catalog);
+            MessageBox.Show(this, UiText.Get("LauncherGenerated"), UiText.Get("ModsLauncherTab"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { ShowVariantError(ex.Message); }
+    }
+
+    private void RestoreLauncher()
+    {
+        try
+        {
+            VariantCatalog catalog = EnsureVariantCatalog(); LauncherSettings settings = CurrentLauncherSettings();
+            if (MessageBox.Show(this, UiText.Get("LauncherRestoreConfirm"), UiText.Get("Warning"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            LauncherService.RestoreOriginal(catalog.InstallationDirectory, settings);
+            catalog.LauncherAuthoring = settings; VariantConfigurationService.Save(catalog);
+        }
+        catch (Exception ex) { ShowVariantError(ex.Message); }
     }
 
     private void PersistVariants(string? selectDataFile)
@@ -470,7 +1306,14 @@ LoadGamePcTexts();
         if (selected is null) return;
         VariantCatalog catalog = EnsureVariantCatalog();
         bool moved = direction < 0 ? catalog.MoveUp(selected.DataFile) : catalog.MoveDown(selected.DataFile);
-        if (moved) PersistVariants(selected.DataFile);
+        if (!moved) { UpdateVariantActions(); return; }
+        try { PersistVariants(selected.DataFile); }
+        catch (Exception ex)
+        {
+            _variantCatalog = VariantConfigurationService.Load(catalog.InstallationDirectory, ActiveGameProfile);
+            RefreshVariantGrid(selected.DataFile);
+            ShowVariantError(ex.Message);
+        }
     }
 
     private void ToggleVariantEnabled()
@@ -485,6 +1328,15 @@ LoadGamePcTexts();
     {
         VariantEntry? selected = SelectedVariant;
         if (selected is null) return;
+        if (TryGetProjectTranslation(selected, out TranslationProjectVariant projectTranslation))
+        {
+            // Project state remains editable before its disposable variant
+            // output has been built.  Never materialize GAMEPCxx in GameRoot
+            // just to satisfy this navigation action.
+            SelectTranslationVariant(projectTranslation.Code);
+            SwitchMode(tabText);
+            return;
+        }
         VariantCatalog catalog = EnsureVariantCatalog();
         VariantEntryStatus status = catalog.GetStatus(selected);
         if (!status.IsAvailable)
@@ -497,13 +1349,27 @@ LoadGamePcTexts();
 
     private void UpdateVariantActions()
     {
+        if (_activeProject is null || _activeVariant is null)
+        {
+            btnVariantAdd.Enabled = false;
+            btnVariantEdit.Enabled = false;
+            btnVariantRemove.Enabled = false;
+            btnVariantMoveUp.Enabled = false;
+            btnVariantMoveDown.Enabled = false;
+            btnVariantToggleEnabled.Enabled = false;
+            btnVariantOpenDataFile.Enabled = false;
+            btnVariantToggleEnabled.Text = UiText.Get("VariantDisable");
+            return;
+        }
         VariantEntry? selected = SelectedVariant;
         bool hasSelection = selected is not null;
-        btnVariantEdit.Enabled = hasSelection;
-        btnVariantRemove.Enabled = hasSelection;
-        btnVariantMoveUp.Enabled = hasSelection;
-        btnVariantMoveDown.Enabled = hasSelection;
-        btnVariantToggleEnabled.Enabled = hasSelection;
+        btnVariantAdd.Enabled = true;
+        bool projectTranslation = TryGetProjectTranslation(selected, out _);
+        btnVariantEdit.Enabled = hasSelection && !projectTranslation;
+        btnVariantRemove.Enabled = hasSelection && !projectTranslation;
+        btnVariantMoveUp.Enabled = hasSelection && !projectTranslation && EnsureVariantCatalog().CanMoveUp(selected!.DataFile);
+        btnVariantMoveDown.Enabled = hasSelection && !projectTranslation && EnsureVariantCatalog().CanMoveDown(selected!.DataFile);
+        btnVariantToggleEnabled.Enabled = hasSelection && !projectTranslation;
         btnVariantOpenDataFile.Enabled = hasSelection;
         btnVariantToggleEnabled.Text = UiText.Get(selected?.Enabled == false ? "VariantEnable" : "VariantDisable");
     }
@@ -516,6 +1382,7 @@ LoadGamePcTexts();
         get
         {
             if (!string.IsNullOrWhiteSpace(_currentDataFilePath)) return _currentDataFilePath;
+            if (string.IsNullOrWhiteSpace(txtGameDir.Text)) return string.Empty;
             _currentDataFilePath = Path.Combine(txtGameDir.Text.Trim(), "GAMEPC");
             return _currentDataFilePath;
         }
@@ -523,16 +1390,164 @@ LoadGamePcTexts();
 
     private void SetCurrentDataFile(string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            _currentDataFilePath = null;
+            lblTextSource.Text = string.Empty;
+            UpdateTextOverview();
+            return;
+        }
         _currentDataFilePath = Path.GetFullPath(path);
         lblTextSource.Text = string.Format(UiText.Get("DataFileSource"), Path.GetFileName(_currentDataFilePath));
+        UpdateTextOverview();
+    }
+
+    private void RefreshTranslationVariantSelector()
+    {
+        _refreshingTranslationVariantSelector = true;
+        try
+        {
+            cmbTranslationVariant.Items.Clear();
+            cmbTranslationVariant.Items.Add(new TextTranslationSelection("EN", UiText.Get("Original"), "GAMEPC", _activeVariant?.SourceExecutableName ?? string.Empty));
+            foreach (TranslationProjectVariant translation in (_translationProjectState?.Variants ?? [])
+                .Where(item => !item.Code.Equals("EN", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(item => item.Code, StringComparer.Ordinal))
+            {
+                cmbTranslationVariant.Items.Add(new TextTranslationSelection(translation.Code, translation.DisplayName, translation.DataFile, translation.ExeFile));
+            }
+
+            TextTranslationSelection? selected = cmbTranslationVariant.Items.OfType<TextTranslationSelection>()
+                .SingleOrDefault(item => item.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase));
+            if (selected is null)
+            {
+                _activeTranslationCode = "EN";
+                selected = cmbTranslationVariant.Items.OfType<TextTranslationSelection>().FirstOrDefault();
+            }
+            cmbTranslationVariant.SelectedItem = selected;
+            cmbTranslationVariant.Enabled = _activeProject is not null;
+        }
+        finally { _refreshingTranslationVariantSelector = false; }
+        RefreshActiveProjectSelector();
+    }
+
+    /// <summary>The top-level project selector and the Text selector represent
+    /// one shared project/mod choice. They never select a DOS runtime or a
+    /// physical GAMEPCxx file independently.</summary>
+    private void RefreshActiveProjectSelector()
+    {
+        _refreshingActiveProjectSelector = true;
+        try
+        {
+            cmbActiveProject.Items.Clear();
+            if (_activeProject is not null)
+            {
+                cmbActiveProject.Items.Add(new TextTranslationSelection("EN", UiText.Get("Original"), "GAMEPC", _activeVariant?.SourceExecutableName ?? string.Empty));
+                foreach (TranslationProjectVariant translation in (_translationProjectState?.Variants ?? [])
+                    .Where(item => !item.Code.Equals("EN", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(item => item.Code, StringComparer.Ordinal))
+                    cmbActiveProject.Items.Add(new TextTranslationSelection(translation.Code, translation.DisplayName, translation.DataFile, translation.ExeFile));
+                cmbActiveProject.SelectedItem = cmbActiveProject.Items.OfType<TextTranslationSelection>()
+                    .SingleOrDefault(item => item.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase));
+            }
+            cmbActiveProject.Enabled = _activeProject is not null && cmbActiveProject.Items.Count != 0;
+        }
+        finally { _refreshingActiveProjectSelector = false; }
+    }
+
+    private void SelectTranslationFromSelector()
+    {
+        if (_refreshingTranslationVariantSelector || cmbTranslationVariant.SelectedItem is not TextTranslationSelection selection)
+            return;
+        SelectTranslationVariant(selection.Code);
+    }
+
+    private void SelectTranslationVariant(string code)
+    {
+        if (_activeProject is null || _translationProjectState is null) return;
+        string selectedCode = code.Equals("EN", StringComparison.OrdinalIgnoreCase) ? "EN" : code;
+        if (!selectedCode.Equals("EN", StringComparison.OrdinalIgnoreCase) && !_translationProjectState.Variants.Any(item => item.Code.Equals(selectedCode, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("The requested project translation does not exist.");
+        if (selectedCode.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase)) return;
+
+        // Persist the currently displayed project edits before changing the
+        // project-state selection.  This is never a GAMEPC/GAMEPCxx write.
+        if (!_activeTranslationCode.Equals("EN", StringComparison.OrdinalIgnoreCase) && HasUnsavedTextChanges)
+        {
+            _translationProjectState = _translationProjects.UpsertWorkingEdits(_activeProject, _translationProjectState, _activeTranslationCode, _gamePcEdits);
+            _translationProjects.Save(_activeProject, _translationProjectState);
+            CaptureSavedTextEdits();
+        }
+
+        _activeTranslationCode = selectedCode;
+        RefreshTranslationVariantSelector();
+        SetCurrentDataFile(Path.Combine(_activeProject.GameRoot, "GAMEPC"));
+        LoadGamePcTexts();
+        // LoadGamePcTexts refreshes Runtime UI. LoadSelectedZone refreshes the
+        // graphics project state, so do not duplicate either synchronous path.
+        if (cmbZone.SelectedIndex >= 0) LoadSelectedZone();
+        else LoadGraphicsProjectState();
+        BindFontEditorToActiveVariant(showMissingError: false);
+        OpenModsLauncher();
+        RefreshWorkflowStatus();
+    }
+
+    private void UpdateTextOverview()
+    {
+        if (lblTextOverview.IsDisposed) return;
+        if (_activeProject is null || _activeVariant is null)
+        {
+            _textVariant = null;
+            lblTextOverview.Text = $"{UiText.Get("ActiveVariant")} —   |   {UiText.Get("Original")}: —   |   {UiText.Get("Translation")}: —   |   EXE: —";
+            return;
+        }
+        _textVariant = _activeVariant;
+        bool baselineSelection = _activeTranslationCode.Equals("EN", StringComparison.OrdinalIgnoreCase);
+        TranslationProjectVariant? translationVariant = baselineSelection ? null : _translationProjectState?.Variants
+            .SingleOrDefault(item => item.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase));
+        // The baseline source remains GAMEPC.  A project translation describes
+        // logical future output names only; rendering this header never probes
+        // or creates root-side GAMEPCxx/RUNVGAxx files.
+        string translation = baselineSelection ? UiText.Get("Original") : translationVariant?.DataFile ?? (string.IsNullOrWhiteSpace(_currentDataFilePath) ? "—" : Path.GetFileName(_currentDataFilePath));
+        string exe = translationVariant?.ExeFile ?? _activeVariant?.SourceExecutableName ?? "—";
+        string name = _activeVariant!.DisplayName;
+        string original = _gamePcOriginal is null ? "GAMEPC" : Path.GetFileName(_gamePcOriginal.Path);
+        string originalStatus = _gamePcOriginal?.Status == GamePcOriginalStatus.VerifiedOriginal ? UiText.Get("VerifiedOriginal") : UiText.Get("BaselineCopy");
+        // Two explicit rows retain the original lifecycle context without
+        // clipping logical output names at the end of a long single line.
+        lblTextOverview.Text = $"{UiText.Get("ActiveVariant")} {name}   |   {UiText.Get("Original")}: {original} ({originalStatus})\r\n" +
+            $"{UiText.Get("Translation")}: {translation}   |   EXE: {exe}";
+    }
+
+    private bool HasUnsavedTextChanges => _gamePcEdits.Count != _savedGamePcEdits.Count ||
+        _gamePcEdits.Any(pair => !_savedGamePcEdits.TryGetValue(pair.Key, out string? saved) || !StringComparer.Ordinal.Equals(pair.Value, saved));
+
+    private void CaptureSavedTextEdits()
+    {
+        _savedGamePcEdits.Clear();
+        foreach ((int index, string text) in _gamePcEdits)
+            _savedGamePcEdits[index] = text;
     }
 
     private void LoadGamePcTexts()
     {
+        TextLoadCount++;
         try
         {
             _gamePcEntries.Clear();
             _gamePcEdits.Clear();
+            _savedGamePcEdits.Clear();
+            _gamePcOriginal = null;
+            _translationProjectState = null;
+            if (string.IsNullOrWhiteSpace(txtGameDir.Text))
+            {
+                _currentDataFilePath = null;
+                textGrid.Rows.Clear();
+                lblTextStatus.Text = UiText.Get("NoSupportedGameSelected");
+                ClearRuntimeUiText();
+                RefreshTranslationVariantSelector();
+                UpdateTextOverview();
+                return;
+            }
             _textDiagnosticStore = TextDiagnosticStore.Load(txtGameDir.Text.Trim());
 
             string dataFilePath = CurrentDataFilePath;
@@ -544,21 +1559,200 @@ LoadGamePcTexts();
                 return;
             }
 
-            _gamePcEntries.AddRange(GamePcTextEditor.LoadEntries(dataFilePath));
+            string directory = txtGameDir.Text.Trim();
+            GameInstallationValidator.TryValidate(directory, InstallationDiscoverySource.Manual, out GameInstallation? parserInstallation);
+            ElviraGameProfile parserProfile = parserInstallation?.Game ?? ActiveGameProfile;
+            if (_activeProject is null || !_activeProject.GameRoot.Equals(directory, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Text project is unavailable until a supported installation is activated.");
+            _gamePcOriginal = GamePcOriginalService.LoadProjectBaseline(_activeProject);
+            TranslationProjectLoadResult projectText = _translationProjects.Load(_activeProject);
+            if (!projectText.IsSuccess) throw new InvalidDataException(projectText.Detail ?? "Translation project data is invalid.");
+            TranslationProjectState projectState = projectText.State!;
+            _translationProjectState = projectState;
+            RefreshTranslationVariantSelector();
+            _gamePcEntries.AddRange(GamePcTextEditor.LoadEntries(dataFilePath, parserProfile));
+            if (_gamePcOriginal.Entries.Count != _gamePcEntries.Count || !_gamePcOriginal.Entries.Select(entry => entry.Index).SequenceEqual(_gamePcEntries.Select(entry => entry.Index)))
+                throw new InvalidDataException($"Original GAMEPC and translation {Path.GetFileName(dataFilePath)} do not have the same logical string indices.");
+            if (Path.GetFullPath(dataFilePath).Equals(Path.Combine(_activeProject.GameRoot, "GAMEPC"), StringComparison.OrdinalIgnoreCase))
+            {
+                TranslationProjectVariant? active = projectState.Variants.SingleOrDefault(item => item.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase));
+                if (active is not null)
+                    foreach ((int index, string text) in active.Edits) _gamePcEdits[index] = text;
+            }
+            CaptureSavedTextEdits();
+            UpdateTextOverview();
+            if (_variantCatalog is not null) RefreshVariantGrid(CurrentTranslationDataFileForPresentation());
             RefreshTextGrid();
             UpdateTextStatusSummary();
-            _detectedProfile = GameProfileDetector.Detect(txtGameDir.Text.Trim(), cmbZone.Items.Count, _gamePcEntries.Count);
+            _detectedProfile = GameInstallationValidator.TryValidate(directory, InstallationDiscoverySource.Manual, out GameInstallation? installation) && installation is not null
+                ? installation.Game
+                : GameProfileDetector.Detect(directory, cmbZone.Items.Count, _gamePcEntries.Count);
             UpdateGameProfileDisplay();
+            LoadRuntimeUiText();
         }
         catch (Exception ex)
         {
             lblTextStatus.Text = ex.Message;
+            LoadRuntimeUiText();
+        }
+        finally
+        {
+            UpdateTextActionState();
         }
     }
 
+    /// <summary>Text actions are available only for the explicit active project.
+    /// Opening a standalone data file remains an intentional read-only entry point.</summary>
+    private void UpdateTextActionState()
+    {
+        bool projectActive = _activeProject is not null && _activeVariant is not null;
+        bool textReady = projectActive && _gamePcEntries.Count > 0;
+        btnOpenDataFile.Enabled = true;
+        btnReloadTexts.Enabled = projectActive;
+        bool editableProject = textReady && !ProjectVariantOwnership.IsOriginal(_activeTranslationCode);
+        btnSaveTexts.Enabled = editableProject;
+        btnSaveAsDataFile.Enabled = textReady;
+        btnCreateDataVariant.Enabled = textReady;
+        btnExportTranslations.Enabled = textReady;
+        btnImportTranslations.Enabled = textReady;
+        cmbTranslationVariant.Enabled = projectActive && _translationProjectState is not null;
+        if (textGrid.Columns.Contains("Translation")) textGrid.Columns["Translation"].ReadOnly = !editableProject;
+    }
+
+    private void LoadRuntimeUiText()
+    {
+        RuntimeUiLoadCount++;
+        _runtimeUiProject = null;
+        _runtimeUiVariant = null;
+        _runtimeUiState = null;
+        _runtimeUiDirty = false;
+        if (_activeProject is null || _activeVariant is null) { ClearRuntimeUiText(); return; }
+        if (!_activeProject.GameRoot.Equals(txtGameDir.Text, StringComparison.OrdinalIgnoreCase))
+        {
+            lblRuntimeUiRuntime.Text = UiText.Get("RuntimeUi.Title");
+            lblRuntimeUiStatus.Text = UiText.Get("RuntimeUi.ProjectUnavailable");
+            runtimeUiGrid.Rows.Clear();
+            UpdateRuntimeUiActions();
+            return;
+        }
+        _runtimeUiProject = _activeProject;
+        _runtimeUiVariant = _activeVariant;
+        RuntimeUiTextLoadResult loaded = _runtimeUiTexts.Load(_runtimeUiProject, _activeTranslationCode);
+        if (!loaded.IsSuccess)
+        {
+            lblRuntimeUiRuntime.Text = _runtimeUiVariant.DisplayName + " — " + UiText.Get("RuntimeUi.Title");
+            lblRuntimeUiStatus.Text = UiText.Get("RuntimeUi.ProjectDataError") + ": " + (loaded.Detail ?? loaded.Status.ToString());
+            runtimeUiGrid.Rows.Clear();
+            UpdateRuntimeUiActions();
+            return;
+        }
+        _runtimeUiState = loaded.State;
+        RefreshRuntimeUiGrid();
+    }
+
+    private VariantContext ResolveRuntimeUiVariant(ProjectContext project)
+    {
+        if (ReferenceEquals(project, _activeProject) && _activeVariant is not null)
+            return _activeVariant;
+        VariantContext[] variants = VariantContextCatalog.CreateBuiltIns(project).ToArray();
+        return variants[0];
+    }
+
+    private void ClearRuntimeUiText()
+    {
+        _runtimeUiProject = null; _runtimeUiVariant = null; _runtimeUiState = null; _runtimeUiDirty = false;
+        runtimeUiGrid.Rows.Clear();
+        lblRuntimeUiRuntime.Text = UiText.Get("RuntimeUi.Title");
+        lblRuntimeUiStatus.Text = UiText.Get("NoSupportedGameSelected");
+        UpdateRuntimeUiActions();
+    }
+
+    private void RefreshRuntimeUiGrid()
+    {
+        if (_runtimeUiProject is null || _runtimeUiVariant is null || _runtimeUiState is null) return;
+        _runtimeUiRefreshing = true;
+        try
+        {
+            runtimeUiGrid.Columns["Override"].ReadOnly = ProjectVariantOwnership.IsOriginal(_activeTranslationCode);
+            runtimeUiGrid.Rows.Clear();
+            lblRuntimeUiRuntime.Text = _runtimeUiVariant.DisplayName + " — " + UiText.Get("RuntimeUi.Title");
+            foreach (RuntimeUiRuntimeProjection record in _runtimeUiTexts.GetEffectiveRecords(_runtimeUiVariant, _runtimeUiState))
+            {
+                RuntimeUiLayoutValidationResult validation = _runtimeUiLayouts.Validate(_runtimeUiVariant, _runtimeUiState, record.LogicalRecordId);
+                string original = record.TextOrigin == RuntimeUiTextOrigin.FrozenDefaultUnavailable ? UiText.Get("RuntimeUi.OriginalUnavailable") : record.IsOverridden ? UiText.Get("RuntimeUi.OriginalUnavailable") : record.EffectiveText ?? UiText.Get("RuntimeUi.OriginalUnavailable");
+                string overrideText = record.IsOverridden ? record.EffectiveText ?? string.Empty : string.Empty;
+                int rowIndex = runtimeUiGrid.Rows.Add(record.DisplayName, original, overrideText, FriendlyRuntimeUiStatus(validation), validation.Detail);
+                DataGridViewRow row = runtimeUiGrid.Rows[rowIndex];
+                row.Tag = record.LogicalRecordId;
+                if (record.IsOverridden) row.DefaultCellStyle.BackColor = Color.LightGoldenrodYellow;
+                if (validation.Status == RuntimeUiLayoutValidationStatus.MappingIncomplete) row.DefaultCellStyle.ForeColor = Color.DarkOrange;
+            }
+            lblRuntimeUiStatus.Text = _runtimeUiDirty ? UiText.Get("RuntimeUi.ChangesNotSaved") : UiText.Get("RuntimeUi.ProjectStateLoaded");
+        }
+        finally { _runtimeUiRefreshing = false; }
+        UpdateRuntimeUiActions();
+    }
+
+    private void ApplyRuntimeUiGridEdit(int rowIndex, int columnIndex)
+    {
+        if (_runtimeUiRefreshing || columnIndex < 0 || rowIndex < 0 || _runtimeUiProject is null || _runtimeUiState is null) return;
+        if (runtimeUiGrid.Columns[columnIndex].Name != "Override" || runtimeUiGrid.Rows[rowIndex].Tag is not RuntimeUiLogicalRecordId id) return;
+        string text = runtimeUiGrid.Rows[rowIndex].Cells["Override"].Value?.ToString() ?? string.Empty;
+        if (ProjectVariantOwnership.IsOriginal(_activeTranslationCode)) return;
+        _runtimeUiState = _runtimeUiTexts.SetOverride(_runtimeUiProject, _runtimeUiState, id, text);
+        _runtimeUiDirty = true;
+        RefreshRuntimeUiGrid();
+        RefreshWorkflowStatus();
+    }
+
+    private void ResetSelectedRuntimeUiOverride()
+    {
+        if (_runtimeUiProject is null || _runtimeUiState is null || runtimeUiGrid.CurrentRow?.Tag is not RuntimeUiLogicalRecordId id) return;
+        _runtimeUiState = _runtimeUiTexts.RemoveOverride(_runtimeUiProject, _runtimeUiState, id);
+        _runtimeUiDirty = true;
+        RefreshRuntimeUiGrid();
+        RefreshWorkflowStatus();
+    }
+
+    private void SaveRuntimeUiText()
+    {
+        if (_runtimeUiProject is null || _runtimeUiState is null) return;
+        RuntimeUiTextSaveResult saved = _runtimeUiTexts.Save(_runtimeUiProject, _activeTranslationCode, _runtimeUiState);
+        if (!saved.Succeeded)
+        {
+            lblRuntimeUiStatus.Text = UiText.Get("RuntimeUi.SaveFailed") + ": " + saved.Detail;
+            return;
+        }
+        _runtimeUiDirty = false;
+        RefreshRuntimeUiGrid();
+        lblRuntimeUiStatus.Text = UiText.Get("RuntimeUi.SavedProjectOnly");
+        SetWorkflowStatus(WorkflowStatusSeverity.Warning, UiText.Get("Workflow.SavedBuildRequired"));
+    }
+
+    private void UpdateRuntimeUiActions()
+    {
+        bool ready = _runtimeUiProject is not null && _runtimeUiState is not null && !ProjectVariantOwnership.IsOriginal(_activeTranslationCode);
+        btnReloadRuntimeUi.Enabled = !string.IsNullOrWhiteSpace(txtGameDir.Text);
+        btnSaveRuntimeUi.Enabled = ready && _runtimeUiDirty;
+        btnResetRuntimeUi.Enabled = ready && runtimeUiGrid.CurrentRow?.Tag is RuntimeUiLogicalRecordId;
+    }
+
+    private static string FriendlyRuntimeUiStatus(RuntimeUiLayoutValidationResult result) => result.Status switch
+    {
+        RuntimeUiLayoutValidationStatus.Valid => "Valid",
+        RuntimeUiLayoutValidationStatus.MappingIncomplete => "Mapping incomplete",
+        RuntimeUiLayoutValidationStatus.DefaultTextUnavailable => "Original text unavailable",
+        RuntimeUiLayoutValidationStatus.EncodingFailure => "Unsupported character",
+        RuntimeUiLayoutValidationStatus.UnsupportedGlyph => "Unsupported glyph",
+        RuntimeUiLayoutValidationStatus.RecordCapacityExceeded or RuntimeUiLayoutValidationStatus.TextTooLong => "Text too long",
+        RuntimeUiLayoutValidationStatus.BankCapacityExceeded => "Bank capacity exceeded",
+        RuntimeUiLayoutValidationStatus.InvalidFrozenDescriptor => "Layout unavailable",
+        _ => result.Status.ToString()
+    };
+
     private void RefreshTextGrid()
     {
-        if (_refreshingTextGrid || _gamePcEntries.Count == 0)
+        if (_refreshingTextGrid || _gamePcEntries.Count == 0 || _gamePcOriginal is null)
             return;
 
         int selectedEntryIndex = textGrid.CurrentRow?.Tag is GamePcStringEntry selected
@@ -581,81 +1775,41 @@ LoadGamePcTexts();
             textGrid.SuspendLayout();
 
             var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
+            var cp852 = GamePcTextEditor.GetEncoding("CP852");
             string filter = txtSearch.Text.Trim();
 
             textGrid.Rows.Clear();
 
             foreach (var entry in _gamePcEntries)
             {
+                GamePcStringEntry originalEntry = _gamePcOriginal.Entries[entry.Index];
+                string originalText = GamePcTextEditor.ToEditableText(originalEntry, originalEntry, enc, ActiveGameProfile);
                 string value = _gamePcEdits.TryGetValue(entry.Index, out var edited)
                     ? edited
-                    : entry.Decode(enc);
+                    : GamePcTextEditor.ToEditableText(entry, originalEntry, enc, ActiveGameProfile);
 
                 if (!string.IsNullOrEmpty(filter) &&
                     value.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) < 0 &&
+                    originalText.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) < 0 &&
                     entry.Index.ToString().IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
                     continue;
 
-                int bytes = enc.GetByteCount(value);
+                int bytes = cp852.GetByteCount(value);
+                int originalBytes = cp852.GetByteCount(originalText);
                 string dosStatus = string.Empty;
-                Color? dosColor = null;
-                Color? rowColor = null;
-                TextDiagnosticResult? diagnostic = null;
-                var profile = GameProfileInfo.For(ActiveGameProfile);
-
-                if (ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0)
-                {
-                    diagnostic = Elvira1TextMetadata.Evaluate(entry.Index, value, enc, _textDiagnosticStore?.IsIgnored(entry.Index) == true);
-                    switch (diagnostic.Kind)
-                    {
-                        case TextDiagnosticKind.ConfirmedRisk:
-                            dosStatus = $"✖ +{diagnostic.OverBy}"; dosColor = Color.DarkRed; rowColor = Color.MistyRose; break;
-                        case TextDiagnosticKind.PossibleRisk:
-                            dosStatus = $"⚠ +{diagnostic.OverBy}"; dosColor = Color.DarkOrange; rowColor = Color.LemonChiffon; break;
-                        case TextDiagnosticKind.ConfirmedSafe:
-                            dosStatus = UiText.Get("SafeStatus"); dosColor = Color.DarkGreen; rowColor = Color.Honeydew; break;
-                        case TextDiagnosticKind.Ignored:
-                            dosStatus = UiText.Get("IgnoredStatus"); dosColor = Color.DimGray; rowColor = Color.Gainsboro; break;
-                    }
-                }
-                else if (cmbTextContext.SelectedIndex == 2)
-                {
-                    if (profile.InteractiveDialogueByteLimit is int limit)
-                    {
-                        int over = Math.Max(0, bytes - limit);
-                        dosStatus = over == 0 ? "OK" : $"✖ +{over}";
-                        dosColor = over == 0 ? Color.DarkGreen : Color.DarkRed;
-                        if (over > 0) rowColor = Color.MistyRose;
-                    }
-                    else
-                    {
-                        dosStatus = "N/A"; dosColor = Color.DimGray;
-                    }
-                }
-
-                if (chkOnlyTextRisks.Checked && !(diagnostic?.IsRisk == true || (cmbTextContext.SelectedIndex == 2 && bytes > (profile.InteractiveDialogueByteLimit ?? int.MaxValue))))
-                    continue;
 
                 int rowIndex = textGrid.Rows.Add(
                     entry.Index,
-                    $"0x{entry.Offset:X}",
-                    entry.ByteLength,
+                    originalBytes,
                     bytes,
+                    bytes - originalBytes,
                     dosStatus,
+                    originalText,
                     value);
 
                 var row = textGrid.Rows[rowIndex];
                 row.Tag = entry;
-                if (dosColor.HasValue)
-                {
-                    row.Cells["DosLimit"].Style.ForeColor = dosColor.Value;
-                    if (dosStatus.StartsWith("⚠"))
-                        row.Cells["DosLimit"].Style.Font = new Font(textGrid.Font, FontStyle.Bold);
-                }
-
-                if (rowColor.HasValue)
-                    row.DefaultCellStyle.BackColor = rowColor.Value;
-                else if (_gamePcEdits.ContainsKey(entry.Index))
+                if (_gamePcEdits.ContainsKey(entry.Index))
                     row.DefaultCellStyle.BackColor = Color.LightGoldenrodYellow;
             }
 
@@ -701,16 +1855,79 @@ LoadGamePcTexts();
     {
         try
         {
-            var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
-            GamePcTextEditor.SaveInPlace(CurrentDataFilePath, _gamePcEdits, _gamePcEntries, enc);
-            lblTextStatus.Text = string.Format(UiText.Get("TextSaved"), Path.GetFileName(CurrentDataFilePath));
+            if (_activeProject is null || _translationProjectState is null) throw new InvalidOperationException("Text project is unavailable.");
+            if (ProjectVariantOwnership.IsOriginal(_activeTranslationCode)) throw new InvalidOperationException("The Original project is read-only. Create or select an editable project variant first.");
+            _translationProjectState = _translationProjects.UpsertWorkingEdits(_activeProject, _translationProjectState, _activeTranslationCode, _gamePcEdits);
+            _translationProjects.Save(_activeProject, _translationProjectState);
+            CaptureSavedTextEdits();
+            lblTextStatus.Text = string.Format(UiText.Get("TextSaved"), TranslationProjectService.FileName);
+            SetWorkflowStatus(WorkflowStatusSeverity.Warning, UiText.Get("Workflow.SavedBuildRequired"));
             LoadGamePcTexts();
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, UiText.Get("AppTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(ex.Message, AppInfo.ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             lblTextStatus.Text = ex.Message;
         }
+    }
+
+    private TranslationExchangeDocument CurrentTranslationExchange()
+    {
+        if (_gamePcOriginal is null || _gamePcEntries.Count == 0) throw new InvalidDataException("Open a translation data file first.");
+        TranslationProjectVariant? projectVariant = _translationProjectState?.Variants.SingleOrDefault(item => item.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase));
+        VariantEntry? variant = projectVariant is null ? null : new VariantEntry(projectVariant.DisplayName, projectVariant.DataFile, true, 1, projectVariant.Code, projectVariant.ExeFile);
+        return TranslationExchangeService.Create(ActiveGameProfile, _gamePcOriginal.Path, _gamePcOriginal.Entries, _gamePcEntries, _gamePcEdits, variant, RuntimeForExchange);
+    }
+
+    private string RuntimeForExchange(int index, string value)
+    {
+        return string.Empty;
+    }
+
+    private void ExportTranslations()
+    {
+        try
+        {
+            TranslationExchangeDocument document = CurrentTranslationExchange();
+            string code = string.IsNullOrWhiteSpace(document.Metadata.VariantCode) ? "translation" : document.Metadata.VariantCode;
+            using var dialog = new SaveFileDialog { Title = UiText.Get("ExportTranslation"), InitialDirectory = Path.GetDirectoryName(CurrentDataFilePath), FileName = $"{document.Metadata.Game}_{code}_translation.xlsx", Filter = "Excel Workbook (*.xlsx)|*.xlsx|CSV files (*.csv)|*.csv" };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            if (Path.GetExtension(dialog.FileName).Equals(".csv", StringComparison.OrdinalIgnoreCase)) TranslationExchangeService.ExportCsv(dialog.FileName, document);
+            else TranslationExchangeService.ExportXlsx(dialog.FileName, document);
+            lblTextStatus.Text = string.Format(UiText.Get("TranslationExported"), Path.GetFileName(dialog.FileName));
+        }
+        catch (Exception ex) { ShowVariantError(ex.Message); }
+    }
+
+    private void ImportTranslations()
+    {
+        try
+        {
+            if (_gamePcOriginal is null || _gamePcEntries.Count == 0) throw new InvalidDataException("Open a translation data file first.");
+            if (_gamePcEdits.Count > 0 && MessageBox.Show(this, UiText.Get("TranslationImportDiscard"), UiText.Get("TranslationImport"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            using var dialog = new OpenFileDialog { Title = UiText.Get("ImportTranslation"), InitialDirectory = Path.GetDirectoryName(CurrentDataFilePath), Filter = "Translation files (*.csv;*.xlsx)|*.csv;*.xlsx|CSV files (*.csv)|*.csv|Excel Workbook (*.xlsx)|*.xlsx", CheckFileExists = true };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            TranslationExchangeDocument importedDocument = TranslationExchangeService.ReadAndValidate(dialog.FileName, ActiveGameProfile, _gamePcOriginal.Path, _gamePcOriginal.Entries);
+            IReadOnlyDictionary<int, string> imported = importedDocument.Rows.ToDictionary(row => row.Index, row => row.Translation);
+            TranslationExchangeDocument current = CurrentTranslationExchange();
+            int changed = current.Rows.Count(row => !StringComparer.Ordinal.Equals(row.Translation, imported[row.Index]));
+            VariantEntry? active = _variantCatalog?.FindByDataFile(Path.GetFileName(CurrentDataFilePath));
+            // Variant fields are informational: warn, but deliberately do not switch the active variant.
+            if (active is not null && (!importedDocument.Metadata.TranslationFile.Equals(active.DataFile, StringComparison.OrdinalIgnoreCase) ||
+                !importedDocument.Metadata.VariantCode.Equals(active.Code, StringComparison.OrdinalIgnoreCase)) &&
+                MessageBox.Show(this, UiText.Get("TranslationImportVariantMismatch"), UiText.Get("TranslationImport"), MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+            if (MessageBox.Show(this, string.Format(UiText.Get("TranslationImportConfirm"), changed, current.Rows.Count - changed, active?.DisplayName ?? Path.GetFileName(CurrentDataFilePath)), UiText.Get("TranslationImport"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            var cp852 = GamePcTextEditor.GetEncoding("CP852");
+            _gamePcEdits.Clear();
+            foreach (GamePcStringEntry entry in _gamePcEntries)
+            {
+                GamePcStringEntry baseEntry = _gamePcOriginal.Entries[entry.Index];
+                if (!StringComparer.Ordinal.Equals(GamePcTextEditor.ToEditableText(entry, baseEntry, cp852, ActiveGameProfile), imported[entry.Index])) _gamePcEdits[entry.Index] = imported[entry.Index];
+            }
+            RefreshTextGrid(); UpdateTextStatusSummary();
+            RefreshWorkflowStatus();
+        }
+        catch (Exception ex) { ShowVariantError(ex.Message); }
     }
 
     private void OpenTextDataFile()
@@ -729,6 +1946,11 @@ LoadGamePcTexts();
 
     private void OpenTextDataFile(string path)
     {
+        if (Path.GetFileName(path).Equals(GamePcOriginalService.OriginalFileName, StringComparison.OrdinalIgnoreCase))
+        {
+            ShowVariantError("GAMEPCO is the protected Original source and cannot be opened as the editable Translation file.");
+            return;
+        }
         SetCurrentDataFile(path);
         LoadGamePcTexts();
         SwitchMode(tabText);
@@ -761,7 +1983,15 @@ LoadGamePcTexts();
         btnVariantMoveUp.Text = UiText.Get("VariantMoveUp");
         btnVariantMoveDown.Text = UiText.Get("VariantMoveDown");
         btnVariantOpenDataFile.Text = UiText.Get("VariantOpenDataFile");
-        lblLauncherPlaceholder.Text = UiText.Get("LauncherFutureNote");
+        lblLauncherFile.Text = UiText.Get("LauncherFile");
+        btnSelectLauncherFile.Text = UiText.Get("SelectLauncher");
+        lblModderName.Text = UiText.Get("ModderName");
+        lblDefaultVariant.Text = UiText.Get("DefaultVariant");
+        lblVariantManagerTitle.Text = UiText.Get("VariantManager.Title");
+        lblVariantManagerHint.Text = UiText.Get("VariantManager.SelectHint");
+        btnPreviewLauncher.Text = UiText.Get("PreviewLauncher");
+        btnGenerateLauncher.Text = UiText.Get("GenerateLauncher");
+        btnRestoreLauncher.Text = UiText.Get("RestoreOriginalLauncher");
         if (variantGrid.Columns.Count == 5)
         {
             variantGrid.Columns["Order"].HeaderText = UiText.Get("VariantOrder");
@@ -770,19 +2000,35 @@ LoadGamePcTexts();
             variantGrid.Columns["Status"].HeaderText = UiText.Get("VariantStatus");
             variantGrid.Columns["Enabled"].HeaderText = UiText.Get("VariantEnabled");
         }
+        if (variantManagerGrid.Columns.Count == 7)
+        {
+            variantManagerGrid.Columns["Active"].HeaderText = UiText.Get("VariantManager.Active");
+            variantManagerGrid.Columns["Variant"].HeaderText = UiText.Get("VariantManager.Variant");
+            variantManagerGrid.Columns["Runtime"].HeaderText = UiText.Get("VariantManager.Runtime");
+            variantManagerGrid.Columns["Directory"].HeaderText = UiText.Get("VariantManager.Directory");
+            variantManagerGrid.Columns["Ownership"].HeaderText = UiText.Get("VariantManager.Ownership");
+            variantManagerGrid.Columns["BuildStatus"].HeaderText = UiText.Get("VariantManager.BuildStatus");
+            variantManagerGrid.Columns["Readiness"].HeaderText = UiText.Get("VariantManager.Readiness");
+        }
         if (_variantCatalog is not null)
-            RefreshVariantGrid(Path.GetFileName(CurrentDataFilePath));
+            RefreshVariantGrid(CurrentTranslationDataFileForPresentation());
         else
             UpdateVariantActions();
+        RefreshVariantManager();
     }
 
     private void SaveTextDataFileAs(bool createVariant)
     {
         if (_gamePcEntries.Count == 0) return;
+        if (createVariant)
+        {
+            CreateTranslationVariant();
+            return;
+        }
         using var dialog = new SaveFileDialog
         {
             Title = UiText.Get(createVariant ? "CreateVariant" : "SaveAsDataFile"),
-            InitialDirectory = Path.GetDirectoryName(CurrentDataFilePath),
+            InitialDirectory = _activeProject?.ProjectRoot ?? Path.GetDirectoryName(CurrentDataFilePath),
             FileName = Path.GetFileName(CurrentDataFilePath),
             Filter = UiText.Get("DataFileFilter"),
             OverwritePrompt = false
@@ -790,49 +2036,91 @@ LoadGamePcTexts();
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         try
         {
-            var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
-            string createdPath = GameDataFileService.SaveAsNew(CurrentDataFilePath, dialog.FileName, _gamePcEdits, _gamePcEntries, enc);
-            SetCurrentDataFile(createdPath);
-            LoadGamePcTexts();
-            lblTextStatus.Text = string.Format(UiText.Get(createVariant ? "VariantCreated" : "DataFileSavedAs"), Path.GetFileName(CurrentDataFilePath));
-            if (createVariant)
-                OfferCreatedVariant(createdPath);
+            if (_activeProject is null) throw new InvalidOperationException("Text project is unavailable.");
+            string createdPath = _translationProjects.ExportProjectDataFile(_activeProject, Path.GetFileName(dialog.FileName), _gamePcEdits);
+            lblTextStatus.Text = string.Format(UiText.Get("DataFileSavedAs"), Path.GetFileName(createdPath));
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, UiText.Get("AppTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(ex.Message, AppInfo.ProductTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            lblTextStatus.Text = ex.Message;
+        }
+    }
+
+    private void CreateTranslationVariant()
+    {
+        if (ActiveGameProfile is not (ElviraGameProfile.Elvira1 or ElviraGameProfile.Elvira2))
+        {
+            ShowVariantError(UiText.Get("LauncherGameUnknown"));
+            return;
+        }
+
+        using var dialog = new TranslationVariantDialog(ActiveGameProfile);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            if (_activeProject is null) throw new InvalidOperationException("Text project is unavailable.");
+            TranslationProjectLoadResult loaded = _translationProjects.Load(_activeProject);
+            if (!loaded.IsSuccess) throw new InvalidDataException(loaded.Detail ?? "Translation project data is invalid.");
+            TranslationProjectVariant created = _translationProjects.Create(_activeProject, loaded.State!, dialog.NameValue, dialog.Code, _gamePcEdits);
+            _translationProjectState = _translationProjects.Add(loaded.State!, created);
+            _translationProjects.Save(_activeProject, _translationProjectState);
+            _activeTranslationCode = created.Code;
+            LoadGamePcTexts();
+            lblTextStatus.Text = string.Format(UiText.Get("VariantCreated"), created.DisplayName);
+        }
+        catch (Exception ex)
+        {
+            ShowVariantError(ex.Message);
             lblTextStatus.Text = ex.Message;
         }
     }
 
     private void ApplyLanguage()
     {
-        Text = UiText.Get("AppTitle");
-        tabVga.Text = UiText.Get("VgaTab");
+        Text = AppInfo.ProductTitle;
+        tabVga.Text = UiText.Get("Graphics");
         tabText.Text = UiText.Get("TextTab");
         tabFont.Text = UiText.Get("FontEditor");
         tabMods.Text = UiText.Get("ModsLauncherTab");
+        tabGameTextDomain.Text = UiText.Get("RuntimeUi.GameTextTab");
+        tabRuntimeUiDomain.Text = UiText.Get("RuntimeUi.Title");
+        btnReloadRuntimeUi.Text = UiText.Get("RuntimeUi.Reload");
+        btnSaveRuntimeUi.Text = UiText.Get("SaveToProject");
+        btnResetRuntimeUi.Text = UiText.Get("RuntimeUi.ResetOverride");
+        btnRunVariant.Text = UiText.Get("Execution.Run"); btnDebugVariant.Text = UiText.Get("Execution.Debug");
+        lblRecoveryTitle.Text = UiText.Get("Recovery.Title");
+        btnVerifyPristine.Text = UiText.Get("Recovery.VerifyPristine"); btnRestoreBaselineLauncher.Text = UiText.Get("Recovery.RestoreLauncher");
+        btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
         btnBrowseGame.Text = UiText.Get("Browse");
+        btnFindGames.Text = UiText.Get("FindGames");
+        lblActiveProjectCaption.Text = UiText.Get("Edition") + ":";
+        btnBuildActiveVariant.Text = UiText.Get("BuildVariant");
+        installationToolTip.SetToolTip(cmbInstallations, UiText.Get("InstallationPathTooltip"));
         btnReload.Text = UiText.Get("Refresh");
-        chkZoom.Text = UiText.Get("PixelZoom");
         btnReplace.Text = UiText.Get("ReplacePng");
         btnExport.Text = UiText.Get("ExportPng");
         btnRestore.Text = UiText.Get("RestoreOriginal");
         btnReloadTexts.Text = UiText.Get("ReloadTexts");
-        btnSaveTexts.Text = UiText.Get("SaveTexts");
+        btnSaveTexts.Text = UiText.Get("SaveToProject");
         btnOpenDataFile.Text = UiText.Get("OpenDataFile");
+        btnExportTranslations.Text = UiText.Get("ExportTranslation");
+        btnImportTranslations.Text = UiText.Get("ImportTranslation");
         btnSaveAsDataFile.Text = UiText.Get("SaveAsDataFile");
         btnCreateDataVariant.Text = UiText.Get("CreateVariant");
-        SetCurrentDataFile(CurrentDataFilePath);
+        if (!string.IsNullOrWhiteSpace(CurrentDataFilePath))
+            SetCurrentDataFile(CurrentDataFilePath);
         lblSearchCaption.Text = UiText.Get("Search");
         lblEncodingCaption.Text = UiText.Get("Encoding");
         lblTextContextCaption.Text = UiText.Get("TextContext");
+        lblTranslationVariantCaption.Text = UiText.Get("Edition") + ":";
         chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
         chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
         int contextIndex = Math.Max(0, cmbTextContext.SelectedIndex);
         cmbTextContext.Items.Clear();
         cmbTextContext.Items.AddRange(new object[] { UiText.Get("ContextAuto"), UiText.Get("ContextGeneric"), UiText.Get("ContextNpc") });
         cmbTextContext.SelectedIndex = Math.Min(contextIndex, cmbTextContext.Items.Count - 1);
+        RefreshTranslationVariantSelector();
 
         int gameProfileIndex = Math.Max(0, cmbGameProfile.SelectedIndex);
         cmbGameProfile.Items.Clear();
@@ -852,32 +2140,117 @@ LoadGamePcTexts();
         if (textGrid.Columns.Contains("Index"))
         {
             textGrid.Columns["Index"].HeaderText = UiText.Get("TextIndex");
-            textGrid.Columns["Offset"].HeaderText = UiText.Get("TextOffset");
-            textGrid.Columns["Length"].HeaderText = UiText.Get("Length");
-            if (textGrid.Columns.Contains("Bytes")) textGrid.Columns["Bytes"].HeaderText = UiText.Get("Bytes");
-            if (textGrid.Columns.Contains("DosLimit")) textGrid.Columns["DosLimit"].HeaderText = UiText.Get("DosLimit");
-            textGrid.Columns["Text"].HeaderText = UiText.Get("Text");
+            textGrid.Columns["OriginalBytes"].HeaderText = UiText.Get("OriginalBytes");
+            textGrid.Columns["TranslationBytes"].HeaderText = UiText.Get("TranslationBytes");
+            textGrid.Columns["ByteDifference"].HeaderText = UiText.Get("Difference");
+            if (textGrid.Columns.Contains("DosLimit"))
+            {
+                textGrid.Columns["DosLimit"].HeaderText = UiText.Get("DosLimit");
+                textGrid.Columns["DosLimit"].HeaderCell.ToolTipText = UiText.Get("RuntimeDiagnosticTooltip");
+            }
+            textGrid.Columns["OriginalText"].HeaderText = UiText.Get("OriginalText");
+            textGrid.Columns["Translation"].HeaderText = UiText.Get("Translation");
+        }
+        if (runtimeUiGrid.Columns.Contains("LogicalId"))
+        {
+            runtimeUiGrid.Columns["LogicalId"].HeaderText = UiText.Get("RuntimeUi.Record");
+            runtimeUiGrid.Columns["Original"].HeaderText = UiText.Get("RuntimeUi.OriginalText");
+            runtimeUiGrid.Columns["Override"].HeaderText = UiText.Get("RuntimeUi.ProjectOverride");
+            runtimeUiGrid.Columns["Status"].HeaderText = UiText.Get("RuntimeUi.Validation");
+            runtimeUiGrid.Columns["Detail"].HeaderText = UiText.Get("RuntimeUi.Details");
         }
         if (cmbZone.Items.Count > 0)
             lblStatus.Text = string.Format(UiText.Get("ZonesFound"), cmbZone.Items.Count);
         if (_gamePcEntries.Count > 0)
             UpdateTextStatusSummary();
+        UpdateTextOverview();
+        UpdateRuntimeColumnVisibility();
         ApplyVariantLanguage();
         btnAbout.Text = UiText.Get("About");
-        btnSpriteEditor.Text = UiText.Get("SpriteEditor");
+        btnHelp.Text = UiText.Get("Help");
+        btnSpriteEditor.Text = UiText.Get("Graphics");
         btnClearEdit.Text = UiText.Get("CancelEdit");
         btnDeploy.Text = UiText.Get("ApplyGame");
         lblPaletteCaption.Text = UiText.Get("Palette");
-        lblLanguageCaption.Text = UiText.Get("Language");
+        btnPaletteAdvanced.Text = _paletteAdvancedVisible ? UiText.Get("PaletteBasic") : UiText.Get("PaletteAdvanced");
+        chkPixelPerfect.Text = UiText.Get("PixelPerfect");
+        lblInstallationCaption.Text = UiText.Get("Installation");
+        lblActiveVariantCaption.Text = UiText.Get("ActiveVariant");
+        lblDetectedGameCaption.Text = UiText.Get("Detected");
+        lblLanguageCaption.Text = UiText.Get("InterfaceLanguage");
+        RefreshGraphicsScopeItems();
+        RefreshPreviewZoomItems();
+        UpdateGraphicsProjectPresentation();
         RefreshPaletteDisplayLanguage();
         btnTextEditor.Text = UiText.Get("OpenTextEditor");
-        btnFontEditor.Text = UiText.Get("FontEditor");
+        btnFontEditor.Text = UiText.Get("FontTab");
+        btnModsLauncher.Text = UiText.Get("ModsLauncherTab");
         lblGameProfile.Text = UiText.Get("Game");
+        lblVgaFileCaption.Text = UiText.Get("VgaFile");
         btnReloadPreview.Text = UiText.Get("ReloadPreview");
+        RefreshInstallationSelector(selectedPath: txtGameDir.Text);
+        if (_activeProject is null)
+        {
+            SetStatusPresentation(WorkflowStatusSeverity.Info, NeutralInstallationPrompt);
+            lblLauncherReadiness.Text = NeutralInstallationPrompt;
+            SetRecoverySafetyControls(active: false);
+        }
         if (_embeddedFontEditor is not null && !_embeddedFontEditor.IsDisposed)
             _embeddedFontEditor.ApplyLanguage();
+        if (_helpViewer is not null && !_helpViewer.IsDisposed)
+            _helpViewer.SetLanguage(UiText.Language);
+        if (_aboutViewer is not null && !_aboutViewer.IsDisposed)
+            _aboutViewer.SetLanguage(UiText.Language);
         UpdateGameProfileDisplay();
         UpdateModeButtons();
+    }
+
+    private string NeutralInstallationPrompt => UiText.Get(UiLocalizationKeys.NoGameSelected) + " " + UiText.Get(UiLocalizationKeys.FindGamesOrBrowseFolder);
+
+    private void OnUiLocaleChanged(object? sender, UiLocaleChangedEventArgs e)
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(() => OnUiLocaleChanged(sender, e)));
+            return;
+        }
+
+        _applyingUiLanguage = true;
+        try
+        {
+            RefreshUiLocaleSelector();
+            ApplyLanguage();
+        }
+        finally { _applyingUiLanguage = false; }
+    }
+
+    private void OnUiLocalesChanged(object? sender, EventArgs e)
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(() => OnUiLocalesChanged(sender, e)));
+            return;
+        }
+        _applyingUiLanguage = true;
+        try { RefreshUiLocaleSelector(); }
+        finally { _applyingUiLanguage = false; }
+    }
+
+    private void RefreshUiLocaleSelector()
+    {
+        string selectedLocaleId = UiText.LocaleId;
+        cmbUiLanguage.BeginUpdate();
+        try
+        {
+            cmbUiLanguage.Items.Clear();
+            foreach (UiLocaleDescriptor locale in UiText.AvailableLocales)
+                cmbUiLanguage.Items.Add(locale);
+            cmbUiLanguage.SelectedIndex = Enumerable.Range(0, cmbUiLanguage.Items.Count)
+                .FirstOrDefault(index => cmbUiLanguage.Items[index] is UiLocaleDescriptor locale && locale.Id == selectedLocaleId, -1);
+        }
+        finally { cmbUiLanguage.EndUpdate(); }
     }
 
     private void ApplySafeHalfSplit()
@@ -940,83 +2313,210 @@ LoadGamePcTexts();
 
     private void BuildUi()
     {
-        var top = new Panel { Dock = DockStyle.Top, Height = 78, Padding = new Padding(8) };
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3,
+            ColumnCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 128));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
 
-        txtGameDir.SetBounds(8, 8, 520, 26);
+        var top = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+        var globalBar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 76,
+            ColumnCount = 4,
+            RowCount = 2,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty
+        };
+        globalBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
+        globalBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
+        globalBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 26));
+        globalBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        globalBar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        globalBar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+
+        var installationRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty };
+        installationRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        installationRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        installationRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        installationRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var gameRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty };
+        gameRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        gameRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        gameRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        gameRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        var contextBlock = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = Padding.Empty, Padding = Padding.Empty };
+        contextBlock.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        contextBlock.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        contextBlock.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        contextBlock.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+
+        var rightHeader = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoScroll = true, Margin = Padding.Empty, Padding = Padding.Empty };
+
+        lblInstallationCaption.Text = UiText.Get("Installation");
+        lblInstallationCaption.AutoSize = true;
+        lblInstallationCaption.Anchor = AnchorStyles.Left;
+        cmbInstallations.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbInstallations.Dock = DockStyle.Fill;
+        cmbInstallations.Margin = new Padding(6, 3, 6, 3);
+        cmbInstallations.DropDownWidth = 620;
+        cmbInstallations.SelectedIndexChanged += (_, _) => InstallationSelectionChanged();
+        installationToolTip.SetToolTip(cmbInstallations, UiText.Get("InstallationPathTooltip"));
+
+        btnFindGames.Text = UiText.Get("FindGames");
+        btnFindGames.Width = 108;
+        ConfigureCenteredButton(btnFindGames);
+        btnFindGames.Margin = new Padding(0, 2, 4, 2);
+        btnFindGames.Click += (_, _) => FindGames();
+
         btnBrowseGame.Text = UiText.Get("Browse");
-        btnBrowseGame.SetBounds(535, 7, 130, 28);
+        btnBrowseGame.Width = 128;
+        ConfigureCenteredButton(btnBrowseGame);
+        btnBrowseGame.Margin = new Padding(0, 2, 10, 2);
         btnBrowseGame.Click += (_, _) => BrowseGame();
 
         lblGameProfile.Text = UiText.Get("Game");
         lblGameProfile.AutoSize = true;
-        lblGameProfile.SetBounds(680, 12, 45, 20);
+        lblGameProfile.Anchor = AnchorStyles.Left;
 
         cmbGameProfile.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbGameProfile.SetBounds(725, 7, 190, 28);
+        cmbGameProfile.Width = 150;
+        cmbGameProfile.Margin = new Padding(6, 3, 10, 3);
         cmbGameProfile.Items.AddRange(new object[] { UiText.Get("AutoDetect"), "Elvira I", "Elvira II" });
         cmbGameProfile.SelectedIndexChanged += (_, _) => UpdateGameProfileDisplay();
 
-        lblDetectedGame.AutoSize = true;
+        lblDetectedGameCaption.Text = UiText.Get("Detected");
+        lblDetectedGameCaption.AutoSize = true;
+        lblDetectedGameCaption.Anchor = AnchorStyles.Left;
+        lblDetectedGame.AutoSize = false;
+        lblDetectedGame.Dock = DockStyle.Fill;
+        lblDetectedGame.TextAlign = ContentAlignment.MiddleLeft;
+        lblDetectedGame.AutoEllipsis = true;
+        installationToolTip.SetToolTip(lblDetectedGame, UiText.Get("Detected"));
         lblDetectedGame.Font = new Font(Font, FontStyle.Bold);
-        lblDetectedGame.SetBounds(925, 12, 470, 20);
 
-        var zoneLabel = new Label { Text = "xNN2.VGA:", AutoSize = true };
-        zoneLabel.SetBounds(8, 46, 70, 20);
+        lblActiveVariantCaption.Text = UiText.Get("ActiveVariant");
+        lblActiveVariantCaption.AutoSize = true;
+        lblActiveVariantCaption.Anchor = AnchorStyles.Left;
+        cmbActiveVariant.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbActiveVariant.DisplayMember = nameof(VariantContext.DisplayName);
+        cmbActiveVariant.Enabled = false;
+        cmbActiveVariant.Dock = DockStyle.Fill;
+        cmbActiveVariant.Margin = new Padding(6, 2, 2, 2);
+        cmbActiveVariant.SelectedIndexChanged += (_, _) =>
+        {
+            if (_refreshingActiveVariantSelector || cmbActiveVariant.SelectedItem is not VariantContext variant)
+                return;
+            if (!ReferenceEquals(variant.Project, _activeProject))
+                return;
+            SetActiveVariant(variant);
+        };
 
-        cmbZone.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbZone.SetBounds(80, 42, 160, 28);
-        cmbZone.SelectedIndexChanged += (_, _) => LoadSelectedZone();
+        lblActiveProjectCaption.Text = UiText.Get("Edition") + ":";
+        lblActiveProjectCaption.AutoSize = true;
+        lblActiveProjectCaption.Anchor = AnchorStyles.Left;
+        cmbActiveProject.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbActiveProject.Dock = DockStyle.Fill;
+        cmbActiveProject.Enabled = false;
+        cmbActiveProject.Margin = new Padding(6, 2, 2, 2);
+        cmbActiveProject.SelectedIndexChanged += (_, _) =>
+        {
+            if (_refreshingActiveProjectSelector || cmbActiveProject.SelectedItem is not TextTranslationSelection selection) return;
+            SelectTranslationVariant(selection.Code);
+        };
 
-        btnReload.Text = UiText.Get("Refresh");
-        btnReload.SetBounds(250, 41, 90, 28);
-        btnReload.Click += (_, _) => ScanGameFolder();
+        btnBuildActiveVariant.Text = UiText.Get("BuildVariant");
+        btnBuildActiveVariant.Width = 128;
+        btnBuildActiveVariant.Enabled = false;
+        btnBuildActiveVariant.Margin = new Padding(4, 2, 8, 2);
+        ConfigureCenteredButton(btnBuildActiveVariant);
+        btnBuildActiveVariant.Click += (_, _) => NavigateToActiveBuildTarget();
 
-        lblPaletteCaption.Text = UiText.Get("Palette");
-        lblPaletteCaption.AutoSize = true;
-        lblPaletteCaption.SetBounds(350, 46, 48, 20);
-
-        cmbPalette.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbPalette.SetBounds(400, 42, 130, 28);
-        cmbPalette.SelectedIndexChanged += (_, _) => PaletteChanged();
-
-        lblLanguageCaption.Text = UiText.Get("Language");
+        lblLanguageCaption.Text = UiText.Get("InterfaceLanguage");
         lblLanguageCaption.AutoSize = true;
-        lblLanguageCaption.SetBounds(545, 46, 52, 20);
+        lblLanguageCaption.Anchor = AnchorStyles.Left;
 
         cmbUiLanguage.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbUiLanguage.DrawMode = DrawMode.OwnerDrawFixed;
         cmbUiLanguage.ItemHeight = 20;
         cmbUiLanguage.DrawItem += DrawCenteredLanguageItem;
-        cmbUiLanguage.SetBounds(615, 42, 145, 28);
-        cmbUiLanguage.Items.AddRange(new object[] { "Slovenčina", "English", "Čeština" });
-        cmbUiLanguage.SelectedIndex = 1;
+        cmbUiLanguage.Width = 132;
+        cmbUiLanguage.Margin = new Padding(6, 3, 10, 3);
+        RefreshUiLocaleSelector();
         cmbUiLanguage.SelectedIndexChanged += (_, _) =>
         {
-            UiText.SetLanguage(cmbUiLanguage.SelectedIndex switch
-            {
-                1 => UiLanguage.English,
-                2 => UiLanguage.Czech,
-                _ => UiLanguage.Slovak
-            });
-            ApplyLanguage();
+            if (_applyingUiLanguage) return;
+            if (cmbUiLanguage.SelectedItem is UiLocaleDescriptor locale)
+                UiText.SetLocale(locale.Id);
         };
 
-        chkZoom.Text = UiText.Get("PixelZoom");
-        chkZoom.Checked = true;
-        chkZoom.SetBounds(775, 43, 145, 24);
-        chkZoom.CheckedChanged += (_, _) => ApplyPreviewZoom();
+        btnHelp.Text = UiText.Get("Help");
+        btnHelp.Width = 90;
+        ConfigureCenteredButton(btnHelp);
+        btnHelp.Margin = new Padding(0, 2, 4, 2);
+        btnHelp.Click += (_, _) => OpenHelp();
 
-        // Permanent mode navigation. These buttons stay in the same place in every mode.
+        btnAbout.Text = UiText.Get("About");
+        btnAbout.Width = 120;
+        ConfigureCenteredButton(btnAbout);
+        btnAbout.Margin = new Padding(0, 2, 0, 2);
+        btnAbout.Click += (_, _) => OpenAbout();
+
+        installationRow.Controls.Add(lblInstallationCaption, 0, 0);
+        installationRow.Controls.Add(cmbInstallations, 1, 0);
+        installationRow.Controls.Add(btnFindGames, 2, 0);
+        installationRow.Controls.Add(btnBrowseGame, 3, 0);
+        gameRow.Controls.Add(lblGameProfile, 0, 0);
+        gameRow.Controls.Add(cmbGameProfile, 1, 0);
+        gameRow.Controls.Add(lblDetectedGameCaption, 2, 0);
+        gameRow.Controls.Add(lblDetectedGame, 3, 0);
+        contextBlock.Controls.Add(lblActiveVariantCaption, 0, 0);
+        contextBlock.Controls.Add(cmbActiveVariant, 1, 0);
+        contextBlock.Controls.Add(lblActiveProjectCaption, 0, 1);
+        contextBlock.Controls.Add(cmbActiveProject, 1, 1);
+        rightHeader.Controls.AddRange(new Control[] { lblLanguageCaption, cmbUiLanguage, btnHelp, btnAbout });
+        globalBar.Controls.Add(installationRow, 0, 0);
+        globalBar.SetColumnSpan(installationRow, 2);
+        globalBar.Controls.Add(rightHeader, 2, 0);
+        globalBar.SetColumnSpan(rightHeader, 2);
+        globalBar.Controls.Add(gameRow, 0, 1);
+        globalBar.Controls.Add(contextBlock, 1, 1);
+        globalBar.SetColumnSpan(contextBlock, 2);
+        globalBar.Controls.Add(btnBuildActiveVariant, 3, 1);
+
+        var navigation = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 42,
+            Padding = new Padding(0, 4, 0, 0),
+            WrapContents = false,
+            AutoScroll = true
+        };
+
+        // Permanent mode navigation stays immediately below the global installation header.
         ConfigureModeButton(btnSpriteEditor);
         ConfigureModeButton(btnTextEditor);
         ConfigureModeButton(btnFontEditor);
 
         btnSpriteEditor.Text = UiText.Get("SpriteEditor");
-        btnSpriteEditor.SetBounds(925, 41, 115, 28);
+        btnSpriteEditor.AutoSize = false;
+        btnSpriteEditor.Width = 105;
+        ConfigureCenteredButton(btnSpriteEditor);
         btnSpriteEditor.Click += (_, _) => SwitchMode(tabVga);
 
         btnTextEditor.Text = UiText.Get("OpenTextEditor");
-        btnTextEditor.SetBounds(1045, 41, 110, 28);
+        btnTextEditor.AutoSize = false;
+        btnTextEditor.Width = 105;
+        ConfigureCenteredButton(btnTextEditor);
         btnTextEditor.Click += (_, _) =>
         {
             LoadGamePcTexts();
@@ -1024,40 +2524,150 @@ LoadGamePcTexts();
         };
 
         btnFontEditor.Text = UiText.Get("FontEditor");
-        btnFontEditor.SetBounds(1160, 41, 105, 28);
+        btnFontEditor.AutoSize = false;
+        btnFontEditor.Width = 105;
+        ConfigureCenteredButton(btnFontEditor);
         btnFontEditor.Click += (_, _) =>
         {
             EnsureEmbeddedFontEditor();
+            BindFontEditorToActiveVariant(showMissingError: true);
             SwitchMode(tabFont);
         };
 
-        btnAbout.Text = UiText.Get("About");
-        btnAbout.SetBounds(1270, 41, 90, 28);
-        btnAbout.Click += (_, _) =>
-            MessageBox.Show(
-                UiText.Get("AboutText"),
-                UiText.Get("AppTitle"),
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+        ConfigureModeButton(btnModsLauncher);
+        btnModsLauncher.Text = UiText.Get("ModsLauncherTab");
+        btnModsLauncher.UseMnemonic = false;
+        btnModsLauncher.AutoSize = false;
+        btnModsLauncher.Width = 205;
+        ConfigureCenteredButton(btnModsLauncher);
+        btnModsLauncher.Click += (_, _) =>
+        {
+            OpenModsLauncher();
+            SwitchMode(tabMods);
+        };
 
-        lblStatus.Dock = DockStyle.Bottom;
-        lblStatus.Height = 28;
-        lblStatus.Padding = new Padding(6, 6, 0, 0);
+        navigation.Controls.AddRange(new Control[] { btnSpriteEditor, btnTextEditor, btnFontEditor, btnModsLauncher });
+
+        lblVgaFileCaption.Text = UiText.Get("VgaFile");
+        ConfigureComboLabel(lblVgaFileCaption, 78);
+        cmbZone.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbZone.Width = 160;
+        cmbZone.SelectedIndexChanged += (_, _) => LoadSelectedZone();
+        btnReload.Text = UiText.Get("Refresh");
+        btnReload.Width = 100;
+        ConfigureCenteredButton(btnReload);
+        btnReload.Click += (_, _) => ScanGameFolder();
+        lblPaletteCaption.Text = UiText.Get("Palette");
+        ConfigureComboLabel(lblPaletteCaption, 58);
+        lblPaletteMode.AutoSize = false;
+        lblPaletteMode.Dock = DockStyle.Fill;
+        lblPaletteMode.TextAlign = ContentAlignment.MiddleLeft;
+        lblPaletteMode.BorderStyle = BorderStyle.Fixed3D;
+        cmbPaletteManual.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbPaletteManual.DrawMode = DrawMode.OwnerDrawFixed;
+        cmbPaletteManual.ItemHeight = 22;
+        cmbPaletteManual.DropDownWidth = 330;
+        cmbPaletteManual.DrawItem += DrawPaletteChoice;
+        cmbPaletteManual.Dock = DockStyle.Fill;
+        cmbPaletteManual.Visible = false;
+        cmbPaletteManual.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_updatingPaletteControl && cmbPaletteManual.SelectedItem is PalettePreviewChoice choice)
+            {
+                ClearStaleGraphicsError();
+                ApplyPaletteChoice(choice.BankIndex);
+            }
+        };
+        panelPaletteSelector.Size = new Size(150, 28);
+        panelPaletteSelector.Controls.Add(lblPaletteMode);
+        panelPaletteSelector.Controls.Add(cmbPaletteManual);
+        panelPaletteSwatches.Size = new Size(170, 22);
+        panelPaletteSwatches.Paint += DrawEffectivePaletteSwatches;
+        panelPaletteSwatches.MouseMove += ShowPaletteSwatchTooltip;
+        btnPaletteAdvanced.Text = UiText.Get("PaletteAdvanced");
+        btnPaletteAdvanced.Width = 105;
+        ConfigureCenteredButton(btnPaletteAdvanced);
+        btnPaletteAdvanced.Click += (_, _) => TogglePaletteAdvanced();
+        chkPixelPerfect.Text = UiText.Get("PixelPerfect");
+        chkPixelPerfect.AutoSize = true;
+        chkPixelPerfect.TextAlign = ContentAlignment.MiddleLeft;
+        chkPixelPerfect.Checked = true;
+        chkPixelPerfect.CheckedChanged += (_, _) =>
+        {
+            preview.PixelPerfect = chkPixelPerfect.Checked;
+            ApplyPreviewZoom();
+            preview.Invalidate();
+        };
+        statusBar.Dock = DockStyle.Fill;
+        statusBar.AutoSize = false;
+        statusBar.Height = 30;
+        statusBar.SizingGrip = false;
+        statusBar.Items.Clear();
+        lblStatus.Spring = true;
+        lblStatus.AutoSize = false;
+        lblStatus.AutoToolTip = true;
         lblStatus.TextAlign = ContentAlignment.MiddleLeft;
+        lblStatus.Padding = new Padding(6, 4, 6, 4);
+        statusBar.Items.Add(lblStatus);
 
-        top.Controls.AddRange(new Control[] { txtGameDir, btnBrowseGame, lblGameProfile, cmbGameProfile, lblDetectedGame, zoneLabel, cmbZone, btnReload, lblPaletteCaption, cmbPalette, lblLanguageCaption, cmbUiLanguage, chkZoom, btnSpriteEditor, btnTextEditor, btnFontEditor, btnAbout });
-        Controls.Add(top);
-        top.BringToFront();
-
+        top.Controls.Add(navigation);
+        top.Controls.Add(globalBar);
         mainSplit.Dock = DockStyle.Fill;
         mainSplit.Orientation = Orientation.Vertical;
         mainSplit.SplitterWidth = 6;
         mainSplit.Panel1MinSize = 0;
         mainSplit.Panel2MinSize = 0;
-        tabVga.Text = UiText.Get("VgaTab");
-        tabVga.Controls.Add(mainSplit);
-        tabVga.Controls.Add(lblStatus);
-        lblStatus.BringToFront();
+        tabVga.Text = UiText.Get("Graphics");
+        var graphicsToolbar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 38,
+            Padding = new Padding(8, 0, 8, 0),
+            ColumnCount = 11,
+            RowCount = 1
+        };
+        _graphicsToolbar = graphicsToolbar;
+        // Keep the edition-scope wording readable at common DPI settings while
+        // preserving the compact, single-row graphics toolbar.
+        foreach (int width in new[] { 78, 160, 112, 58, 140, 145, 109, 105, 110, 220 })
+            graphicsToolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, width));
+        graphicsToolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 185));
+        foreach (Control control in new Control[] { lblVgaFileCaption, cmbZone, btnReload, lblPaletteCaption, panelPaletteSelector, panelPaletteSwatches, btnPaletteAdvanced, chkPixelPerfect, lblGraphicsVariant, cmbGraphicsScope, btnSaveGraphicsProject })
+            control.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        cmbZone.Margin = new Padding(0);
+        btnReload.Margin = new Padding(4, 0, 8, 0);
+        panelPaletteSelector.Margin = new Padding(0);
+        btnPaletteAdvanced.Margin = new Padding(4, 0, 0, 0);
+        chkPixelPerfect.Margin = new Padding(8, 0, 0, 0);
+        lblGraphicsVariant.Text = "—";
+        lblGraphicsVariant.AutoSize = false;
+        lblGraphicsVariant.TextAlign = ContentAlignment.MiddleLeft;
+        cmbGraphicsScope.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbGraphicsScope.DropDownWidth = 300;
+        cmbGraphicsScope.Items.AddRange(new object[] { UiText.Get("Graphics.ScopeEdition"), UiText.Get("Graphics.CurrentRuntimeOnly"), UiText.Get("Graphics.ReadOnlyBaseline") });
+        cmbGraphicsScope.SelectedIndex = -1;
+        cmbGraphicsScope.SelectedIndexChanged += (_, _) => UpdateGraphicsProjectPresentation();
+        btnSaveGraphicsProject.Text = UiText.Get("SaveToProject");
+        btnSaveGraphicsProject.Anchor = AnchorStyles.Left;
+        btnSaveGraphicsProject.Width = 175;
+        btnSaveGraphicsProject.Margin = new Padding(4, 0, 0, 0);
+        btnSaveGraphicsProject.Click += (_, _) => SaveGraphicsProjectState();
+        ConfigureCenteredButton(btnSaveGraphicsProject);
+        graphicsToolbar.Controls.Add(lblVgaFileCaption, 0, 0);
+        graphicsToolbar.Controls.Add(cmbZone, 1, 0);
+        graphicsToolbar.Controls.Add(btnReload, 2, 0);
+        graphicsToolbar.Controls.Add(lblPaletteCaption, 3, 0);
+        graphicsToolbar.Controls.Add(panelPaletteSelector, 4, 0);
+        graphicsToolbar.Controls.Add(panelPaletteSwatches, 5, 0);
+        graphicsToolbar.Controls.Add(btnPaletteAdvanced, 6, 0);
+        graphicsToolbar.Controls.Add(chkPixelPerfect, 7, 0);
+        graphicsToolbar.Controls.Add(lblGraphicsVariant, 8, 0);
+        graphicsToolbar.Controls.Add(cmbGraphicsScope, 9, 0);
+        graphicsToolbar.Controls.Add(btnSaveGraphicsProject, 10, 0);
+        var vgaHost = new Panel { Dock = DockStyle.Fill, Padding = Padding.Empty };
+        vgaHost.Controls.Add(mainSplit);
+        vgaHost.Controls.Add(graphicsToolbar);
+        tabVga.Controls.Add(vgaHost);
 
         tabText.Text = UiText.Get("TextTab");
         BuildTextEditorUi();
@@ -1067,6 +2677,11 @@ LoadGamePcTexts();
         BuildModsLauncherUi();
 
         tabs.Dock = DockStyle.Fill;
+        // The application-level navigation is the only visible page selector.
+        // Keep the TabControl strictly as the page host so it does not duplicate it.
+        tabs.Appearance = TabAppearance.FlatButtons;
+        tabs.ItemSize = new Size(0, 1);
+        tabs.SizeMode = TabSizeMode.Fixed;
         tabs.TabPages.Add(tabVga);
         tabs.TabPages.Add(tabText);
         tabs.TabPages.Add(tabFont);
@@ -1076,7 +2691,10 @@ LoadGamePcTexts();
             if (tabs.SelectedTab == tabMods) OpenModsLauncher();
             UpdateModeButtons();
         };
-        Controls.Add(tabs);
+        root.Controls.Add(top, 0, 0);
+        root.Controls.Add(tabs, 0, 1);
+        root.Controls.Add(statusBar, 0, 2);
+        Controls.Add(root);
 
         grid.Dock = DockStyle.Fill;
         grid.AllowUserToAddRows = false;
@@ -1101,7 +2719,16 @@ LoadGamePcTexts();
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Flags", HeaderText = "Flags", Width = 70 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Edit", HeaderText = "Edit", Width = 70 });
 
-        grid.SelectionChanged += (_, _) => ShowSelectedPreview();
+        grid.SelectionChanged += (_, _) =>
+        {
+            if (_refreshingGraphicsGrid) return;
+            // A Basic/Automatic Elvira I preview is image-specific. Manual
+            // selection remains intact and still has precedence.
+            if (_manualPaletteBank is null) UpdatePalettePresentation();
+            UpdateGraphicsProjectPresentation();
+            UpdateGraphicsActionState();
+            ShowSelectedPreview();
+        };
         grid.MouseEnter += (_, _) => grid.Focus();
         grid.KeyDown += (_, e) =>
         {
@@ -1128,16 +2755,8 @@ LoadGamePcTexts();
             }
         };
 
-        var gridTopHost = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 75,
-            BackColor = SystemColors.Control
-        };
-
-mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
+        mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         mainSplit.Panel1.Controls.Add(grid);
-        mainSplit.Panel1.Controls.Add(gridTopHost);
 
         var right = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
         mainSplit.Panel2.Controls.Add(right);
@@ -1168,7 +2787,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         btnReloadPreview.SetBounds(162, 5, 90, 26);
         cmbPreviewZoom.Items.AddRange(new object[]
         {
-            "Fit", "100%", "200%", "300%", "400%", "600%", "800%"
+            UiText.Get("Graphics.Fit"), "100%", "200%", "300%", "400%", "600%", "800%"
         });
         cmbPreviewZoom.SelectedIndex = 0;
         cmbPreviewZoom.SelectedIndexChanged += (_, _) => ApplyPreviewZoom();
@@ -1193,6 +2812,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(4)
         };
+        _graphicsActionRow = buttons;
 
         btnReplace.Text = UiText.Get("ReplacePng");
         btnClearEdit.Text = UiText.Get("CancelEdit");
@@ -1203,19 +2823,24 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         btnReplace.Width = 120;
         btnClearEdit.Width = 100;
         btnExport.Width = 110;
-        btnDeploy.Width = 150;
         btnRestore.Width = 130;
+        foreach (Button button in new[] { btnReplace, btnClearEdit, btnExport, btnRestore })
+            ConfigureCenteredButton(button);
 
         btnReplace.Click += (_, _) => ReplaceSelected();
         btnClearEdit.Click += (_, _) => ClearSelectedEdit();
         btnExport.Click += (_, _) => ExportSelected();
-        btnDeploy.Click += (_, _) => Deploy();
         btnRestore.Click += (_, _) => RestoreOriginal();
 
-        buttons.Controls.AddRange(new Control[] { btnReplace, btnClearEdit, btnExport, btnDeploy, btnRestore });
+        // Directly writing a VGA file in pristine GameRoot conflicts with the
+        // project -> build variant workflow. Keep the old private helper only
+        // for legacy source compatibility; it is not a normal UI action.
+        btnDeploy.Enabled = false;
+        btnDeploy.Visible = false;
+        buttons.Controls.AddRange(new Control[] { btnReplace, btnClearEdit, btnExport, btnRestore });
 
         previewViewport.Dock = DockStyle.Fill;
-        previewViewport.Padding = new Padding(0, 75, 0, 0);
+        previewViewport.Padding = Padding.Empty;
         previewViewport.BackColor = Color.FromArgb(40, 40, 40);
         previewViewport.Controls.Add(previewScroll);
 
@@ -1223,6 +2848,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         right.Controls.Add(zoomBar);
         right.Controls.Add(lblMeta);
         right.Controls.Add(buttons);
+        UpdateGraphicsActionState();
     }
 
     private static void ConfigureModeButton(Button button)
@@ -1230,11 +2856,17 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderSize = 1;
         button.UseVisualStyleBackColor = false;
+        button.TextAlign = ContentAlignment.MiddleCenter;
     }
 
     private void SwitchMode(TabPage target)
     {
         tabs.SelectedTab = target;
+        // TabControl can retain stale pixels when a borderless embedded Form is
+        // activated over a data grid. Force the newly active page to repaint.
+        target.PerformLayout();
+        target.Invalidate(true);
+        target.Update();
         UpdateModeButtons();
     }
 
@@ -1243,14 +2875,34 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         SetModeButtonState(btnSpriteEditor, tabs.SelectedTab == tabVga);
         SetModeButtonState(btnTextEditor, tabs.SelectedTab == tabText);
         SetModeButtonState(btnFontEditor, tabs.SelectedTab == tabFont);
+        SetModeButtonState(btnModsLauncher, tabs.SelectedTab == tabMods);
     }
 
-    private static void SetModeButtonState(Button button, bool active)
+    private void SetModeButtonState(Button button, bool active)
     {
         button.BackColor = active ? SystemColors.Highlight : SystemColors.Control;
         button.ForeColor = active ? SystemColors.HighlightText : SystemColors.ControlText;
         button.FlatAppearance.BorderColor = active ? SystemColors.Highlight : SystemColors.ControlDark;
-        button.Font = new Font(button.Font, active ? FontStyle.Bold : FontStyle.Regular);
+        if (!_modeButtonFonts.TryGetValue(button, out ModeButtonFonts? fonts))
+        {
+            FontStyle regularStyle = button.Font.Style & ~FontStyle.Bold;
+            fonts = new ModeButtonFonts(new Font(button.Font, regularStyle), new Font(button.Font, regularStyle | FontStyle.Bold));
+            _modeButtonFonts.Add(button, fonts);
+        }
+        button.Font = active ? fonts.Bold : fonts.Regular;
+    }
+
+    private void DisposePresentationResources()
+    {
+        foreach (ModeButtonFonts fonts in _modeButtonFonts.Values) fonts.Dispose();
+        _modeButtonFonts.Clear();
+        _statusRegularFont?.Dispose();
+        _statusEmphasisFont?.Dispose();
+        _variantMissingFont?.Dispose();
+        _statusInfoImage?.Dispose();
+        _statusSuccessImage?.Dispose();
+        _statusWarningImage?.Dispose();
+        _statusErrorImage?.Dispose();
     }
 
     private void EnsureEmbeddedFontEditor()
@@ -1266,28 +2918,72 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
             MinimumSize = Size.Empty,
             StartPosition = FormStartPosition.Manual
         };
-        _embeddedFontEditor.GameExecutableOpened += SynchronizeGameContextFromExecutable;
-
-        // The application's permanent navigation/header overlays the first ~78 px of
-        // the hidden TabControl page area.  VGA/Text already compensate for this.
-        // Host the embedded font editor below the same header so its own Game EXE /
-        // Apply / Import / Export toolbar remains fully visible.
+        // The root layout gives the global header and the active page separate rows.
+        // The embedded editor can therefore occupy the page row without compensating padding.
         var fontHost = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(0, 78, 0, 0)
+            Padding = Padding.Empty,
+            BackColor = SystemColors.Control
         };
         fontHost.Controls.Add(_embeddedFontEditor);
 
         tabFont.Controls.Clear();
         tabFont.Controls.Add(fontHost);
         _embeddedFontEditor.Show();
+        BindFontEditorToActiveVariant(showMissingError: false);
+        tabFont.Invalidate(true);
     }
+
+    // Legacy VariantEntry metadata describes editable GAMEPC* translation files.
+    // It is deliberately not the global runtime selection.
+    private VariantEntry? ActiveDataFileVariant =>
+        _variantCatalog?.FindByDataFile(Path.GetFileName(_currentDataFilePath ?? string.Empty));
+
+    private VariantEntry? ActiveFontVariantEntry => _activeVariant is null
+        ? null
+        : new VariantEntry(_activeVariant.DisplayName, _activeVariant.LogicalDataFileName, true, 0,
+            _activeVariant.DirectoryKey, _activeVariant.SourceExecutableName);
+
+    private void BindFontEditorToActiveVariant(bool showMissingError)
+    {
+        if (_embeddedFontEditor is null || _embeddedFontEditor.IsDisposed || _variantCatalog is null || _activeProject is null || _activeVariant is null) return;
+        FontBindCount++;
+        VariantEntry? variant = ActiveFontVariantEntry;
+        if (variant is null) return;
+        _embeddedFontEditor.BindVariant(variant, _variantCatalog.InstallationDirectory, showMissingError);
+        _embeddedFontEditor.BindProjectVariant(_activeProject, _activeVariant, _activeTranslationCode);
+    }
+
+    private bool ConfirmFontVariantTargetChange(VariantEntry? nextVariant)
+    {
+        if (!RequiresFontVariantDiscardConfirmation(ActiveDataFileVariant, nextVariant, _embeddedFontEditor?.HasPendingEditedGlyphs == true))
+            return true;
+        return MessageBox.Show(this,
+            string.Format(UiText.Get("VariantFontChangeDiscardWarning"), nextVariant!.DisplayName),
+            UiText.Get("Warning"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+    }
+
+    internal static bool RequiresFontVariantDiscardConfirmation(VariantEntry? current, VariantEntry? next, bool hasPendingFontEdits) =>
+        hasPendingFontEdits && current is not null && next is not null &&
+        !current.ExeFile.Equals(next.ExeFile, StringComparison.OrdinalIgnoreCase);
 
     private void SynchronizeGameContextFromExecutable(string executablePath, ElviraGame game)
     {
         string? directory = Path.GetDirectoryName(Path.GetFullPath(executablePath));
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
+        if (_applyingInstallation || directory.Equals(txtGameDir.Text, StringComparison.OrdinalIgnoreCase))
+        {
+            _detectedProfile = game == ElviraGame.Elvira2 ? ElviraGameProfile.Elvira2 : ElviraGameProfile.Elvira1;
+            UpdateGameProfileDisplay();
+            return;
+        }
+        if (GameInstallationValidator.TryValidate(directory, InstallationDiscoverySource.Manual, out GameInstallation? installation) && installation is not null)
+        {
+            AddInstallation(installation);
+            ApplyInstallation(installation, persist: true);
+            return;
+        }
         txtGameDir.Text = directory;
         _currentDataFilePath = null;
         _variantCatalog = null;
@@ -1314,129 +3010,61 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
 
     private void UpdateGameProfileDisplay()
     {
+        if (_activeProject is null)
+        {
+            lblDetectedGame.Text = UiText.Get(UiLocalizationKeys.NoGameSelected);
+            installationToolTip.SetToolTip(lblDetectedGame, lblDetectedGame.Text);
+            lblDetectedGame.ForeColor = SystemColors.ControlText;
+            UpdateTextOverview();
+            UpdateRuntimeColumnVisibility();
+            UpdateTextValidation();
+            return;
+        }
         var active = ActiveGameProfile;
         var info = GameProfileInfo.For(active);
         string mode = cmbGameProfile.SelectedIndex == 0 ? UiText.Get("Detected") : UiText.Get("Selected");
         lblDetectedGame.Text = $"{mode}: {info.DisplayName}";
+        installationToolTip.SetToolTip(lblDetectedGame, lblDetectedGame.Text);
         lblDetectedGame.ForeColor = active == ElviraGameProfile.Unknown ? Color.DarkOrange : SystemColors.ControlText;
+        UpdateTextOverview();
+        UpdateRuntimeColumnVisibility();
         UpdateTextValidation();
+    }
+
+    private void UpdateRuntimeColumnVisibility()
+    {
+        if (!textGrid.Columns.Contains("DosLimit")) return;
+        textGrid.Columns["DosLimit"].Visible = false;
     }
 
     private void UpdateTextValidation()
     {
         if (lblTextValidation.IsDisposed) return;
-        if (textGrid.CurrentRow?.Tag is not GamePcStringEntry entry)
+        if (textGrid.CurrentRow?.Tag is not GamePcStringEntry)
         {
             lblTextValidation.Text = string.Empty;
             return;
         }
 
-        string text = textGrid.CurrentRow.Cells["Text"].Value?.ToString() ?? string.Empty;
+        string text = textGrid.CurrentRow.Cells["Translation"].Value?.ToString() ?? string.Empty;
         var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
         int bytes = enc.GetByteCount(text);
-        var profile = GameProfileInfo.For(ActiveGameProfile);
-
-        _updatingIgnoreCheck = true;
-        chkIgnoreTextWarning.Enabled = ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0;
-        chkIgnoreTextWarning.Checked = _textDiagnosticStore?.IsIgnored(entry.Index) == true;
-        _updatingIgnoreCheck = false;
-
-        if (ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0)
-        {
-            var d = Elvira1TextMetadata.Evaluate(entry.Index, text, enc, _textDiagnosticStore?.IsIgnored(entry.Index) == true);
-            lblTextValidation.ForeColor = d.Kind switch
-            {
-                TextDiagnosticKind.ConfirmedRisk => Color.DarkRed,
-                TextDiagnosticKind.PossibleRisk => Color.DarkOrange,
-                TextDiagnosticKind.ConfirmedSafe => Color.DarkGreen,
-                TextDiagnosticKind.Ignored => Color.DimGray,
-                _ => SystemColors.ControlText
-            };
-            lblTextValidation.Text = d.Kind switch
-            {
-                TextDiagnosticKind.ConfirmedRisk => string.Format(UiText.Get("ConfirmedRiskDetail"), d.Bytes, d.Limit, d.OverBy),
-                TextDiagnosticKind.PossibleRisk => string.Format(UiText.Get("PossibleRiskDetail"), d.Bytes, d.Limit, d.OverBy),
-                TextDiagnosticKind.ConfirmedSafe => string.Format(UiText.Get("ConfirmedSafeDetail"), d.Bytes, d.Context),
-                TextDiagnosticKind.Ignored => string.Format(UiText.Get("IgnoredDetail"), d.Bytes),
-                _ => string.Format(UiText.Get("BytesOnly"), d.Bytes)
-            };
-            textToolTip.SetToolTip(lblTextValidation, BuildDiagnosticTooltip(d, text));
-            return;
-        }
-
-        if (cmbTextContext.SelectedIndex != 2)
-        {
-            lblTextValidation.ForeColor = SystemColors.ControlText;
-            lblTextValidation.Text = string.Format(UiText.Get("BytesOnly"), bytes);
-            return;
-        }
-
-        if (profile.InteractiveDialogueByteLimit is not int limit)
-        {
-            lblTextValidation.ForeColor = SystemColors.ControlText;
-            lblTextValidation.Text = string.Format(UiText.Get("DialogueLimitUnknown"), profile.DisplayName);
-            return;
-        }
-
-        var sim = DialogueLimitValidator.Simulate(text, enc, limit);
-        if (bytes <= limit)
-        {
-            lblTextValidation.ForeColor = Color.DarkGreen;
-            lblTextValidation.Text = string.Format(UiText.Get("DialogueLimitOk"), bytes, limit);
-        }
-        else
-        {
-            lblTextValidation.ForeColor = Color.DarkRed;
-            lblTextValidation.Text = string.Format(UiText.Get("DialogueLimitExceeded"), bytes, limit, bytes - limit, sim.TruncatedText.Length);
-            textToolTip.SetToolTip(lblTextValidation, $"{UiText.Get("DialogueVisible")}: {sim.VisibleText}\n\n{UiText.Get("DialogueTruncated")}: {sim.TruncatedText}");
-        }
-    }
-
-    private static string BuildDiagnosticTooltip(TextDiagnosticResult d, string fullText)
-    {
-        if (d.Kind is TextDiagnosticKind.ConfirmedRisk or TextDiagnosticKind.PossibleRisk)
-            return $"{d.Confidence} | {d.Context}\n{UiText.Get("DialogueVisible")}: {d.VisibleText}\n\n{UiText.Get("DialogueTruncated")}: {d.ClippedText}";
-        return $"{d.Confidence} | {d.Context}\n{fullText}";
+        lblTextValidation.ForeColor = SystemColors.ControlText;
+        lblTextValidation.Text = string.Format(UiText.Get("BytesOnly"), bytes);
+        textToolTip.SetToolTip(lblTextValidation, text);
     }
 
     private string BuildDialogueTooltip(GamePcStringEntry entry, string text)
     {
         var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
-        if (ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0)
-        {
-            var d = Elvira1TextMetadata.Evaluate(entry.Index, text, enc, _textDiagnosticStore?.IsIgnored(entry.Index) == true);
-            return BuildDiagnosticTooltip(d, text);
-        }
-
         int bytes = enc.GetByteCount(text);
-        var profile = GameProfileInfo.For(ActiveGameProfile);
-        if (cmbTextContext.SelectedIndex != 2 || profile.InteractiveDialogueByteLimit is not int limit)
-            return $"{bytes} {UiText.Get("Bytes").ToLowerInvariant()} | {text}";
-
-        var sim = DialogueLimitValidator.Simulate(text, enc, limit);
-        if (bytes <= limit) return string.Format(UiText.Get("DialogueLimitOk"), bytes, limit) + $"\n\n{text}";
-        return string.Format(UiText.Get("DialogueLimitExceeded"), bytes, limit, bytes - limit, sim.TruncatedText.Length) +
-               $"\n\n{UiText.Get("DialogueVisible")}: {sim.VisibleText}\n\n{UiText.Get("DialogueTruncated")}: {sim.TruncatedText}";
+        return $"{bytes} {UiText.Get("Bytes").ToLowerInvariant()} | {text}";
     }
 
     private void UpdateTextStatusSummary()
     {
         if (_gamePcEntries.Count == 0) return;
-        string baseText = string.Format(UiText.Get("StringsCount"), Path.GetFileName(CurrentDataFilePath), _gamePcEntries.Count);
-        if (ActiveGameProfile == ElviraGameProfile.Elvira1 && cmbTextContext.SelectedIndex == 0)
-        {
-            var enc = GamePcTextEditor.GetEncoding(cmbTextEncoding.SelectedItem?.ToString() ?? "CP852");
-            int confirmed = 0, possible = 0;
-            foreach (var entry in _gamePcEntries)
-            {
-                string value = _gamePcEdits.TryGetValue(entry.Index, out var edited) ? edited : entry.Decode(enc);
-                var d = Elvira1TextMetadata.Evaluate(entry.Index, value, enc, _textDiagnosticStore?.IsIgnored(entry.Index) == true);
-                if (d.Kind == TextDiagnosticKind.ConfirmedRisk) confirmed++;
-                else if (d.Kind == TextDiagnosticKind.PossibleRisk) possible++;
-            }
-            baseText += " | " + string.Format(UiText.Get("RiskSummary"), confirmed, possible);
-        }
-        lblTextStatus.Text = baseText;
+        lblTextStatus.Text = string.Format(UiText.Get("StringsCount"), Path.GetFileName(CurrentDataFilePath), _gamePcEntries.Count);
     }
 
     private void SelectTextEntry(int index)
@@ -1450,50 +3078,297 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
             {
                 textGrid.ClearSelection();
                 row.Selected = true;
-                if (!row.Cells["Text"].Selected)
-                    textGrid.CurrentCell = row.Cells["Text"];
+                if (!row.Cells["Translation"].Selected)
+                    textGrid.CurrentCell = row.Cells["Translation"];
                 break;
             }
         }
     }
 
-    private static string LocalizedProfileNote(ElviraGameProfile profile)
+    private static string LocalizedProfileNote(ElviraGameProfile profile) => profile switch
     {
-        return (UiText.Language, profile) switch
-        {
-            (UiLanguage.Slovak, ElviraGameProfile.Elvira1) => "Pôvodná DOS cesta interaktívneho NPC dialógu má pozorovaný 96-bajtový CP852 limit, ktorý rešpektuje hranice slov. Nie je to globálny limit GAMEPC.",
-            (UiLanguage.Czech, ElviraGameProfile.Elvira1) => "Původní DOS cesta interaktivního NPC dialogu má pozorovaný 96bajtový CP852 limit respektující hranice slov. Nejde o globální limit GAMEPC.",
-            (_, ElviraGameProfile.Elvira1) => "The original DOS interactive NPC dialogue path has an observed 96-byte CP852 word-aware limit. This is not a global GAMEPC limit.",
-            (UiLanguage.Slovak, ElviraGameProfile.Elvira2) => "Pre Elviru II zatiaľ nepredpokladáme rovnaký limit ako v Elvire I; upozornenie zostáva informačné, kým sa limit experimentálne nepotvrdí.",
-            (UiLanguage.Czech, ElviraGameProfile.Elvira2) => "Pro Elviru II zatím nepředpokládáme stejný limit jako v Elviře I; upozornění zůstává informační, dokud se limit experimentálně nepotvrdí.",
-            (_, ElviraGameProfile.Elvira2) => "Elvira II is not assumed to share Elvira I's dialogue limit; validation remains informational until proven.",
-            _ => string.Empty
-        };
-    }
+        ElviraGameProfile.Elvira1 => UiText.Get("Text.ProfileNote.Elvira1"),
+        ElviraGameProfile.Elvira2 => UiText.Get("Text.ProfileNote.Elvira2"),
+        _ => string.Empty
+    };
 
     private void BrowseGame()
     {
-        using var dlg = new FolderBrowserDialog { SelectedPath = txtGameDir.Text };
-        if (dlg.ShowDialog(this) == DialogResult.OK)
+        using var dlg = new FolderBrowserDialog { SelectedPath = Directory.Exists(txtGameDir.Text) ? txtGameDir.Text : string.Empty };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        if (!GameInstallationValidator.TryValidate(dlg.SelectedPath, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
         {
-            txtGameDir.Text = dlg.SelectedPath;
+            MessageBox.Show(this, UiText.Get("InvalidGameFolder"), UiText.Get("UnsupportedInstallation"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (!ConfirmInstallationChange(installation.InstallationPath)) return;
+        AddInstallation(installation);
+        ApplyInstallation(installation, persist: true);
+    }
+
+    private void InitializeInstallations()
+    {
+        // Discovery is intentionally an explicit user action.  Do not restore
+        // the last installation, select a singleton result, or create context.
+        _installations.Clear();
+        RefreshInstallationSelector();
+        ClearInstallationState();
+    }
+
+    private void FindGames()
+    {
+        Cursor? previous = Cursor.Current;
+        try
+        {
+            Cursor.Current = Cursors.WaitCursor;
+            IReadOnlyList<GameInstallation> found = InstallationDiscoveryService.DiscoverFast(_installations.Select(item => item.InstallationPath));
+            foreach (GameInstallation installation in found) AddInstallation(installation, refresh: false);
+            RefreshInstallationSelector();
+            PersistInstallations();
+            string message = found.Count switch
+            {
+                0 => UiText.Get("NoSupportedInstallationFound"),
+                1 => UiText.Get("OneSupportedInstallationFound"),
+                _ => string.Format(UiText.Get("ManySupportedInstallationsFound"), found.Count)
+            };
+            MessageBox.Show(this, message, UiText.Get("FindGames"), MessageBoxButtons.OK,
+                found.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.None);
+        }
+        finally { if (previous is not null) Cursor.Current = previous; }
+    }
+
+    private GameInstallation? SelectedInstallation => (cmbInstallations.SelectedItem as InstallationSelectionItem)?.Installation;
+
+    private void AddInstallation(GameInstallation installation, bool refresh = true)
+    {
+        int existing = _installations.FindIndex(item => item.NormalizedPath.Equals(installation.NormalizedPath, StringComparison.OrdinalIgnoreCase));
+        if (existing >= 0) _installations[existing] = installation;
+        else _installations.Add(installation);
+        if (refresh) RefreshInstallationSelector(txtGameDir.Text);
+    }
+
+    private void RefreshInstallationSelector(string? selectedPath = null)
+    {
+        _refreshingInstallationSelector = true;
+        try
+        {
+            string? selected = string.IsNullOrWhiteSpace(selectedPath) ? null : InstallationPathNormalizer.Normalize(selectedPath);
+            cmbInstallations.BeginUpdate();
+            cmbInstallations.Items.Clear();
+            foreach (GameInstallation installation in _installations.OrderBy(item => item.Game).ThenBy(item => item.InstallationPath, StringComparer.OrdinalIgnoreCase))
+                cmbInstallations.Items.Add(new InstallationSelectionItem(installation));
+            int selectedIndex = selected is null ? -1 : Enumerable.Range(0, cmbInstallations.Items.Count)
+                .FirstOrDefault(index => cmbInstallations.Items[index] is InstallationSelectionItem { Installation: { } installation } &&
+                    installation.NormalizedPath.Equals(selected, StringComparison.OrdinalIgnoreCase));
+            if (selected is not null && selectedIndex == 0 && (cmbInstallations.Items.Count == 0 || cmbInstallations.Items[0] is not InstallationSelectionItem { Installation: { } first } || !first.NormalizedPath.Equals(selected, StringComparison.OrdinalIgnoreCase)))
+                selectedIndex = -1;
+            cmbInstallations.SelectedIndex = selectedIndex;
+            cmbInstallations.EndUpdate();
+            installationToolTip.SetToolTip(cmbInstallations, SelectedInstallation?.InstallationPath ?? UiText.Get("InstallationPathTooltip"));
+        }
+        finally { _refreshingInstallationSelector = false; }
+    }
+
+    private void InstallationSelectionChanged()
+    {
+        if (_refreshingInstallationSelector) return;
+        ApplyInstallationSelection(SelectedInstallation);
+    }
+
+    private void ApplyInstallationSelection(GameInstallation? selected)
+    {
+        if (selected is null)
+        {
+            if (string.IsNullOrWhiteSpace(txtGameDir.Text)) return;
+            if (!ConfirmInstallationChange(null)) { RefreshInstallationSelector(txtGameDir.Text); return; }
+            ClearInstallationState();
+            PersistInstallations();
+            return;
+        }
+        // The sentinel clears txtGameDir. It is not a filesystem installation, so
+        // selecting a real installation afterwards must apply it directly rather
+        // than attempting to normalize that deliberately empty UI state.
+        if (InstallationSelectionState.IsSameActiveInstallation(selected, txtGameDir.Text)) return;
+        if (!ConfirmInstallationChange(selected.InstallationPath)) { RefreshInstallationSelector(txtGameDir.Text); return; }
+        ApplyInstallation(selected, persist: true);
+    }
+
+    private bool ConfirmInstallationChange(string? destination)
+    {
+        bool fontEdits = _embeddedFontEditor?.HasPendingEditedGlyphs == true;
+        // `_edits` is the currently displayed graphics projection. It includes
+        // saved edition edits, so it is not a dirty-state source.
+        if (!HasUnsavedTextChanges && !_runtimeUiDirty && !_graphicsProjectDirty && !fontEdits) return true;
+        string target = destination ?? UiText.Get("NoSupportedGameSelected");
+        return MessageBox.Show(this, string.Format(UiText.Get("InstallationChangeDiscardWarning"), target), UiText.Get("Warning"),
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+    }
+
+    private void ApplyInstallation(GameInstallation installation, bool persist)
+    {
+        ApplyInstallationRequestedCount++;
+        if (_applyingInstallation || IsActiveInstallation(installation))
+        {
+            ApplyInstallationSuppressedCount++;
+            return;
+        }
+        _applyingInstallation = true;
+        try
+        {
+            ApplyInstallationEffectiveCount++;
+            if (!_openedProjects.TryGetValue(installation.NormalizedPath, out ProjectContext? project))
+            {
+                ProjectContextOpenResult opened = new ProjectContextLoader().Open(installation.InstallationPath);
+                if (!opened.IsSuccess)
+                {
+                    RejectInstallationActivation(installation, opened.Detail ?? opened.Status.ToString());
+                    return;
+                }
+                project = opened.Context!;
+                _openedProjects.Add(installation.NormalizedPath, project);
+            }
+            _lastInstallationActivationFailure = null;
+            txtGameDir.Text = installation.InstallationPath;
+            _currentDataFilePath = null;
+            _activeTranslationCode = "EN";
             _variantCatalog = null;
-            ApplyLanguage();
+            _activeProject = project;
+            _availableActiveVariants = VariantContextCatalog.CreateBuiltIns(_activeProject);
+            _activeVariant = _availableActiveVariants.First();
+            _modsVariant = _activeVariant;
+            RefreshActiveVariantSelector();
+            _variantCatalog = VariantConfigurationService.Load(_activeProject.GameRoot, _activeProject.GameProfile);
+            SetCurrentDataFile(Path.Combine(_activeProject.GameRoot, _activeVariant.LogicalDataFileName));
+            cmbGameProfile.SelectedIndex = 0;
             ScanGameFolder();
             LoadGamePcTexts();
-            if (_embeddedFontEditor is not null && !_embeddedFontEditor.IsDisposed)
-                _embeddedFontEditor.LoadFromGameDirectory(txtGameDir.Text);
+            _detectedProfile = installation.Game;
+            UpdateGameProfileDisplay();
+            BindFontEditorToActiveVariant(showMissingError: false);
+            RefreshInstallationSelector(installation.InstallationPath);
+            if (persist) PersistInstallations();
+            RefreshWorkflowStatus();
         }
+        finally { _applyingInstallation = false; }
+    }
+
+    /// <summary>
+    /// The only runtime-selection transition. It changes presentation/projection
+    /// state only; ProjectContext and game/project files remain untouched.
+    /// </summary>
+    private void SetActiveVariant(VariantContext variant)
+    {
+        ArgumentNullException.ThrowIfNull(variant);
+        if (_activeProject is null || !ReferenceEquals(variant.Project, _activeProject))
+            throw new InvalidOperationException("The active variant must belong to the active ProjectContext.");
+        if (ReferenceEquals(_activeVariant, variant))
+            return;
+
+        _activeVariant = variant;
+        RefreshActiveVariantSelector();
+        UpdateTextOverview();
+        LoadRuntimeUiText();
+        if (cmbZone.SelectedIndex >= 0)
+            LoadSelectedZone();
+        else
+            LoadGraphicsProjectState();
+        BindFontEditorToActiveVariant(showMissingError: false);
+        OpenModsLauncher();
+        UpdateGameProfileDisplay();
+        RefreshWorkflowStatus();
+    }
+
+    private void RefreshActiveVariantSelector()
+    {
+        _refreshingActiveVariantSelector = true;
+        try
+        {
+            cmbActiveVariant.Items.Clear();
+            if (_activeProject is not null)
+            {
+                foreach (VariantContext variant in _availableActiveVariants)
+                    cmbActiveVariant.Items.Add(variant);
+                cmbActiveVariant.SelectedItem = _activeVariant;
+            }
+            cmbActiveVariant.Enabled = _activeVariant is not null;
+        }
+        finally { _refreshingActiveVariantSelector = false; }
+    }
+
+    private void RejectInstallationActivation(GameInstallation installation, string detail)
+    {
+        ClearInstallationState();
+        _lastInstallationActivationFailure = detail;
+        RefreshInstallationSelector();
+        SetStatus($"Cannot activate {GameProfileInfo.For(installation.Game).DisplayName}: {detail}", true);
+    }
+
+    private void ClearInstallationState()
+    {
+        _lastInstallationActivationFailure = null;
+        txtGameDir.Text = string.Empty;
+        _currentDataFilePath = null;
+        _activeTranslationCode = "EN";
+        _translationProjectState = null;
+        _gamePcEntries.Clear();
+        _gamePcEdits.Clear();
+        _savedGamePcEdits.Clear();
+        _gamePcOriginal = null;
+        _textDiagnosticStore = null;
+        _variantCatalog = null;
+        _activeProject = null;
+        _activeVariant = null;
+        _availableActiveVariants = [];
+        _textVariant = null;
+        _modsVariant = null;
+        RefreshActiveVariantSelector();
+        _openedProjects.Clear();
+        _detectedProfile = ElviraGameProfile.Unknown;
+        cmbZone.Items.Clear();
+        _currentVga = null;
+        _currentData = null;
+        _table = null;
+        _paletteBanks.Clear();
+        _pairedPaletteResource = null;
+        _pairedPalettePath = null;
+        _manualPaletteBank = null;
+        preview.Image?.Dispose();
+        preview.Image = null;
+        grid.Rows.Clear();
+        textGrid.Rows.Clear();
+        // A selected catalog row is meaningful only inside its ProjectContext.
+        // Clear it before recalculating no-game action state.
+        variantGrid.Rows.Clear();
+        variantManagerGrid.Rows.Clear();
+        RefreshTranslationVariantSelector();
+        UpdateTextOverview();
+        UpdateTextActionState();
+        ClearRuntimeUiText();
+        ClearGraphicsProjectState();
+        _embeddedFontEditor?.ClearActiveProjectBinding();
+        SetModsLauncherControls(active: false);
+        UpdateVariantActions();
+        _workflowStatus = null;
+        btnBuildActiveVariant.Enabled = false;
+        SetStatusPresentation(WorkflowStatusSeverity.Info, NeutralInstallationPrompt);
+        UpdateGraphicsActionState();
+        UpdateGameProfileDisplay();
+    }
+
+    private void PersistInstallations()
+    {
+        _installationSettings.Save(_installations, string.IsNullOrWhiteSpace(txtGameDir.Text) ? null : txtGameDir.Text);
     }
 
     private void ScanGameFolder()
     {
         try
         {
+            ClearStaleGraphicsError();
             string dir = txtGameDir.Text.Trim();
             if (!Directory.Exists(dir))
             {
-                SetStatus("Adresár neexistuje.", true);
+                SetGraphicsStatus(UiText.Get("Graphics.DirectoryMissing"), true);
                 return;
             }
 
@@ -1516,8 +3391,10 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
                 cmbZone.SelectedIndex = idx >= 0 ? idx : 0;
             }
 
-            SetStatus(string.Format(UiText.Get("ZonesFound"), files.Count), false);
-            _detectedProfile = GameProfileDetector.Detect(dir, files.Count, _gamePcEntries.Count > 0 ? _gamePcEntries.Count : null);
+            SetGraphicsStatus(string.Format(UiText.Get("ZonesFound"), files.Count), false);
+            _detectedProfile = GameInstallationValidator.TryValidate(dir, InstallationDiscoverySource.Manual, out GameInstallation? installation) && installation is not null
+                ? installation.Game
+                : GameProfileDetector.Detect(dir, files.Count, _gamePcEntries.Count > 0 ? _gamePcEntries.Count : null);
             UpdateGameProfileDisplay();
         }
         catch (Exception ex)
@@ -1532,51 +3409,216 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
 
         try
         {
+            ClearStaleGraphicsError();
+            GraphicsLoadCount++;
             _edits.Clear();
 
             _currentVga = Path.Combine(txtGameDir.Text.Trim(), cmbZone.SelectedItem.ToString()!);
+            LoadGraphicsProjectState();
             _currentData = File.ReadAllBytes(_currentVga);
             _table = new VgaImageTableParser(_currentData).Parse();
+            ApplyGraphicsProjectEditsForCurrentResource();
 
             LoadZonePalettes();
 
+            _refreshingGraphicsGrid = true;
             grid.SuspendLayout();
-            grid.Rows.Clear();
-
-            foreach (var e in _table.Entries)
+            try
             {
-                if (e.DataOffset == 0 || e.PixelWidth <= 0 || e.Height <= 0)
-                    continue;
+                grid.Rows.Clear();
 
-                int rowIndex = grid.Rows.Add(
-                    e.ImageId.ToString("D4"),
-                    $"0x{e.DataOffset:X8}",
-                    e.Compressed ? "RLE" : "RAW",
-                    $"{e.PixelWidth}x{e.Height}",
-                    $"0x{e.HeaderFlags:X2}",
-                    "");
+                foreach (var e in _table.Entries)
+                {
+                    if (e.DataOffset == 0 || e.PixelWidth <= 0 || e.Height <= 0)
+                        continue;
 
-                grid.Rows[rowIndex].Tag = e;
+                    int rowIndex = grid.Rows.Add(
+                        e.ImageId.ToString("D4"),
+                        $"0x{e.DataOffset:X8}",
+                        e.Compressed ? "RLE" : "RAW",
+                        $"{e.PixelWidth}x{e.Height}",
+                        $"0x{e.HeaderFlags:X2}",
+                        "");
+
+                    grid.Rows[rowIndex].Tag = e;
+                }
             }
-
-            grid.ResumeLayout();
+            finally
+            {
+                grid.ResumeLayout();
+                _refreshingGraphicsGrid = false;
+            }
             preview.Image?.Dispose();
             preview.Image = null;
             preview.Size = previewScroll.ClientSize;
             lblMeta.Text = "";
-            SetStatus($"{Path.GetFileName(_currentVga)} | entries: {_table.Entries.Count} | endian: {_table.Endian}", false);
+            SetGraphicsStatus($"{Path.GetFileName(_currentVga)} | entries: {_table.Entries.Count} | endian: {_table.Endian}", false);
+            UpdateGraphicsProjectPresentation();
 
             if (grid.Rows.Count > 0)
             {
-                grid.ClearSelection();
-                grid.CurrentCell = grid.Rows[0].Cells[0];
-                grid.Rows[0].Selected = true;
-                grid.FirstDisplayedScrollingRowIndex = 0;
+                _refreshingGraphicsGrid = true;
+                try
+                {
+                    grid.ClearSelection();
+                    grid.CurrentCell = grid.Rows[0].Cells[0];
+                    grid.Rows[0].Selected = true;
+                    grid.FirstDisplayedScrollingRowIndex = 0;
+                }
+                finally { _refreshingGraphicsGrid = false; }
+                // Programmatic selection above is intentionally silent. Refresh
+                // each dependent presentation exactly once for the final row.
+                if (_manualPaletteBank is null) UpdatePalettePresentation();
+                UpdateGraphicsProjectPresentation();
+                ShowSelectedPreview();
             }
+            UpdateGraphicsActionState();
         }
         catch (Exception ex)
         {
             Error(ex);
+            UpdateGraphicsActionState();
+        }
+    }
+
+    private void LoadGraphicsProjectState()
+    {
+        if (_activeProject is null || _activeVariant is null) { ClearGraphicsProjectState(); return; }
+        if (!_activeProject.GameRoot.Equals(txtGameDir.Text, StringComparison.OrdinalIgnoreCase))
+        {
+            _graphicsProject = null; _graphicsVariant = null; _graphicsProjectState = null; _graphicsProjectDirty = false;
+            return;
+        }
+        if (_graphicsProject is not null && _graphicsProject.GameRoot.Equals(_activeProject.GameRoot, StringComparison.OrdinalIgnoreCase) &&
+            _graphicsProjectCode.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase) && _graphicsProjectState is not null)
+        {
+            _graphicsVariant = _activeVariant;
+            UpdateGraphicsProjectPresentation();
+            return;
+        }
+        _graphicsProject = _activeProject;
+        _graphicsVariant = _activeVariant;
+        _graphicsProjectCode = _activeTranslationCode;
+        GraphicsProjectLoadResult loaded = _graphicsVariants.Load(_graphicsProject, _activeTranslationCode);
+        if (!loaded.IsSuccess)
+        {
+            _graphicsProjectState = null; _graphicsProjectDirty = false;
+            SetGraphicsStatus("Graphics project data error: " + (loaded.Detail ?? loaded.Status.ToString()), true);
+            return;
+        }
+        _graphicsProjectState = loaded.State;
+        _graphicsProjectDirty = false;
+    }
+
+    private VariantContext ResolveGraphicsVariant(ProjectContext project)
+    {
+        if (ReferenceEquals(project, _activeProject) && _activeVariant is not null)
+            return _activeVariant;
+        VariantContext[] variants = VariantContextCatalog.CreateBuiltIns(project).ToArray();
+        return variants[0];
+    }
+
+    private void ApplyGraphicsProjectEditsForCurrentResource()
+    {
+        if (_graphicsProject is null || _graphicsVariant is null || _graphicsProjectState is null || _currentVga is null) return;
+        string resource = Path.GetFileName(_currentVga).ToUpperInvariant();
+        foreach (GraphicsVariantProjection projection in _graphicsVariants.GetGraphicsEditsForVariant(_graphicsProject, _graphicsProjectState, _graphicsVariant))
+        {
+            if (!projection.Edit.Identity.ResourceFileName.Equals(resource, StringComparison.OrdinalIgnoreCase)) continue;
+            if (File.Exists(projection.Edit.ReplacementPngPath)) _edits[projection.Edit.Identity.ImageId] = projection.Edit.ReplacementPngPath;
+        }
+    }
+
+    private void SaveGraphicsProjectState()
+    {
+        if (_graphicsProject is null || _graphicsProjectState is null) return;
+        GraphicsProjectSaveResult saved = _graphicsVariants.Save(_graphicsProject, _activeTranslationCode, _graphicsProjectState);
+        if (!saved.Succeeded) { SetGraphicsStatus("Graphics project save failed: " + saved.Detail, true); return; }
+        _graphicsProjectDirty = false;
+        UpdateGraphicsProjectPresentation();
+        SetWorkflowStatus(WorkflowStatusSeverity.Warning, UiText.Get("Workflow.SavedBuildRequired"));
+    }
+
+    private void UpdateGraphicsProjectPresentation()
+    {
+        bool bound = _graphicsProject is not null && _graphicsVariant is not null && _graphicsProjectState is not null;
+        bool readOnlyOriginal = bound && ProjectVariantOwnership.IsOriginal(_activeTranslationCode);
+        bool ready = bound && !readOnlyOriginal;
+        btnSaveGraphicsProject.Enabled = ready && _graphicsProjectDirty;
+        cmbGraphicsScope.Enabled = ready;
+        if (readOnlyOriginal)
+        {
+            // The scope selector describes an editable-project choice. Original
+            // is immutable, so show an explicit neutral baseline state instead.
+            if (cmbGraphicsScope.SelectedIndex != 2) cmbGraphicsScope.SelectedIndex = 2;
+            lblGraphicsVariant.Text = _graphicsVariant!.DisplayName + " — " + UiText.Get("OriginalReadOnly");
+            return;
+        }
+        if (!ready)
+        {
+            // "Shared" is an edit scope, not a neutral/no-project value.
+            // Keep the selector visibly unselected until a graphics project is active.
+            if (cmbGraphicsScope.SelectedIndex >= 0) cmbGraphicsScope.SelectedIndex = -1;
+            lblGraphicsVariant.Text = UiText.Get("Graphics.ProjectUnavailable") + ": —";
+            return;
+        }
+        if (cmbGraphicsScope.SelectedIndex is < 0 or 2)
+        {
+            cmbGraphicsScope.SelectedIndex = 0;
+            return;
+        }
+        VgaImageEntry? selected = SelectedEntry();
+        GraphicsProjectEdit? edit = selected is null || _currentVga is null ? null : _graphicsProjectState!.Edits
+            .SingleOrDefault(value => value.Identity.ResourceFileName.Equals(Path.GetFileName(_currentVga), StringComparison.OrdinalIgnoreCase) && value.Identity.ImageId == selected.ImageId);
+        if (edit is null)
+        {
+            lblGraphicsVariant.Text = _graphicsVariant!.DisplayName + " — " +
+                (_graphicsProjectDirty ? UiText.Get("Graphics.UnsavedProjectEdits") : UiText.Get("Graphics.NewEdit")) + " " +
+                (cmbGraphicsScope.SelectedIndex == 1 ? UiText.Get("Graphics.CurrentRuntimeOnly") : UiText.Get("Graphics.ScopeEdition"));
+            return;
+        }
+        GraphicsApplicabilityStatus status = _graphicsVariants.GetApplicability(_graphicsProject!.GameProfile, edit, _graphicsVariant!.RuntimeKind);
+        string scope = status switch
+        {
+            GraphicsApplicabilityStatus.Shared => UiText.Get("Graphics.ScopeEdition"),
+            GraphicsApplicabilityStatus.RuntimeSpecific => UiText.Get("Graphics.CurrentRuntimeOnly"),
+            _ => UiText.Get("Graphics.UnsupportedCurrentRuntime")
+        };
+        lblGraphicsVariant.Text = _graphicsVariant.DisplayName + " — " + scope + (_graphicsProjectDirty ? " " + UiText.Get("Graphics.Unsaved") : string.Empty);
+    }
+
+    private void ClearGraphicsProjectState()
+    {
+        _graphicsProject = null; _graphicsVariant = null; _graphicsProjectState = null; _graphicsProjectCode = ProjectVariantOwnership.OriginalCode; _graphicsProjectDirty = false;
+        _edits.Clear();
+        _graphicsStatusIsError = false;
+        UpdateGraphicsProjectPresentation();
+    }
+
+    /// <summary>Presentation only. A control is enabled only when the active
+    /// installation has supplied a concrete VGA image on which it can act.</summary>
+    private void UpdateGraphicsActionState()
+    {
+        bool installationReady = _activeProject is not null;
+        bool imageReady = installationReady && _currentVga is not null && _table is not null;
+        bool selected = imageReady && SelectedEntry() is not null;
+        bool editableProject = !ProjectVariantOwnership.IsOriginal(_activeTranslationCode);
+        cmbZone.Enabled = installationReady && cmbZone.Items.Count > 0;
+        btnReload.Enabled = installationReady;
+        btnReloadPreview.Enabled = selected;
+        btnReplace.Enabled = selected && editableProject;
+        btnExport.Enabled = selected;
+        btnRestore.Enabled = selected && _currentVga is not null && File.Exists(SafeDeployer.OriginalBackupPath(_currentVga));
+        btnClearEdit.Enabled = selected && editableProject && _edits.ContainsKey(SelectedEntry()!.ImageId);
+        btnDeploy.Enabled = false;
+        if (!imageReady)
+        {
+            lblPaletteMode.Text = "—";
+            lblPaletteMode.Visible = true;
+            cmbPaletteManual.Visible = false;
+            cmbPaletteManual.Enabled = false;
+            btnPaletteAdvanced.Enabled = false;
+            panelPaletteSwatches.Enabled = false;
         }
     }
 
@@ -1606,6 +3648,10 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
 
     private void ApplyPreviewZoom()
     {
+        if (_applyingPreviewZoom) return;
+        _applyingPreviewZoom = true;
+        try
+        {
         if (preview.Image is null)
         {
             preview.Dock = DockStyle.None;
@@ -1616,29 +3662,32 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
             return;
         }
 
-        string mode = cmbPreviewZoom.SelectedItem?.ToString() ?? "Fit";
+        int zoomIndex = Math.Max(0, cmbPreviewZoom.SelectedIndex);
 
-        if (mode == "Fit")
+        if (zoomIndex == 0)
         {
+            // A fill-docked Fit preview must not retain ScrollableControl
+            // offsets from an earlier enlarged preview.
+            previewScroll.AutoScroll = false;
             previewScroll.AutoScrollMinSize = Size.Empty;
             preview.Dock = DockStyle.Fill;
             preview.SizeMode = PictureBoxSizeMode.Zoom;
-            preview.Location = Point.Empty;
             previewScroll.AutoScrollPosition = Point.Empty;
             return;
         }
 
+        previewScroll.AutoScroll = true;
         preview.Dock = DockStyle.None;
         preview.SizeMode = PictureBoxSizeMode.StretchImage;
 
-        int percent = mode switch
+        int percent = zoomIndex switch
         {
-            "100%" => 100,
-            "200%" => 200,
-            "300%" => 300,
-            "400%" => 400,
-            "600%" => 600,
-            "800%" => 800,
+            1 => 100,
+            2 => 200,
+            3 => 300,
+            4 => 400,
+            5 => 600,
+            6 => 800,
             _ => 100
         };
 
@@ -1672,50 +3721,54 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
                 Math.Max(imageW, viewW),
                 Math.Max(imageH, viewH));
         }
+        }
+        finally { _applyingPreviewZoom = false; }
+    }
+
+    private void RefreshGraphicsScopeItems()
+    {
+        int selected = cmbGraphicsScope.SelectedIndex;
+        cmbGraphicsScope.BeginUpdate();
+        try
+        {
+            cmbGraphicsScope.Items.Clear();
+            cmbGraphicsScope.Items.AddRange(new object[]
+            {
+                UiText.Get("Graphics.ScopeEdition"),
+                UiText.Get("Graphics.CurrentRuntimeOnly"),
+                UiText.Get("Graphics.ReadOnlyBaseline")
+            });
+            cmbGraphicsScope.SelectedIndex = selected < 0 ? -1 : Math.Min(selected, cmbGraphicsScope.Items.Count - 1);
+        }
+        finally { cmbGraphicsScope.EndUpdate(); }
+    }
+
+    private void RefreshPreviewZoomItems()
+    {
+        int selected = Math.Max(0, cmbPreviewZoom.SelectedIndex);
+        cmbPreviewZoom.BeginUpdate();
+        try
+        {
+            cmbPreviewZoom.Items.Clear();
+            cmbPreviewZoom.Items.AddRange(new object[] { UiText.Get("Graphics.Fit"), "100%", "200%", "300%", "400%", "600%", "800%" });
+            cmbPreviewZoom.SelectedIndex = Math.Min(selected, cmbPreviewZoom.Items.Count - 1);
+        }
+        finally { cmbPreviewZoom.EndUpdate(); }
     }
 
 
     private void RefreshPaletteDisplayLanguage()
     {
-        if (cmbPalette.Items.Count == 0)
-            return;
-
-        int selected = cmbPalette.SelectedIndex;
-
-        // Item 0 is the diagnostic palette string; replace it in the new language.
-        if (cmbPalette.Items.Count > 0 && cmbPalette.Items[0] is string)
-            cmbPalette.Items[0] = UiText.Get("DiagnosticPalette");
-
-        // ElviraPaletteBank.ToString() uses the current UiText language.
-        // Reinsert bank objects so the ComboBox recomputes their visible text.
-        var banks = new List<ElviraPaletteBank>();
-        for (int i = 1; i < cmbPalette.Items.Count; i++)
-        {
-            if (cmbPalette.Items[i] is ElviraPaletteBank bank)
-                banks.Add(bank);
-        }
-
-        cmbPalette.BeginUpdate();
-        while (cmbPalette.Items.Count > 1)
-            cmbPalette.Items.RemoveAt(cmbPalette.Items.Count - 1);
-
-        foreach (var bank in banks)
-            cmbPalette.Items.Add(bank);
-
-        if (selected >= 0 && selected < cmbPalette.Items.Count)
-            cmbPalette.SelectedIndex = selected;
-
-        cmbPalette.EndUpdate();
-        cmbPalette.Refresh();
+        UpdatePalettePresentation();
     }
 
     private void LoadZonePalettes()
     {
+        string? previousPalettePath = _pairedPalettePath;
+        int? previousManualBank = _manualPaletteBank;
         _paletteBanks.Clear();
-        cmbPalette.BeginUpdate();
-        cmbPalette.Items.Clear();
-
-        cmbPalette.Items.Add(UiText.Get("DiagnosticPalette"));
+        _pairedPaletteResource = null;
+        _pairedPalettePath = null;
 
         if (_currentVga is not null)
         {
@@ -1731,42 +3784,203 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
                     try
                     {
                         _paletteBanks.AddRange(ElviraPaletteLoader.Load(vga1Path));
-                        foreach (var bank in _paletteBanks)
-                            cmbPalette.Items.Add(bank);
+                        _pairedPaletteResource = vga1Name;
+                        _pairedPalettePath = vga1Path;
                     }
                     catch (Exception ex)
                     {
-                        SetStatus($"Paleta: {ex.Message}", true);
+                        SetGraphicsStatus(string.Format(UiText.Get("PaletteLoadError"), ex.Message), true);
                     }
                 }
             }
         }
 
-        cmbPalette.EndUpdate();
-
-        // First real palette bank is a better default than the diagnostic colors.
-        cmbPalette.SelectedIndex = _paletteBanks.Count > 0 ? 1 : 0;
+        // The only proven automatic behavior is the paired xNN1.VGA group
+        // with its default bank 0. It is deliberately not presented as an
+        // exact original-runtime palette-bank detection.
+        bool samePaletteGroup = previousPalettePath is not null
+            && _pairedPalettePath is not null
+            && string.Equals(previousPalettePath, _pairedPalettePath, StringComparison.OrdinalIgnoreCase);
+        ApplyPaletteChoice(samePaletteGroup ? previousManualBank : null, refreshPreview: false);
     }
 
-    private void PaletteChanged()
+    private void ApplyPaletteChoice(int? manualBank, bool refreshPreview = true)
     {
-        if (cmbPalette.SelectedIndex <= 0)
-            _activePalette = ElviraPaletteLoader.DiagnosticPalette();
-        else
+        _manualPaletteBank = manualBank.HasValue && manualBank.Value >= 0 && manualBank.Value < _paletteBanks.Count
+            ? manualBank
+            : null;
+
+        UpdatePalettePresentation();
+        if (refreshPreview)
+            ShowSelectedPreview();
+    }
+
+    private void UpdatePalettePresentation()
+    {
+        if (_activeProject is null || _currentVga is null)
         {
-            int bankIndex = cmbPalette.SelectedIndex - 1;
-            if (bankIndex >= 0 && bankIndex < _paletteBanks.Count)
-                _activePalette = _paletteBanks[bankIndex].Colors;
+            lblPaletteMode.Text = "—";
+            lblPaletteMode.Visible = true;
+            cmbPaletteManual.Visible = false;
+            cmbPaletteManual.Enabled = false;
+            btnPaletteAdvanced.Enabled = false;
+            panelPaletteSwatches.Enabled = false;
+            panelPaletteSwatches.Invalidate();
+            return;
+        }
+        bool hasPairedBanks = _paletteBanks.Count > 0;
+        panelPaletteSwatches.Enabled = hasPairedBanks;
+        string effectiveLabel = PaletteDisplayLabel();
+        lblPaletteMode.Text = effectiveLabel;
+        lblPaletteMode.Visible = !_paletteAdvancedVisible;
+        cmbPaletteManual.Visible = _paletteAdvancedVisible;
+        btnPaletteAdvanced.Enabled = hasPairedBanks;
+        btnPaletteAdvanced.Text = _paletteAdvancedVisible ? UiText.Get("PaletteBasic") : UiText.Get("PaletteAdvanced");
+
+        _updatingPaletteControl = true;
+        try
+        {
+            cmbPaletteManual.Items.Clear();
+            cmbPaletteManual.Items.Add(new PalettePreviewChoice(null, PaletteAutomaticLabel()));
+            foreach (ElviraPaletteBank paletteBank in _paletteBanks)
+                cmbPaletteManual.Items.Add(new PalettePreviewChoice(paletteBank.Index, paletteBank.ToString()));
+            cmbPaletteManual.SelectedIndex = _manualPaletteBank is int selected && selected >= 0 && selected < _paletteBanks.Count
+                ? selected + 1
+                : 0;
+            cmbPaletteManual.Enabled = hasPairedBanks;
+        }
+        finally
+        {
+            _updatingPaletteControl = false;
         }
 
-        ShowSelectedPreview();
+        string paired = _pairedPaletteResource ?? UiText.Get("PaletteUnavailable");
+        PaletteResolution automatic = AutomaticPaletteResolution();
+        string tip = automatic.Kind == PaletteResolutionKind.Unique
+            ? string.Format(UiText.Get("PaletteAutomaticUniqueTooltip"), paired, automatic.PaletteId!.Value.ToString("D3"))
+            : string.Format(UiText.Get("PaletteAutomaticTooltip"), paired);
+        paletteToolTip.SetToolTip(lblPaletteMode, tip);
+        paletteToolTip.SetToolTip(cmbPaletteManual, tip);
+        paletteToolTip.SetToolTip(btnPaletteAdvanced, tip);
+        panelPaletteSwatches.Invalidate();
     }
+
+    private void DrawPaletteChoice(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || e.Index >= cmbPaletteManual.Items.Count) return;
+        e.DrawBackground();
+        if (cmbPaletteManual.Items[e.Index] is not PalettePreviewChoice choice) return;
+        Color[] colors = choice.BankIndex is int bank && bank >= 0 && bank < _paletteBanks.Count ? _paletteBanks[bank].Colors : EffectivePalette();
+        TextRenderer.DrawText(e.Graphics, choice.Display, e.Font, new Rectangle(e.Bounds.Left + 3, e.Bounds.Top, 112, e.Bounds.Height), e.ForeColor, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        DrawPaletteSwatches(e.Graphics, colors, new Rectangle(e.Bounds.Left + 118, e.Bounds.Top + 3, e.Bounds.Width - 122, e.Bounds.Height - 6));
+        e.DrawFocusRectangle();
+    }
+
+    private void DrawEffectivePaletteSwatches(object? sender, PaintEventArgs e)
+    {
+        if (!panelPaletteSwatches.Enabled)
+        {
+            e.Graphics.Clear(SystemColors.Control);
+            ControlPaint.DrawBorder(e.Graphics, panelPaletteSwatches.ClientRectangle, SystemColors.ControlDark, ButtonBorderStyle.Solid);
+            return;
+        }
+        DrawPaletteSwatches(e.Graphics, EffectivePalette(), panelPaletteSwatches.ClientRectangle);
+    }
+
+    private static void DrawPaletteSwatches(Graphics graphics, IReadOnlyList<Color> colors, Rectangle bounds)
+    {
+        if (colors.Count == 0 || bounds.Width <= 0 || bounds.Height <= 0) return;
+        using var border = new Pen(SystemColors.ControlDark);
+        for (int i = 0; i < colors.Count; i++)
+        {
+            int left = bounds.Left + i * bounds.Width / colors.Count;
+            int right = bounds.Left + (i + 1) * bounds.Width / colors.Count;
+            Rectangle swatch = Rectangle.FromLTRB(left, bounds.Top, Math.Max(left + 1, right), bounds.Bottom);
+            using var brush = new SolidBrush(colors[i]); graphics.FillRectangle(brush, swatch); graphics.DrawRectangle(border, swatch.X, swatch.Y, swatch.Width - 1, swatch.Height - 1);
+        }
+    }
+
+    private void ShowPaletteSwatchTooltip(object? sender, MouseEventArgs e)
+    {
+        if (!panelPaletteSwatches.Enabled) return;
+        Color[] colors = EffectivePalette();
+        if (colors.Length == 0 || panelPaletteSwatches.ClientSize.Width <= 0) return;
+        int index = Math.Clamp(e.X * colors.Length / panelPaletteSwatches.ClientSize.Width, 0, colors.Length - 1); Color color = colors[index];
+        paletteToolTip.SetToolTip(panelPaletteSwatches,
+            string.Format(UiText.Get("Palette.SwatchTooltip"), index, color.R, color.G, color.B, color.R, color.G, color.B));
+    }
+
+    private void TogglePaletteAdvanced()
+    {
+        if (_paletteAdvancedVisible)
+        {
+            // Basic is a semantic reset: return the current resource to its
+            // proven automatic palette choice.
+            _paletteAdvancedVisible = false;
+            ApplyPaletteChoice(null);
+            return;
+        }
+
+        _paletteAdvancedVisible = true;
+        UpdatePalettePresentation();
+    }
+
+    private PaletteResolution AutomaticPaletteResolution()
+    {
+        VgaImageEntry? entry = SelectedEntry();
+        if (entry is null || _pairedPalettePath is null || _currentVga is null || _paletteBanks.Count == 0)
+            return PaletteResolution.Unresolved();
+        return ActiveGameProfile switch
+        {
+            ElviraGameProfile.Elvira1 => _elvira1PaletteResolver.Resolve(_pairedPalettePath, _currentVga, entry.ImageId),
+            ElviraGameProfile.Elvira2 => _elvira2PaletteResolver.Resolve(_pairedPalettePath, _currentVga, entry.ImageId),
+            _ => PaletteResolution.Unresolved()
+        };
+    }
+
+    private int EffectivePaletteBank
+        => Elvira1PaletteResolver.EffectivePaletteBank(_manualPaletteBank, AutomaticPaletteResolution(), _paletteBanks.Count);
+
+    private Color[] EffectivePalette()
+        => _paletteBanks.Count == 0
+            ? ElviraPaletteLoader.DiagnosticPalette()
+            : _paletteBanks[EffectivePaletteBank].Colors;
+
+    private bool TryGetActiveReplacementPalette(out Color[] palette, out string identity)
+    {
+        if (_paletteBanks.Count == 0)
+        {
+            palette = Array.Empty<Color>();
+            identity = UiText.Get("PaletteUnavailable");
+            return false;
+        }
+
+        int bank = EffectivePaletteBank;
+        palette = _paletteBanks[bank].Colors;
+        identity = $"{_pairedPaletteResource ?? UiText.Get("PaletteUnavailable")} / {UiText.Get("PaletteWord")} {bank:D3}";
+        return true;
+    }
+
+    private string PaletteAutomaticLabel()
+    {
+        PaletteResolution automatic = AutomaticPaletteResolution();
+        int bank = Elvira1PaletteResolver.EffectivePaletteBank(null, automatic, _paletteBanks.Count);
+        return automatic.Kind == PaletteResolutionKind.Unique
+            ? string.Format(UiText.Get("PaletteAutomaticResolved"), bank)
+            : string.Format(UiText.Get("PaletteAutomaticFallback"), bank);
+    }
+
+    private string PaletteDisplayLabel()
+        => _manualPaletteBank is int bank && bank >= 0 && bank < _paletteBanks.Count
+            ? _paletteBanks[bank].ToString()
+            : PaletteAutomaticLabel();
 
     private VgaImageEntry? SelectedEntry()
         => grid.CurrentRow?.Tag as VgaImageEntry;
 
     private void ShowSelectedPreview()
     {
+        PreviewRenderCount++;
         var e = SelectedEntry();
         if (e is null || _currentData is null) return;
 
@@ -1783,20 +3997,18 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
             else
             {
                 byte[] px = ElviraImageDecoder.Decode(_currentData, e);
-                preview.Image = PaletteTools.ToBitmap(e.PixelWidth, e.Height, px, _activePalette, transparentZero: true);
+                preview.Image = PaletteTools.ToBitmap(e.PixelWidth, e.Height, px, EffectivePalette(), transparentZero: true);
                 ApplyPreviewZoom();
             }
 
-            lblMeta.Text =
-                $"Image {e.ImageId:D4} | Offset 0x{e.DataOffset:X8} | {(e.Compressed ? "RLE" : "RAW")} | " +
-                $"{e.PixelWidth}x{e.Height} | flags 0x{e.HeaderFlags:X2}" +
-                (_edits.ContainsKey(e.ImageId) ? " | EDITOVANÝ" : "") + $" | paleta: {cmbPalette.Text}";
+            lblMeta.Text = string.Format(UiText.Get("GraphicsMeta"), e.ImageId, e.DataOffset, e.Compressed ? "RLE" : "RAW", e.PixelWidth, e.Height, e.HeaderFlags,
+                _edits.ContainsKey(e.ImageId) ? UiText.Get("GraphicsEdited") : string.Empty, PaletteDisplayLabel());
         }
         catch (Exception ex)
         {
             preview.Image?.Dispose();
             preview.Image = null;
-            lblMeta.Text = $"Image {e.ImageId:D4} | preview chyba: {ex.Message}";
+            lblMeta.Text = string.Format(UiText.Get("GraphicsPreviewError"), e.ImageId, ex.Message);
         }
     }
 
@@ -1808,24 +4020,58 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         using var dlg = new OpenFileDialog
         {
             Filter = $"{UiText.Get("PngImage")}|*.png",
-            Title = $"Náhradný PNG pre image {e.ImageId:D4}"
+            Title = string.Format(UiText.Get("ReplacePngTitle"), e.ImageId)
         };
 
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         try
         {
-            // Validate immediately.
-            _ = PaletteTools.ReadIndices(dlg.FileName, e.PixelWidth, e.Height);
-            _edits[e.ImageId] = dlg.FileName;
+            bool hasPalette = TryGetActiveReplacementPalette(out Color[] palette, out string paletteIdentity);
+            ReplacePngValidationResult validation = ReplacePngValidator.Validate(
+                dlg.FileName, e.PixelWidth, e.Height, paletteIdentity, hasPalette ? palette : null);
+            if (!validation.IsValid)
+            {
+                ShowReplacePngValidation(validation);
+                return;
+            }
+
+            // Commit only after every pixel has passed strict exact-palette validation.
+            if (!ReplacePngValidator.TryCommitValidatedReplacement(_edits, e.ImageId, dlg.FileName, validation))
+                return;
+            TrackGraphicsProjectEdit(e.ImageId, dlg.FileName);
             RefreshEditMarker(e.ImageId);
             ShowSelectedPreview();
-            SetStatus($"Image {e.ImageId:D4}: načítaný replacement PNG.", false);
+            SetGraphicsStatus(string.Format(UiText.Get("ReplacementLoaded"), e.ImageId), false);
         }
         catch (Exception ex)
         {
-            Error(ex);
+            System.Diagnostics.Debug.WriteLine(ex);
+            SetGraphicsStatus(UiText.Get("Graphics.ReplaceUnexpected"), true);
+            MessageBox.Show(this, UiText.Get("Graphics.ReplaceUnexpected"), UiText.Get("Graphics.ReplaceValidationTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    private void ShowReplacePngValidation(ReplacePngValidationResult validation)
+    {
+        string message = validation.FailureKind switch
+        {
+            ReplacePngValidationFailureKind.PaletteMismatch => UiText.Get("Graphics.PngPaletteInvalid"),
+            ReplacePngValidationFailureKind.DimensionMismatch => string.Format(UiText.Get("Graphics.PngDimensionsMismatch"),
+                validation.ExpectedWidth, validation.ExpectedHeight, validation.ActualWidth ?? 0, validation.ActualHeight ?? 0),
+            ReplacePngValidationFailureKind.PaletteUnavailable => UiText.Get("Graphics.PaletteUnavailable"),
+            _ => UiText.Get("Graphics.UnsupportedPng")
+        };
+        SetGraphicsStatus(message, true);
+
+        if (validation.FailureKind == ReplacePngValidationFailureKind.PaletteMismatch)
+        {
+            using var dialog = new PaletteValidationDialog(validation);
+            dialog.ShowDialog(this);
+            return;
+        }
+
+        MessageBox.Show(this, message, UiText.Get("Graphics.ReplaceValidationTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     private void ClearSelectedEdit()
@@ -1833,8 +4079,33 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         var e = SelectedEntry();
         if (e is null) return;
         _edits.Remove(e.ImageId);
+        RemoveGraphicsProjectEdit(e.ImageId);
         RefreshEditMarker(e.ImageId);
+        UpdateGraphicsActionState();
         ShowSelectedPreview();
+    }
+
+    private void TrackGraphicsProjectEdit(int imageId, string pngPath)
+    {
+        if (ProjectVariantOwnership.IsOriginal(_activeTranslationCode)) return;
+        if (_graphicsProject is null || _graphicsVariant is null || _graphicsProjectState is null || _currentVga is null) return;
+        GraphicsEditScope scope = cmbGraphicsScope.SelectedIndex == 1 ? GraphicsEditScope.RuntimeSpecific : GraphicsEditScope.Shared;
+        var edit = new GraphicsProjectEdit(new GraphicsProjectIdentity(Path.GetFileName(_currentVga), imageId), pngPath, scope,
+            scope == GraphicsEditScope.RuntimeSpecific ? _graphicsVariant.RuntimeKind : null);
+        _graphicsProjectState = _graphicsVariants.SetEdit(_graphicsProject, _graphicsProjectState, edit);
+        _graphicsProjectDirty = true;
+        UpdateGraphicsProjectPresentation();
+        RefreshWorkflowStatus();
+    }
+
+    private void RemoveGraphicsProjectEdit(int imageId)
+    {
+        if (ProjectVariantOwnership.IsOriginal(_activeTranslationCode)) return;
+        if (_graphicsProject is null || _graphicsProjectState is null || _currentVga is null) return;
+        _graphicsProjectState = _graphicsVariants.RemoveEdit(_graphicsProject, _graphicsProjectState, new GraphicsProjectIdentity(Path.GetFileName(_currentVga), imageId));
+        _graphicsProjectDirty = true;
+        UpdateGraphicsProjectPresentation();
+        RefreshWorkflowStatus();
     }
 
     private void RefreshEditMarker(int id)
@@ -1843,7 +4114,7 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         {
             if (row.Tag is VgaImageEntry e && e.ImageId == id)
             {
-                row.Cells["Edit"].Value = _edits.ContainsKey(id) ? "ÁNO" : "";
+                row.Cells["Edit"].Value = _edits.ContainsKey(id) ? UiText.Get("Common.Yes") : "";
                 row.DefaultCellStyle.BackColor = _edits.ContainsKey(id)
                     ? Color.LightGoldenrodYellow
                     : SystemColors.Window;
@@ -1869,10 +4140,10 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         {
             using Bitmap bmp = _edits.TryGetValue(e.ImageId, out string? replacement)
                 ? new Bitmap(replacement)
-                : PaletteTools.ToBitmap(e.PixelWidth, e.Height, ElviraImageDecoder.Decode(_currentData, e), _activePalette, transparentZero: true);
+                : PaletteTools.ToBitmap(e.PixelWidth, e.Height, ElviraImageDecoder.Decode(_currentData, e), EffectivePalette(), transparentZero: true);
 
             bmp.Save(dlg.FileName, ImageFormat.Png);
-            SetStatus($"Exportované: {dlg.FileName}", false);
+            SetGraphicsStatus(string.Format(UiText.Get("Graphics.Exported"), dlg.FileName), false);
         }
         catch (Exception ex)
         {
@@ -1885,18 +4156,16 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         if (_currentVga is null) return;
         if (_edits.Count == 0)
         {
-            MessageBox.Show(this, UiText.Get("NoEditedPng"), UiText.Get("AppTitle"),
+            MessageBox.Show(this, UiText.Get("NoEditedPng"), AppInfo.ProductTitle,
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
+        if (!ValidatePendingGraphicsReplacements()) return;
+
         var answer = MessageBox.Show(this,
-            $"Automaticky aplikovať {_edits.Count} editov do {Path.GetFileName(_currentVga)}?\n\n" +
-            "Program:\n" +
-            "1. vytvorí nemennú O.VGA zálohu (iba pri prvom uložení),\n" +
-            "2. zostaví a overí nový VGA do dočasného súboru,\n" +
-            "3. nahradí iba aktívny VGA pod pôvodným názvom.",
-            "Aplikovať do hry",
+            string.Format(UiText.Get("Graphics.ConfirmDeploy"), _edits.Count, Path.GetFileName(_currentVga)),
+            UiText.Get("Graphics.DeployTitle"),
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning);
 
@@ -1904,19 +4173,50 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
 
         try
         {
-            SafeDeployer.Deploy(_currentVga, _edits);
-            SetStatus("Patch úspešne aplikovaný do hry.", false);
+            SafeDeployer.Deploy(_currentVga, _edits, EffectivePalette());
+            SetGraphicsStatus(UiText.Get("Graphics.Deployed"), false);
             LoadSelectedZone();
             MessageBox.Show(this,
-                "Hotovo. VGA je už pod pôvodným názvom a môžeš rovno spustiť hru.",
-                UiText.Get("AppTitle"),
+                UiText.Get("Graphics.DeployComplete"),
+                AppInfo.ProductTitle,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+        }
+        catch (InvalidDataException ex)
+        {
+            // A replacement may have changed externally after Replace PNG was
+            // accepted.  Keep this normal input failure concise and private.
+            System.Diagnostics.Debug.WriteLine(ex);
+            SetGraphicsStatus(UiText.Get("Graphics.ReplaceUnexpected"), true);
+            MessageBox.Show(this, UiText.Get("Graphics.ReplaceUnexpected"), UiText.Get("Graphics.ReplaceValidationTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (Exception ex)
         {
             Error(ex);
         }
+    }
+
+    private bool ValidatePendingGraphicsReplacements()
+    {
+        if (_table is null) return false;
+        bool hasPalette = TryGetActiveReplacementPalette(out Color[] palette, out string paletteIdentity);
+        foreach ((int imageId, string path) in _edits.OrderBy(item => item.Key))
+        {
+            VgaImageEntry? entry = _table.Entries.SingleOrDefault(item => item.ImageId == imageId);
+            if (entry is null)
+            {
+                SetGraphicsStatus(UiText.Get("Graphics.ReplaceUnexpected"), true);
+                MessageBox.Show(this, UiText.Get("Graphics.ReplaceUnexpected"), UiText.Get("Graphics.ReplaceValidationTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            ReplacePngValidationResult validation = ReplacePngValidator.Validate(path, entry.PixelWidth, entry.Height,
+                paletteIdentity, hasPalette ? palette : null);
+            if (validation.IsValid) continue;
+            ShowReplacePngValidation(validation);
+            return false;
+        }
+        return true;
     }
 
     private void RestoreOriginal()
@@ -1953,15 +4253,522 @@ mainSplit.Panel1.Padding = new Padding(0, 0, 4, 0);
         }
     }
 
+    private void NavigateToActiveBuildTarget()
+    {
+        if (_activeProject is null || _activeVariant is null) return;
+        OpenModsLauncher();
+        SwitchMode(tabMods);
+        if (btnRebuildOwnedVariant.Enabled) btnRebuildOwnedVariant.Focus();
+        SetWorkflowStatus(WorkflowStatusSeverity.Info, string.Format(UiText.Get("Workflow.BuildTarget"), _activeVariant.DisplayName, ActiveEditionDisplayName()));
+    }
+
+    private string ActiveEditionDisplayName()
+    {
+        if (_activeTranslationCode.Equals(ProjectVariantOwnership.OriginalCode, StringComparison.OrdinalIgnoreCase))
+            return UiText.Get("Original") + " (EN)";
+        TranslationProjectVariant? edition = _translationProjectState?.Variants
+            .FirstOrDefault(item => item.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase));
+        return edition is null ? _activeTranslationCode : edition.DisplayName + " (" + _activeTranslationCode + ")";
+    }
+
+    private void RefreshWorkflowStatus()
+    {
+        WorkflowRefreshCount++;
+        if (_activeProject is null || _activeVariant is null)
+        {
+            _workflowStatus = null;
+            SetStatusPresentation(WorkflowStatusSeverity.Info, NeutralInstallationPrompt);
+            return;
+        }
+
+        btnBuildActiveVariant.Enabled = true;
+        if (ProjectVariantOwnership.IsOriginal(_activeTranslationCode))
+        {
+            SetWorkflowStatus(WorkflowStatusSeverity.Info, UiText.Get("Workflow.OriginalReadOnly"));
+            return;
+        }
+        if (HasUnsavedTextChanges || _graphicsProjectDirty || _runtimeUiDirty)
+        {
+            SetWorkflowStatus(WorkflowStatusSeverity.Warning, UiText.Get("Workflow.UnsavedChanges"));
+            return;
+        }
+
+        VariantBuildStatusProjection status = _variantBuildStatus.Inspect(_activeProject, _activeVariant);
+        if (status.Status == VariantBuildStatus.Ready)
+            SetWorkflowStatus(WorkflowStatusSeverity.Success, UiText.Get("Workflow.BuiltReady"));
+        else if (status.Status is VariantBuildStatus.Incomplete or VariantBuildStatus.Invalid)
+            SetWorkflowStatus(WorkflowStatusSeverity.Error, UiText.Get("Workflow.BuildIncomplete"));
+        else
+            SetWorkflowStatus(WorkflowStatusSeverity.Warning, UiText.Get("Workflow.SavedBuildRequired"));
+    }
+
+    private void SetWorkflowStatus(WorkflowStatusSeverity severity, string text)
+    {
+        _workflowStatus = new WorkflowStatus(severity, text, _activeVariant?.DirectoryKey, _activeTranslationCode);
+        SetStatusPresentation(severity, text);
+    }
+
     private void SetStatus(string text, bool error)
     {
+        _workflowStatus = null;
+        SetStatusPresentation(error ? WorkflowStatusSeverity.Error : WorkflowStatusSeverity.Info, text);
+    }
+
+    private void SetStatusPresentation(WorkflowStatusSeverity severity, string text)
+    {
         lblStatus.Text = text;
-        lblStatus.ForeColor = error ? Color.DarkRed : SystemColors.ControlText;
+        lblStatus.ToolTipText = text;
+        lblStatus.ImageAlign = ContentAlignment.MiddleLeft;
+        lblStatus.TextAlign = ContentAlignment.MiddleLeft;
+        lblStatus.Padding = new Padding(30, 4, 6, 4);
+        bool emphasis = severity is WorkflowStatusSeverity.Warning or WorkflowStatusSeverity.Error;
+        _statusRegularFont ??= new Font(Font, FontStyle.Regular);
+        _statusEmphasisFont ??= new Font(Font, FontStyle.Bold);
+        lblStatus.Font = emphasis ? _statusEmphasisFont : _statusRegularFont;
+        switch (severity)
+        {
+            case WorkflowStatusSeverity.Success:
+                _statusSuccessImage ??= SystemIcons.Shield.ToBitmap();
+                lblStatus.Image = _statusSuccessImage;
+                lblStatus.ForeColor = Color.DarkGreen;
+                break;
+            case WorkflowStatusSeverity.Warning:
+                _statusWarningImage ??= SystemIcons.Warning.ToBitmap();
+                lblStatus.Image = _statusWarningImage;
+                lblStatus.ForeColor = Color.DarkGoldenrod;
+                break;
+            case WorkflowStatusSeverity.Error:
+                _statusErrorImage ??= SystemIcons.Error.ToBitmap();
+                lblStatus.Image = _statusErrorImage;
+                lblStatus.ForeColor = Color.DarkRed;
+                break;
+            default:
+                _statusInfoImage ??= SystemIcons.Information.ToBitmap();
+                lblStatus.Image = _statusInfoImage;
+                lblStatus.ForeColor = SystemColors.ControlText;
+                break;
+        }
     }
 
     private void Error(Exception ex)
     {
-        SetStatus(ex.Message, true);
-        MessageBox.Show(this, ex.ToString(), "Chyba", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        SetGraphicsStatus(ex.Message, true);
+        MessageBox.Show(this, ex.ToString(), UiText.Get("Error.Title"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+
+    private void SetGraphicsStatus(string text, bool error)
+    {
+        _graphicsStatusIsError = error;
+        SetStatus(text, error);
+    }
+
+    private void ClearStaleGraphicsError()
+    {
+        if (!_graphicsStatusIsError) return;
+        _graphicsStatusIsError = false;
+        SetStatus(string.Empty, error: false);
+    }
+
+    private bool IsActiveInstallation(GameInstallation installation)
+    {
+        return InstallationSelectionState.IsSameActiveInstallation(installation, txtGameDir.Text) &&
+               _detectedProfile == installation.Game;
+    }
+
+    private static int CountControls(Control root)
+    {
+        int count = 1;
+        foreach (Control child in root.Controls)
+            count += CountControls(child);
+        return count;
+    }
+
+    // Non-interactive lifecycle harness hooks.  They deliberately avoid dialogs
+    // and persistence so the smoke can prove activation separately from UI input.
+    internal void InitializeInstallationStateForTest() => InitializeInstallations();
+
+    internal void ClearInstallationStateForTest()
+    {
+        ClearInstallationState();
+        // The real selector transition has already selected its neutral item
+        // before it invokes ClearInstallationState. Reproduce that UI detail
+        // for the direct non-interactive state harness.
+        RefreshInstallationSelector();
+    }
+
+    internal void DiscoverInstallationsForTest(IEnumerable<GameInstallation> installations)
+    {
+        foreach (GameInstallation installation in installations) AddInstallation(installation, refresh: false);
+        RefreshInstallationSelector();
+    }
+
+    internal void ActivateInstallationForTest(GameInstallation installation) => ApplyInstallation(installation, persist: false);
+
+    internal void SetActiveVariantForTest(BuiltInVariantId variantId)
+    {
+        if (_activeProject is null) throw new InvalidOperationException("No installation is active.");
+        VariantContext variant = _availableActiveVariants.Single(item => item.VariantId == variantId);
+        SetActiveVariant(variant);
+    }
+
+    internal void SelectGraphicsZoneForTest(string fileName)
+    {
+        int index = cmbZone.Items.IndexOf(fileName);
+        if (index < 0) throw new InvalidOperationException("The requested graphics resource is unavailable.");
+        cmbZone.SelectedIndex = index;
+    }
+
+    internal void SetTextEditForTest(int index, string text)
+    {
+        _gamePcEdits[index] = text;
+        RefreshWorkflowStatus();
+    }
+
+    internal void SaveTextProjectForTest() => SaveGamePcTexts();
+
+    internal void MaterializeGraphicsLayoutForTest()
+    {
+        // Non-interactive layout fixture: do not show a window, but give the
+        // docked graphics hierarchy a realistic client area for geometry tests.
+        tabVga.Size = new Size(1400, 700);
+        foreach (Control child in tabVga.Controls)
+        {
+            child.Bounds = tabVga.ClientRectangle;
+            child.PerformLayout();
+        }
+        mainSplit.Bounds = new Rectangle(0, 38, 1400, 620);
+        ApplySafeHalfSplit();
+        mainSplit.PerformLayout();
+        foreach (Control child in mainSplit.Panel2.Controls) child.PerformLayout();
+        previewViewport.PerformLayout();
+        previewScroll.PerformLayout();
+    }
+
+    internal EditionSwitchDiagnostics RunEditionSwitchStressForTest(int cycles)
+    {
+        if (cycles <= 0) throw new ArgumentOutOfRangeException(nameof(cycles));
+        if (_activeProject is null || _translationProjectState is null ||
+            !_translationProjectState.Variants.Any(item => item.Code.Equals("S1", StringComparison.OrdinalIgnoreCase)) ||
+            !_translationProjectState.Variants.Any(item => item.Code.Equals("SK", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("The edition-switch fixture requires S1 and SK projects.");
+
+        EnsureEmbeddedFontEditor();
+        SelectGraphicsZoneForTest("382.VGA");
+        Rectangle viewportBounds = previewViewport.Bounds;
+        Rectangle previewBounds = previewScroll.Bounds;
+        int controls = ControlTreeCount;
+        int graphics = GraphicsLoadCount;
+        int text = TextLoadCount;
+        int runtime = RuntimeUiLoadCount;
+        int font = FontBindCount;
+        int workflow = WorkflowRefreshCount;
+        int previewRenders = PreviewRenderCount;
+
+        string[] sequence = ["EN", "S1", "SK", "S1"];
+        for (int cycle = 0; cycle < cycles; cycle++)
+        {
+            foreach (string code in sequence)
+            {
+                SelectTranslationVariant(code);
+                if (previewViewport.Bounds != viewportBounds || previewScroll.Bounds != previewBounds)
+                    throw new InvalidOperationException("Edition switching changed Graphics preview geometry.");
+                if (code.Equals("S1", StringComparison.OrdinalIgnoreCase) && _edits.Count != 1)
+                    throw new InvalidOperationException("S1 Graphics state was not restored during stress switching.");
+                if (!code.Equals("S1", StringComparison.OrdinalIgnoreCase) && _edits.Count != 0)
+                    throw new InvalidOperationException("Graphics state leaked outside S1 during stress switching.");
+                if (HasUnsavedTextChanges)
+                    throw new InvalidOperationException("Edition switching created a false Text dirty state.");
+            }
+        }
+
+        int switchCount = cycles * sequence.Length;
+        var result = new EditionSwitchDiagnostics(
+            switchCount,
+            GraphicsLoadCount - graphics,
+            TextLoadCount - text,
+            RuntimeUiLoadCount - runtime,
+            FontBindCount - font,
+            WorkflowRefreshCount - workflow,
+            PreviewRenderCount - previewRenders,
+            controls,
+            ControlTreeCount,
+            viewportBounds,
+            previewViewport.Bounds,
+            previewBounds,
+            previewScroll.Bounds);
+
+        if (result.GraphicsLoads != switchCount || result.TextLoads != switchCount || result.RuntimeUiLoads != switchCount ||
+            result.FontBinds != switchCount || result.WorkflowRefreshes < switchCount || result.WorkflowRefreshes > switchCount * 3 ||
+            result.PreviewRenders != switchCount || result.ControlsBefore != result.ControlsAfter)
+            throw new InvalidOperationException("Edition refresh work was not bounded per switch.");
+        return result;
+    }
+
+    internal MainFormLayoutDiagnostics RunMainFormLayoutStressForTest()
+    {
+        if (_activeProject is null) throw new InvalidOperationException("An active project is required for layout stress validation.");
+        GraphicsLayoutSnapshot baseline = CaptureGraphicsLayoutSnapshot();
+
+        for (int cycle = 0; cycle < 25; cycle++)
+        {
+            foreach (string code in new[] { "EN", "S1", "SK", "S1" })
+            {
+                SelectTranslationVariant(code);
+                AssertStableGraphicsLayout(baseline, "edition change");
+            }
+        }
+
+        for (int index = 0; index < 20; index++)
+        {
+            SwitchMode(tabVga);
+            SwitchMode(tabText);
+            SwitchMode(tabFont);
+            SwitchMode(tabMods);
+            SwitchMode(tabVga);
+            AssertStableGraphicsLayout(baseline, "tab change");
+        }
+
+        string priorLocale = UiText.LocaleId;
+        try
+        {
+            foreach (string locale in new[] { "sk", "cs", "en", "sk", "cs", "en", "sk", "cs", "en", "sk" })
+            {
+                UiText.SetLocale(locale);
+                AssertStableGraphicsLayout(baseline, "locale change");
+            }
+        }
+        finally { UiText.SetLocale(priorLocale); }
+
+        AssertStableGraphicsLayout(baseline, "locale restoration");
+        return new MainFormLayoutDiagnostics(baseline, CaptureGraphicsLayoutSnapshot(), 100, 20, 10);
+    }
+
+    private GraphicsLayoutSnapshot CaptureGraphicsLayoutSnapshot() => new(
+        mainSplit.Bounds,
+        mainSplit.Panel1.Bounds,
+        mainSplit.Panel2.Bounds,
+        mainSplit.SplitterDistance,
+        previewViewport.Bounds,
+        previewScroll.Bounds,
+        _graphicsToolbar?.Bounds ?? Rectangle.Empty,
+        _graphicsActionRow?.Bounds ?? Rectangle.Empty);
+
+    private void AssertStableGraphicsLayout(GraphicsLayoutSnapshot expected, string transition)
+    {
+        if (CaptureGraphicsLayoutSnapshot() != expected)
+            throw new InvalidOperationException("Graphics layout changed after " + transition + ".");
+    }
+
+    internal void SelectTranslationForTest(string code)
+    {
+        if (_activeProject is null) throw new InvalidOperationException("No installation is active.");
+        TranslationProjectLoadResult loaded = _translationProjects.Load(_activeProject);
+        if (!loaded.IsSuccess || (!code.Equals("EN", StringComparison.OrdinalIgnoreCase) && !loaded.State!.Variants.Any(item => item.Code.Equals(code, StringComparison.OrdinalIgnoreCase))))
+            throw new InvalidOperationException("The requested project translation does not exist.");
+        if (_translationProjectState is null) LoadGamePcTexts();
+        SelectTranslationVariant(code);
+    }
+
+    internal void OpenTranslationFromCatalogForTest(string code)
+    {
+        OpenModsLauncher();
+        DataGridViewRow? row = variantGrid.Rows.Cast<DataGridViewRow>().SingleOrDefault(item =>
+            item.Tag is VariantEntry entry && entry.Code.Equals(code, StringComparison.OrdinalIgnoreCase));
+        if (row is null) throw new InvalidOperationException("The requested translation is not present in the project translation catalog.");
+        row.Selected = true;
+        variantGrid.CurrentCell = row.Cells[0];
+        OpenSelectedVariantDataFile();
+    }
+
+    internal void BrowseValidatedInstallationForTest(GameInstallation installation)
+    {
+        AddInstallation(installation, refresh: false);
+        ApplyInstallation(installation, persist: false);
+    }
+
+    internal void ActivateFontForTest()
+    {
+        EnsureEmbeddedFontEditor();
+        BindFontEditorToActiveVariant(showMissingError: false);
+    }
+
+    internal void OpenModsForTest() => OpenModsLauncher();
+
+    internal ContextSafetyDiagnostics RunContextSafetyStressForTest(GameInstallation elvira1, GameInstallation elvira2)
+    {
+        ApplyInstallation(elvira1, persist: false);
+        EnsureEmbeddedFontEditor();
+        _embeddedFontEditor!.LoadFromGameDirectory(elvira1.InstallationPath);
+        int controlsBefore = ControlTreeCount;
+        for (int activation = 0; activation < 20; activation++)
+        {
+            ScanGameFolder();
+            LoadGamePcTexts();
+            _embeddedFontEditor!.LoadFromGameDirectory(elvira1.InstallationPath);
+            OpenModsLauncher();
+            SwitchMode(tabVga);
+            SwitchMode(tabText);
+            SwitchMode(tabFont);
+            SwitchMode(tabMods);
+        }
+
+        for (int switchIndex = 0; switchIndex < 10; switchIndex++)
+        {
+            ApplyInstallation(elvira2, persist: false);
+            ScanGameFolder(); LoadGamePcTexts(); OpenModsLauncher();
+            OpenFirstVariantInTextEditorForTest();
+            EnsureEmbeddedFontEditor();
+            _embeddedFontEditor!.LoadFromGameDirectory(elvira2.InstallationPath);
+
+            ApplyInstallation(elvira1, persist: false);
+            ScanGameFolder(); LoadGamePcTexts(); OpenModsLauncher();
+            OpenFirstVariantInTextEditorForTest();
+            _embeddedFontEditor!.LoadFromGameDirectory(elvira1.InstallationPath);
+        }
+
+        int effectiveBeforeRedundant = ApplyInstallationEffectiveCount;
+        for (int repeat = 0; repeat < 5; repeat++) ApplyInstallation(elvira1, persist: false);
+        if (ApplyInstallationEffectiveCount != effectiveBeforeRedundant)
+            throw new InvalidOperationException("An identical active installation was applied again.");
+
+        return new ContextSafetyDiagnostics(
+            ApplyInstallationRequestedCount,
+            ApplyInstallationEffectiveCount,
+            ApplyInstallationSuppressedCount,
+            GraphicsLoadCount,
+            TextLoadCount,
+            _embeddedFontEditor?.SourceLoadCount ?? 0,
+            ModsRefreshCount,
+            controlsBefore,
+            ControlTreeCount);
+    }
+
+    private void OpenFirstVariantInTextEditorForTest()
+    {
+        if (_activeProject is null || _activeVariant is null)
+            throw new InvalidOperationException("The active variant was not available for the context-safety test.");
+
+        string logicalDataFile = Path.Combine(_activeProject.GameRoot, _activeVariant.LogicalDataFileName);
+        if (!File.Exists(logicalDataFile))
+            throw new InvalidOperationException("The active variant logical data file was not available for the context-safety test.");
+
+        SetCurrentDataFile(logicalDataFile);
+        LoadGamePcTexts();
+        SwitchMode(tabText);
+    }
+}
+
+internal sealed record ContextSafetyDiagnostics(
+    int ApplyRequested,
+    int ApplyEffective,
+    int ApplySuppressed,
+    int GraphicsLoads,
+    int TextLoads,
+    int FontLoads,
+    int ModsRefreshes,
+    int ControlsBefore,
+    int ControlsAfter);
+
+internal sealed record EditionSwitchDiagnostics(
+    int SwitchCount,
+    int GraphicsLoads,
+    int TextLoads,
+    int RuntimeUiLoads,
+    int FontBinds,
+    int WorkflowRefreshes,
+    int PreviewRenders,
+    int ControlsBefore,
+    int ControlsAfter,
+    Rectangle ViewportBefore,
+    Rectangle ViewportAfter,
+    Rectangle PreviewBefore,
+    Rectangle PreviewAfter);
+
+internal sealed record GraphicsLayoutSnapshot(
+    Rectangle SplitBounds,
+    Rectangle LeftPanelBounds,
+    Rectangle RightPanelBounds,
+    int SplitterDistance,
+    Rectangle PreviewViewportBounds,
+    Rectangle PreviewScrollBounds,
+    Rectangle ToolbarBounds,
+    Rectangle ActionRowBounds);
+
+internal sealed record MainFormLayoutDiagnostics(
+    GraphicsLayoutSnapshot Before,
+    GraphicsLayoutSnapshot After,
+    int EditionChanges,
+    int TabChanges,
+    int LocaleChanges);
+
+internal sealed class ModeButtonFonts(Font regular, Font bold) : IDisposable
+{
+    public Font Regular { get; } = regular;
+    public Font Bold { get; } = bold;
+    public void Dispose()
+    {
+        Regular.Dispose();
+        Bold.Dispose();
+    }
+}
+
+/// <summary>Read-only Variant Manager projection. It never authorizes or
+/// performs a build, run, directory creation, or other file operation.</summary>
+internal sealed record VariantManagerRow(
+    VariantContext Variant,
+    VariantDirectoryOperationStatus Ownership,
+    VariantLaunchReadiness Readiness,
+    string VariantRoot,
+    VariantBuildStatus BuildStatus,
+    int ConfiguredCapabilities,
+    int CapabilityCount);
+
+internal sealed record PalettePreviewChoice(int? BankIndex, string Display)
+{
+    public override string ToString() => Display;
+}
+
+internal sealed record TextTranslationSelection(string Code, string DisplayName, string DataFile, string ExeFile)
+{
+    public override string ToString() => Code.Equals("EN", StringComparison.OrdinalIgnoreCase)
+        ? $"{DisplayName} (EN)"
+        : $"{DisplayName} ({Code})";
+}
+
+internal sealed class PixelPerfectPictureBox : PictureBox
+{
+    public bool PixelPerfect { get; set; } = true;
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaintBackground(e);
+        if (Image is null || ClientSize.Width <= 0 || ClientSize.Height <= 0)
+            return;
+
+        Rectangle destination = SizeMode switch
+        {
+            PictureBoxSizeMode.StretchImage => ClientRectangle,
+            PictureBoxSizeMode.Zoom => ZoomRectangle(Image.Size, ClientSize),
+            PictureBoxSizeMode.CenterImage => new Rectangle(
+                Math.Max(0, (ClientSize.Width - Image.Width) / 2),
+                Math.Max(0, (ClientSize.Height - Image.Height) / 2),
+                Image.Width,
+                Image.Height),
+            _ => new Rectangle(0, 0, Image.Width, Image.Height)
+        };
+
+        e.Graphics.InterpolationMode = PixelPerfect ? InterpolationMode.NearestNeighbor : InterpolationMode.HighQualityBicubic;
+        e.Graphics.PixelOffsetMode = PixelPerfect ? PixelOffsetMode.Half : PixelOffsetMode.HighQuality;
+        e.Graphics.SmoothingMode = PixelPerfect ? SmoothingMode.None : SmoothingMode.HighQuality;
+        e.Graphics.CompositingQuality = PixelPerfect ? CompositingQuality.HighSpeed : CompositingQuality.HighQuality;
+        e.Graphics.DrawImage(Image, destination, 0, 0, Image.Width, Image.Height, GraphicsUnit.Pixel);
+    }
+
+    private static Rectangle ZoomRectangle(Size imageSize, Size clientSize)
+    {
+        float scale = Math.Min((float)clientSize.Width / imageSize.Width, (float)clientSize.Height / imageSize.Height);
+        int width = Math.Max(1, (int)Math.Round(imageSize.Width * scale));
+        int height = Math.Max(1, (int)Math.Round(imageSize.Height * scale));
+        return new Rectangle((clientSize.Width - width) / 2, (clientSize.Height - height) / 2, width, height);
     }
 }

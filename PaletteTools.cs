@@ -33,45 +33,19 @@ internal static class PaletteTools
     }
 
     public static byte[] ReadIndices(string pngPath, int expectedWidth, int expectedHeight)
+        => ReadIndices(pngPath, expectedWidth, expectedHeight, DiagnosticPalette);
+
+    public static byte[] ReadIndices(string pngPath, int expectedWidth, int expectedHeight, IReadOnlyList<Color> palette)
     {
-        using var bmp = new Bitmap(pngPath);
-        if (bmp.Width != expectedWidth || bmp.Height != expectedHeight)
-            throw new InvalidDataException(
-                $"PNG má {bmp.Width}x{bmp.Height}, očakáva sa {expectedWidth}x{expectedHeight}.");
+        ReplacePngValidationResult validation = ReplacePngValidator.Validate(pngPath, expectedWidth, expectedHeight, "palette", palette);
+        if (validation.IsValid && validation.Indices is not null) return validation.Indices;
 
-        byte[] result = new byte[checked(expectedWidth * expectedHeight)];
-
-        for (int y = 0; y < expectedHeight; y++)
-        for (int x = 0; x < expectedWidth; x++)
+        throw new InvalidDataException(validation.FailureKind switch
         {
-            Color c = bmp.GetPixel(x, y);
-
-            if (c.A < 128)
-            {
-                result[y * expectedWidth + x] = 0;
-                continue;
-            }
-
-            int idx = FindExact(DiagnosticPalette, c);
-            if (idx < 0)
-                throw new InvalidDataException(
-                    $"Neznáma farba na ({x},{y}): #{c.R:X2}{c.G:X2}{c.B:X2}. " +
-                    "Replacement PNG zatiaľ musí používať diagnostickú 16-farebnú paletu.");
-
-            result[y * expectedWidth + x] = (byte)idx;
-        }
-
-        return result;
-    }
-
-    private static int FindExact(Color[] palette, Color c)
-    {
-        for (int i = 1; i < palette.Length; i++)
-        {
-            Color p = palette[i];
-            if (c.R == p.R && c.G == p.G && c.B == p.B)
-                return i;
-        }
-        return -1;
+            ReplacePngValidationFailureKind.DimensionMismatch => $"PNG dimensions {validation.ActualWidth}x{validation.ActualHeight} do not match expected {expectedWidth}x{expectedHeight}.",
+            ReplacePngValidationFailureKind.PaletteMismatch => $"PNG contains {validation.InvalidPixelCount} pixels outside the active palette.",
+            ReplacePngValidationFailureKind.PaletteUnavailable => "The active palette is unavailable.",
+            _ => "The selected file is not a supported PNG image."
+        });
     }
 }
