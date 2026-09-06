@@ -1,7 +1,7 @@
 # Nápověda π1 Elvira I & II Editor
 
 ## [getting-started] Začínáme
-V selektoru **Instalace** vyberte podporovanou VGA hru. Editor si platné instalace pamatuje v uživatelském nastavení aplikace, nikdy ve složce hry. **Najít hry...** provede rychlou omezenou kontrolu běžných umístění GOG a zapamatovaných cest; při spuštění automaticky neprohledává celé disky. Pomocí **Vybrat adresář...** můžete složku hry vždy ručně ověřit a přidat. Více instalací Elvira I/II zůstává samostatnými položkami a **Hra: Automatická detekce** ihned zobrazí ověřenou vybranou hru. Jazyk vyberte v **Jazyk rozhraní**. Používejte Grafiku, Text, Font a Mody a spouštěč; Nápověda je jen pro čtení a O programu je stručné shrnutí.
+V selektoru **Instalace** vyberte podporovanou VGA hru. Editor si platné instalace pamatuje v uživatelském nastavení aplikace, nikdy ve složce hry. **Najít hry...** provede rychlou omezenou kontrolu běžných umístění GOG a zapamatovaných cest; při spuštění automaticky neprohledává celé disky. Pomocí **Vybrat adresář...** můžete složku hry vždy ručně ověřit a přidat. Více instalací Elvira I/II zůstává samostatnými položkami a vybraná instalace automaticky identifikuje a aktivuje podporovanou hru. Jazyk vyberte v **Jazyk rozhraní**. Používejte Grafiku, Text, Font a Mody a spouštěč; Nápověda je jen pro čtení a O programu je stručné shrnutí.
 
 Podporované hry: **Elvira: Mistress of the Dark** a **Elvira II: The Jaws of Cerberus**.
 

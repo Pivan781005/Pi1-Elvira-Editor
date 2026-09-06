@@ -1,5 +1,6 @@
 using System.Drawing.Imaging;
 using System.Drawing.Drawing2D;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace ElviraVgaEditor;
@@ -10,14 +11,14 @@ internal sealed class MainForm : Form
     // The user-facing control is cmbInstallations; its display text is never parsed.
     private readonly TextBox txtGameDir = new();
     private readonly ComboBox cmbInstallations = new();
-    private readonly Button btnFindGames = new();
-    private readonly Button btnBrowseGame = new();
+    private readonly CenteredCaptionButton btnFindGames = new();
+    private readonly CenteredCaptionButton btnBrowseGame = new();
     private readonly ComboBox cmbZone = new();
     private readonly Panel panelPaletteSelector = new();
     private readonly Panel panelPaletteSwatches = new();
     private readonly Label lblPaletteMode = new();
     private readonly ComboBox cmbPaletteManual = new();
-    private readonly Button btnPaletteAdvanced = new();
+    private readonly CenteredCaptionButton btnPaletteAdvanced = new();
     private readonly Label lblPaletteCaption = new();
     private readonly Label lblLanguageCaption = new();
     private readonly Label lblInstallationCaption = new();
@@ -25,28 +26,26 @@ internal sealed class MainForm : Form
     private readonly ComboBox cmbActiveVariant = new();
     private readonly Label lblActiveProjectCaption = new();
     private readonly ComboBox cmbActiveProject = new();
-    private readonly Button btnBuildActiveVariant = new();
+    private readonly CenteredCaptionButton btnBuildActiveVariant = new();
     private readonly Label lblVgaFileCaption = new();
-    private readonly Button btnReload = new();
+    private readonly CenteredCaptionButton btnReload = new();
     private readonly DataGridView grid = new();
     private readonly PixelPerfectPictureBox preview = new();
     private readonly Panel previewScroll = new();
     private readonly Panel previewViewport = new();
     private readonly ComboBox cmbPreviewZoom = new();
-    private readonly Button btnReloadPreview = new();
+    private readonly CenteredCaptionButton btnReloadPreview = new();
     private readonly Label lblPreviewZoom = new();
     private readonly Label lblMeta = new();
     private readonly StatusStrip statusBar = new();
     private readonly ToolStripStatusLabel lblStatus = new();
-    private readonly Button btnAbout = new();
-    private readonly Button btnHelp = new();
-    private readonly Button btnSpriteEditor = new();
-    private readonly Button btnTextEditor = new();
-    private readonly Button btnFontEditor = new();
-    private readonly Button btnModsLauncher = new();
+    private readonly CenteredCaptionButton btnAbout = new();
+    private readonly CenteredCaptionButton btnHelp = new();
+    private readonly CenteredCaptionButton btnSpriteEditor = new();
+    private readonly CenteredCaptionButton btnTextEditor = new();
+    private readonly CenteredCaptionButton btnFontEditor = new();
+    private readonly CenteredCaptionButton btnModsLauncher = new();
     private readonly ComboBox cmbUiLanguage = new();
-    private readonly ComboBox cmbGameProfile = new();
-    private readonly Label lblGameProfile = new();
     private readonly Label lblDetectedGameCaption = new();
     private readonly Label lblDetectedGame = new();
     private readonly TabControl tabs = new();
@@ -61,13 +60,13 @@ internal sealed class MainForm : Form
     private readonly DataGridView textGrid = new();
     private readonly TextBox txtSearch = new();
     private readonly ComboBox cmbTextEncoding = new();
-    private readonly Button btnOpenDataFile = new();
-    private readonly Button btnReloadTexts = new();
-    private readonly Button btnSaveTexts = new();
-    private readonly Button btnSaveAsDataFile = new();
-    private readonly Button btnCreateDataVariant = new();
-    private readonly Button btnExportTranslations = new();
-    private readonly Button btnImportTranslations = new();
+    private readonly CenteredCaptionButton btnOpenDataFile = new();
+    private readonly CenteredCaptionButton btnReloadTexts = new();
+    private readonly CenteredCaptionButton btnSaveTexts = new();
+    private readonly CenteredCaptionButton btnSaveAsDataFile = new();
+    private readonly CenteredCaptionButton btnCreateDataVariant = new();
+    private readonly CenteredCaptionButton btnExportTranslations = new();
+    private readonly CenteredCaptionButton btnImportTranslations = new();
     private readonly Label lblTextStatus = new();
     private readonly Label lblTextSource = new();
     private readonly Label lblTextOverview = new();
@@ -87,9 +86,9 @@ internal sealed class MainForm : Form
     private readonly TabPage tabGameTextDomain = new();
     private readonly TabPage tabRuntimeUiDomain = new();
     private readonly DataGridView runtimeUiGrid = new();
-    private readonly Button btnReloadRuntimeUi = new();
-    private readonly Button btnSaveRuntimeUi = new();
-    private readonly Button btnResetRuntimeUi = new();
+    private readonly CenteredCaptionButton btnReloadRuntimeUi = new();
+    private readonly CenteredCaptionButton btnSaveRuntimeUi = new();
+    private readonly CenteredCaptionButton btnResetRuntimeUi = new();
     private readonly Label lblRuntimeUiStatus = new();
     private readonly Label lblRuntimeUiRuntime = new();
     private readonly RuntimeUiTextService _runtimeUiTexts = new();
@@ -117,32 +116,32 @@ internal sealed class MainForm : Form
     private readonly Label lblVariantManagerTitle = new();
     private readonly Label lblVariantManagerHint = new();
     private bool _refreshingVariantManager;
-    private readonly Button btnVariantAdd = new();
-    private readonly Button btnVariantEdit = new();
-    private readonly Button btnVariantRemove = new();
-    private readonly Button btnVariantMoveUp = new();
-    private readonly Button btnVariantMoveDown = new();
-    private readonly Button btnVariantToggleEnabled = new();
-    private readonly Button btnVariantOpenDataFile = new();
+    private readonly CenteredCaptionButton btnVariantAdd = new();
+    private readonly CenteredCaptionButton btnVariantEdit = new();
+    private readonly CenteredCaptionButton btnVariantRemove = new();
+    private readonly CenteredCaptionButton btnVariantMoveUp = new();
+    private readonly CenteredCaptionButton btnVariantMoveDown = new();
+    private readonly CenteredCaptionButton btnVariantToggleEnabled = new();
+    private readonly CenteredCaptionButton btnVariantOpenDataFile = new();
     private readonly Label lblLauncherFile = new();
     private readonly TextBox txtLauncherFile = new();
-    private readonly Button btnSelectLauncherFile = new();
+    private readonly CenteredCaptionButton btnSelectLauncherFile = new();
     private readonly Label lblModderName = new();
     private readonly TextBox txtModderName = new();
-    private readonly Button btnPreviewLauncher = new();
-    private readonly Button btnGenerateLauncher = new();
-    private readonly Button btnRestoreLauncher = new();
+    private readonly CenteredCaptionButton btnPreviewLauncher = new();
+    private readonly CenteredCaptionButton btnGenerateLauncher = new();
+    private readonly CenteredCaptionButton btnRestoreLauncher = new();
     private readonly Label lblDefaultVariant = new();
     private readonly Label lblLauncherReadiness = new();
-    private readonly Button btnRunVariant = new();
-    private readonly Button btnDebugVariant = new();
+    private readonly CenteredCaptionButton btnRunVariant = new();
+    private readonly CenteredCaptionButton btnDebugVariant = new();
     private readonly Label lblRecoveryTitle = new();
     private readonly Label lblRecoveryStatus = new();
-    private readonly Button btnVerifyPristine = new();
-    private readonly Button btnRestoreBaselineLauncher = new();
-    private readonly Button btnRebuildOwnedVariant = new();
-    private readonly Button btnRemoveOwnedVariant = new();
-    private readonly Button btnReverseAllPreview = new();
+    private readonly CenteredCaptionButton btnVerifyPristine = new();
+    private readonly CenteredCaptionButton btnRestoreBaselineLauncher = new();
+    private readonly CenteredCaptionButton btnRebuildOwnedVariant = new();
+    private readonly CenteredCaptionButton btnRemoveOwnedVariant = new();
+    private readonly CenteredCaptionButton btnReverseAllPreview = new();
     private readonly ComboBox cmbDefaultVariant = new();
     private VariantCatalog? _variantCatalog;
     private VariantContext? _modsVariant;
@@ -168,15 +167,17 @@ internal sealed class MainForm : Form
     private readonly SplitContainer mainSplit = new();
     private TableLayoutPanel? _graphicsToolbar;
     private FlowLayoutPanel? _graphicsActionRow;
-    private readonly Button btnReplace = new();
-    private readonly Button btnClearEdit = new();
-    private readonly Button btnExport = new();
+    private FlowLayoutPanel? _navigationRow;
+    private TableLayoutPanel? _headerGrid;
+    private readonly CenteredCaptionButton btnReplace = new();
+    private readonly CenteredCaptionButton btnClearEdit = new();
+    private readonly CenteredCaptionButton btnExport = new();
     private readonly Button btnDeploy = new();
-    private readonly Button btnRestore = new();
+    private readonly CenteredCaptionButton btnRestore = new();
     private readonly CheckBox chkPixelPerfect = new();
     private readonly Label lblGraphicsVariant = new();
     private readonly ComboBox cmbGraphicsScope = new();
-    private readonly Button btnSaveGraphicsProject = new();
+    private readonly CenteredCaptionButton btnSaveGraphicsProject = new();
     private readonly GraphicsVariantService _graphicsVariants = new();
     private ProjectContext? _graphicsProject;
     private VariantContext? _graphicsVariant;
@@ -371,7 +372,6 @@ internal sealed class MainForm : Form
             e.Handled = true;
             e.SuppressKeyPress = true;
         };
-        cmbGameProfile.SelectedIndex = 0;
 
         Shown += (_, _) =>
         {
@@ -417,14 +417,30 @@ internal sealed class MainForm : Form
         e.DrawFocusRectangle();
     }
 
-    private static void ConfigureCenteredButton(Button button)
+    // One shared visual configuration for normal MainForm action buttons.
+    // Fixed 32 px logical height; optical vertical-centering padding keeps the
+    // visible caption mass centered (measured: Padding(6,1,6,1) renders the
+    // caption ~1 px high, Padding(6,2,6,0) centers it, Padding(6,3,6,0)
+    // already sits low; total vertical padding stays 2 px so rectangles are
+    // unchanged). Width growth for localized captions is opt-in per container
+    // so fixed toolbars keep deterministic geometry while wrapping flows may
+    // reflow horizontally. Height never changes: preferred text height stays
+    // below the 32 px MinimumSize floor at supported fonts/DPIs.
+    private static void ConfigureCenteredButton(Button button, bool allowWidthGrowth = false)
     {
         button.AutoSize = false;
         button.Height = 32;
         button.MinimumSize = new Size(0, 32);
-        button.Padding = new Padding(6, 1, 6, 1);
+        button.Padding = new Padding(6, 2, 6, 0);
         button.TextAlign = ContentAlignment.MiddleCenter;
         button.UseCompatibleTextRendering = false;
+        if (allowWidthGrowth)
+        {
+            // Floor preserves the EN minimum; only width may grow for SK/CZ.
+            button.MinimumSize = new Size(button.Width, 32);
+            button.AutoSize = true;
+            button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        }
     }
 
     private static void ConfigureComboLabel(Label label, int width)
@@ -479,67 +495,111 @@ internal sealed class MainForm : Form
 
     private void BuildTextEditorUi()
     {
+        // Stabilized layout: the previous 168 px fixed panel used absolute
+        // SetBounds coordinates (buttons up to x=1008, context group at
+        // x=1020) which clipped on narrow windows, overlapped under DPI
+        // scaling, and overflowed with longer SK/CZ captions. Use stacked
+        // Dock.Top AutoSize rows (header table + wrapping action/filter
+        // flows) so resize/DPI/localization reflow instead of clipping.
         var topText = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 168,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Padding = new Padding(8)
         };
 
-        lblTextSource.AutoSize = false;
-        lblTextSource.SetBounds(8, 6, 430, 28);
+        var headerTable = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        headerTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        headerTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+
+        lblTextSource.AutoSize = true;
+        lblTextSource.Dock = DockStyle.Fill;
         lblTextSource.TextAlign = ContentAlignment.MiddleLeft;
         lblTextSource.Font = new Font(Font, FontStyle.Bold);
 
-        lblTextOverview.SetBounds(445, 4, 620, 54);
+        lblTextOverview.AutoSize = true;
+        lblTextOverview.Dock = DockStyle.Fill;
         lblTextOverview.TextAlign = ContentAlignment.MiddleLeft;
         lblTextOverview.Font = new Font(Font, FontStyle.Bold);
+        headerTable.Controls.Add(lblTextSource, 0, 0);
+        headerTable.Controls.Add(lblTextOverview, 1, 0);
+
+        var actionFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
 
         btnOpenDataFile.Text = UiText.Get("OpenDataFile");
-        btnOpenDataFile.SetBounds(8, 64, 210, 32);
+        btnOpenDataFile.Size = new Size(210, 32);
+        btnOpenDataFile.Margin = new Padding(0, 4, 6, 0);
         btnOpenDataFile.Click += (_, _) => OpenTextDataFile();
 
         lblSearchCaption.Text = UiText.Get("Search");
-        lblSearchCaption.AutoSize = false;
-        lblSearchCaption.SetBounds(8, 104, 55, 26);
+        lblSearchCaption.AutoSize = true;
         lblSearchCaption.TextAlign = ContentAlignment.MiddleLeft;
+        lblSearchCaption.Margin = new Padding(0, 5, 6, 0);
 
-        txtSearch.SetBounds(65, 104, 260, 26);
+        txtSearch.Size = new Size(260, 26);
+        txtSearch.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        txtSearch.Margin = new Padding(0, 4, 6, 0);
         txtSearch.TextChanged += (_, _) => RefreshTextGrid();
 
         lblEncodingCaption.Text = UiText.Get("Encoding");
-        lblEncodingCaption.AutoSize = false;
-        lblEncodingCaption.SetBounds(340, 104, 75, 26);
+        lblEncodingCaption.AutoSize = true;
         lblEncodingCaption.TextAlign = ContentAlignment.MiddleLeft;
+        lblEncodingCaption.Margin = new Padding(6, 5, 6, 0);
 
         cmbTextEncoding.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbTextEncoding.Items.AddRange(new object[] { "CP852", "Windows-1250", "Latin1/Raw" });
         cmbTextEncoding.SelectedIndex = 0;
-        cmbTextEncoding.SetBounds(420, 104, 130, 26);
+        cmbTextEncoding.Size = new Size(130, 26);
+        cmbTextEncoding.Margin = new Padding(0, 4, 6, 0);
         cmbTextEncoding.SelectedIndexChanged += (_, _) => RefreshTextGrid();
 
         btnReloadTexts.Text = UiText.Get("ReloadTexts");
-        btnReloadTexts.SetBounds(228, 64, 100, 32);
+        btnReloadTexts.Size = new Size(100, 32);
+        btnReloadTexts.Margin = new Padding(0, 4, 6, 0);
         btnReloadTexts.Click += (_, _) => LoadGamePcTexts();
 
         btnSaveTexts.Text = UiText.Get("SaveToProject");
-        btnSaveTexts.SetBounds(338, 64, 145, 32);
+        btnSaveTexts.Size = new Size(145, 32);
+        btnSaveTexts.Margin = new Padding(0, 4, 6, 0);
         btnSaveTexts.Click += (_, _) => SaveGamePcTexts();
 
         btnSaveAsDataFile.Text = UiText.Get("SaveAsDataFile");
-        btnSaveAsDataFile.SetBounds(493, 64, 125, 32);
+        btnSaveAsDataFile.Size = new Size(125, 32);
+        btnSaveAsDataFile.Margin = new Padding(0, 4, 6, 0);
         btnSaveAsDataFile.Click += (_, _) => SaveTextDataFileAs(createVariant: false);
 
         btnCreateDataVariant.Text = UiText.Get("CreateVariant");
-        btnCreateDataVariant.SetBounds(628, 64, 160, 32);
-        btnExportTranslations.SetBounds(798, 64, 100, 32);
-        btnImportTranslations.SetBounds(908, 64, 100, 32);
+        btnCreateDataVariant.Size = new Size(160, 32);
+        btnCreateDataVariant.Margin = new Padding(0, 4, 6, 0);
+        btnExportTranslations.Size = new Size(100, 32);
+        btnExportTranslations.Margin = new Padding(0, 4, 6, 0);
+        btnImportTranslations.Size = new Size(100, 32);
+        btnImportTranslations.Margin = new Padding(0, 4, 0, 0);
         btnExportTranslations.Text = UiText.Get("ExportTranslation");
         btnImportTranslations.Text = UiText.Get("ImportTranslation");
         btnExportTranslations.Click += (_, _) => ExportTranslations();
         btnImportTranslations.Click += (_, _) => ImportTranslations();
         foreach (Button button in new[] { btnOpenDataFile, btnReloadTexts, btnSaveTexts, btnSaveAsDataFile, btnCreateDataVariant, btnExportTranslations, btnImportTranslations })
-            ConfigureCenteredButton(button);
+            ConfigureCenteredButton(button, allowWidthGrowth: true);
         btnCreateDataVariant.Click += (_, _) => SaveTextDataFileAs(createVariant: true);
 
         lblTextContextCaption.Text = UiText.Get("TextContext");
@@ -562,13 +622,13 @@ internal sealed class MainForm : Form
             UpdateTextStatusSummary();
         };
 
-        lblTextValidation.AutoSize = false;
-        lblTextValidation.SetBounds(600, 104, 340, 22);
+        lblTextValidation.AutoSize = true;
         lblTextValidation.TextAlign = ContentAlignment.MiddleLeft;
+        lblTextValidation.Margin = new Padding(6, 5, 0, 0);
 
         chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
         chkOnlyTextRisks.AutoSize = true;
-        chkOnlyTextRisks.SetBounds(300, 136, 210, 22);
+        chkOnlyTextRisks.Margin = new Padding(6, 6, 6, 0);
         chkOnlyTextRisks.Visible = false;
         chkOnlyTextRisks.Enabled = false;
         chkOnlyTextRisks.Checked = false;
@@ -576,7 +636,7 @@ internal sealed class MainForm : Form
 
         chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
         chkIgnoreTextWarning.AutoSize = true;
-        chkIgnoreTextWarning.SetBounds(525, 136, 250, 22);
+        chkIgnoreTextWarning.Margin = new Padding(6, 6, 0, 0);
         chkIgnoreTextWarning.Visible = false;
         chkIgnoreTextWarning.Enabled = false;
 
@@ -586,8 +646,7 @@ internal sealed class MainForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            Location = new Point(1020, 67),
-            Margin = Padding.Empty,
+            Margin = new Padding(6, 4, 0, 0),
             Padding = Padding.Empty
         };
         textContextGroup.Controls.AddRange(new Control[] { lblTextContextCaption, cmbTextContext });
@@ -603,12 +662,31 @@ internal sealed class MainForm : Form
         cmbTranslationVariant.Margin = Padding.Empty;
         cmbTranslationVariant.SelectedIndexChanged += (_, _) => SelectTranslationFromSelector();
 
-        topText.Controls.AddRange(new Control[]
+        var filterFlow = new FlowLayoutPanel
         {
-            lblTextSource, lblTextOverview, btnOpenDataFile, btnReloadTexts, btnSaveTexts, btnSaveAsDataFile, btnCreateDataVariant,
-            btnExportTranslations, btnImportTranslations, lblSearchCaption, txtSearch, lblEncodingCaption, cmbTextEncoding,
-            textContextGroup, lblTextValidation, chkOnlyTextRisks, chkIgnoreTextWarning
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        filterFlow.Controls.AddRange(new Control[]
+        {
+            lblSearchCaption, txtSearch, lblEncodingCaption, cmbTextEncoding,
+            lblTextValidation, chkOnlyTextRisks, chkIgnoreTextWarning
         });
+
+        actionFlow.Controls.AddRange(new Control[]
+        {
+            btnOpenDataFile, btnReloadTexts, btnSaveTexts, btnSaveAsDataFile, btnCreateDataVariant,
+            btnExportTranslations, btnImportTranslations, textContextGroup
+        });
+
+        topText.Controls.Add(filterFlow);
+        topText.Controls.Add(actionFlow);
+        topText.Controls.Add(headerTable);
 
         textGrid.Dock = DockStyle.Fill;
         textGrid.AllowUserToAddRows = false;
@@ -676,7 +754,8 @@ internal sealed class MainForm : Form
         };
 
         lblTextStatus.Dock = DockStyle.Bottom;
-        lblTextStatus.Height = 28;
+        lblTextStatus.AutoSize = true;
+        lblTextStatus.MinimumSize = new Size(0, 28);
         lblTextStatus.Padding = new Padding(6, 6, 0, 0);
 
         // The main application toolbar overlays the top ~75 px of the tab area.
@@ -702,22 +781,40 @@ internal sealed class MainForm : Form
 
     private void BuildRuntimeUiTextUi()
     {
-        var toolbar = new Panel { Dock = DockStyle.Top, Height = 74, Padding = new Padding(8) };
-        lblRuntimeUiRuntime.AutoSize = false;
-        lblRuntimeUiRuntime.SetBounds(8, 5, 850, 25);
+        // Stabilized: previously a fixed 74 px panel with absolute positions;
+        // longer SK/CZ button captions overflowed fixed 140 px slots. Use an
+        // AutoSize header label plus a wrapping button flow.
+        var toolbar = new Panel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(8) };
+        lblRuntimeUiRuntime.AutoSize = true;
+        lblRuntimeUiRuntime.Dock = DockStyle.Top;
         lblRuntimeUiRuntime.Font = new Font(Font, FontStyle.Bold);
         lblRuntimeUiRuntime.TextAlign = ContentAlignment.MiddleLeft;
+        var runtimeButtonFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
         btnReloadRuntimeUi.Text = UiText.Get("RuntimeUi.Reload");
-        btnReloadRuntimeUi.SetBounds(8, 35, 140, 30);
+        btnReloadRuntimeUi.Size = new Size(140, 30);
+        btnReloadRuntimeUi.Margin = new Padding(0, 4, 6, 0);
         btnReloadRuntimeUi.Click += (_, _) => LoadRuntimeUiText();
         btnSaveRuntimeUi.Text = UiText.Get("SaveToProject");
-        btnSaveRuntimeUi.SetBounds(158, 35, 140, 30);
+        btnSaveRuntimeUi.Size = new Size(140, 30);
+        btnSaveRuntimeUi.Margin = new Padding(0, 4, 6, 0);
         btnSaveRuntimeUi.Click += (_, _) => SaveRuntimeUiText();
         btnResetRuntimeUi.Text = UiText.Get("RuntimeUi.ResetOverride");
-        btnResetRuntimeUi.SetBounds(308, 35, 140, 30);
+        btnResetRuntimeUi.Size = new Size(140, 30);
+        btnResetRuntimeUi.Margin = new Padding(0, 4, 0, 0);
         btnResetRuntimeUi.Click += (_, _) => ResetSelectedRuntimeUiOverride();
-        foreach (Button button in new[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi }) ConfigureCenteredButton(button);
-        toolbar.Controls.AddRange(new Control[] { lblRuntimeUiRuntime, btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi });
+        foreach (Button button in new[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi }) ConfigureCenteredButton(button, allowWidthGrowth: true);
+        runtimeButtonFlow.Controls.AddRange(new Control[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi });
+        toolbar.Controls.Add(runtimeButtonFlow);
+        toolbar.Controls.Add(lblRuntimeUiRuntime);
 
         runtimeUiGrid.Dock = DockStyle.Fill;
         runtimeUiGrid.AllowUserToAddRows = false;
@@ -744,7 +841,8 @@ internal sealed class MainForm : Form
         runtimeUiGrid.SelectionChanged += (_, _) => UpdateRuntimeUiActions();
 
         lblRuntimeUiStatus.Dock = DockStyle.Bottom;
-        lblRuntimeUiStatus.Height = 28;
+        lblRuntimeUiStatus.AutoSize = true;
+        lblRuntimeUiStatus.MinimumSize = new Size(0, 28);
         lblRuntimeUiStatus.Padding = new Padding(6, 6, 0, 0);
         var host = new Panel { Dock = DockStyle.Fill, Padding = Padding.Empty };
         host.Controls.Add(runtimeUiGrid);
@@ -755,37 +853,149 @@ internal sealed class MainForm : Form
 
     private void BuildModsLauncherUi()
     {
-        var authoring = new Panel { Dock = DockStyle.Top, Height = 416, Padding = new Padding(8) };
-        lblLauncherFile.SetBounds(8, 7, 104, 26); lblLauncherFile.TextAlign = ContentAlignment.MiddleLeft; txtLauncherFile.SetBounds(118, 7, 175, 26);
-        btnSelectLauncherFile.SetBounds(300, 7, 105, 32);
-        lblModderName.SetBounds(425, 7, 104, 26); lblModderName.TextAlign = ContentAlignment.MiddleLeft; txtModderName.SetBounds(535, 7, 190, 26);
-        lblDefaultVariant.SetBounds(8, 42, 104, 26); lblDefaultVariant.TextAlign = ContentAlignment.MiddleLeft; cmbDefaultVariant.SetBounds(118, 42, 175, 26);
-        cmbDefaultVariant.DropDownStyle = ComboBoxStyle.DropDownList; cmbDefaultVariant.DisplayMember = nameof(VariantEntry.DisplayName);
-        btnPreviewLauncher.SetBounds(8, 78, 145, 32); btnGenerateLauncher.SetBounds(161, 78, 275, 32); btnRestoreLauncher.SetBounds(444, 78, 245, 32);
-        btnRunVariant.SetBounds(8, 114, 145, 30); btnDebugVariant.SetBounds(161, 114, 145, 30);
-        ConfigureCenteredButton(btnRunVariant); ConfigureCenteredButton(btnDebugVariant);
+        // Stabilized: previously a fixed 416 px panel with ~23 absolute
+        // SetBounds positions (fixed 880 px labels/grid, buttons up to
+        // x=880). Longer SK/CZ captions overflowed fixed slots and the grid
+        // never stretched on resize/DPI. Use stacked Dock.Top AutoSize rows
+        // with wrapping flows plus a Dock.Top grid that stretches width.
+        var authoring = new Panel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(8) };
+        var fileFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        lblLauncherFile.AutoSize = true;
+        lblLauncherFile.TextAlign = ContentAlignment.MiddleLeft;
+        lblLauncherFile.Margin = new Padding(0, 7, 6, 0);
+        txtLauncherFile.Size = new Size(175, 26);
+        txtLauncherFile.Margin = new Padding(0, 4, 6, 0);
+        btnSelectLauncherFile.Size = new Size(105, 32);
+        btnSelectLauncherFile.Margin = new Padding(0, 4, 12, 0);
+        lblModderName.AutoSize = true;
+        lblModderName.TextAlign = ContentAlignment.MiddleLeft;
+        lblModderName.Margin = new Padding(0, 7, 6, 0);
+        txtModderName.Size = new Size(190, 26);
+        txtModderName.Margin = new Padding(0, 4, 0, 0);
+        fileFlow.Controls.AddRange(new Control[] { lblLauncherFile, txtLauncherFile, btnSelectLauncherFile, lblModderName, txtModderName });
+        var defaultFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        lblDefaultVariant.AutoSize = true;
+        lblDefaultVariant.TextAlign = ContentAlignment.MiddleLeft;
+        lblDefaultVariant.Margin = new Padding(0, 7, 6, 0);
+        cmbDefaultVariant.Size = new Size(175, 26);
+        cmbDefaultVariant.Margin = new Padding(0, 4, 0, 0);
+        defaultFlow.Controls.AddRange(new Control[] { lblDefaultVariant, cmbDefaultVariant });
+        var launcherFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        btnPreviewLauncher.Size = new Size(145, 32);
+        btnPreviewLauncher.Margin = new Padding(0, 4, 6, 0);
+        btnGenerateLauncher.Size = new Size(275, 32);
+        btnGenerateLauncher.Margin = new Padding(0, 4, 6, 0);
+        btnRestoreLauncher.Size = new Size(245, 32);
+        btnRestoreLauncher.Margin = new Padding(0, 4, 0, 0);
+        launcherFlow.Controls.AddRange(new Control[] { btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher });
+        var runFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        btnRunVariant.Size = new Size(145, 30);
+        btnRunVariant.Margin = new Padding(0, 4, 6, 0);
+        btnDebugVariant.Size = new Size(145, 30);
+        btnDebugVariant.Margin = new Padding(0, 4, 0, 0);
+        runFlow.Controls.AddRange(new Control[] { btnRunVariant, btnDebugVariant });
         btnRunVariant.Text = UiText.Get("Execution.Run"); btnDebugVariant.Text = UiText.Get("Execution.Debug");
         btnRunVariant.Click += (_, _) => ExecuteActiveVariant(VariantExecutionMode.Run);
         btnDebugVariant.Click += (_, _) => ExecuteActiveVariant(VariantExecutionMode.Debug);
-        lblLauncherReadiness.SetBounds(8, 150, 850, 28); lblLauncherReadiness.TextAlign = ContentAlignment.MiddleLeft;
-        lblRecoveryTitle.SetBounds(8, 184, 850, 22); lblRecoveryTitle.Text = UiText.Get("Recovery.Title"); lblRecoveryTitle.Font = new Font(Font, FontStyle.Bold);
-        btnVerifyPristine.SetBounds(8, 210, 145, 30); btnRestoreBaselineLauncher.SetBounds(161, 210, 210, 30);
-        btnRebuildOwnedVariant.SetBounds(379, 210, 165, 30); btnRemoveOwnedVariant.SetBounds(552, 210, 165, 30); btnReverseAllPreview.SetBounds(725, 210, 155, 30);
+        lblLauncherReadiness.AutoSize = true;
+        lblLauncherReadiness.Dock = DockStyle.Top;
+        lblLauncherReadiness.TextAlign = ContentAlignment.MiddleLeft;
+        lblLauncherReadiness.Margin = new Padding(0, 6, 0, 0);
+        lblRecoveryTitle.AutoSize = true;
+        lblRecoveryTitle.Dock = DockStyle.Top;
+        lblRecoveryTitle.Text = UiText.Get("Recovery.Title"); lblRecoveryTitle.Font = new Font(Font, FontStyle.Bold);
+        lblRecoveryTitle.Margin = new Padding(0, 8, 0, 0);
+        var recoveryFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        btnVerifyPristine.Size = new Size(145, 30);
+        btnVerifyPristine.Margin = new Padding(0, 4, 6, 0);
+        btnRestoreBaselineLauncher.Size = new Size(210, 30);
+        btnRestoreBaselineLauncher.Margin = new Padding(0, 4, 6, 0);
+        btnRebuildOwnedVariant.Size = new Size(165, 30);
+        btnRebuildOwnedVariant.Margin = new Padding(0, 4, 6, 0);
+        btnRemoveOwnedVariant.Size = new Size(165, 30);
+        btnRemoveOwnedVariant.Margin = new Padding(0, 4, 6, 0);
+        btnReverseAllPreview.Size = new Size(155, 30);
+        btnReverseAllPreview.Margin = new Padding(0, 4, 0, 0);
+        recoveryFlow.Controls.AddRange(new Control[] { btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview });
         btnVerifyPristine.Text = UiText.Get("Recovery.VerifyPristine"); btnRestoreBaselineLauncher.Text = UiText.Get("Recovery.RestoreLauncher");
         btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
         btnSaveGraphicsProject.Text = UiText.Get("SaveToProject");
-        foreach (Button button in new[] { btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview }) ConfigureCenteredButton(button);
         btnVerifyPristine.Click += (_, _) => VerifyPristineInstallation();
         btnRestoreBaselineLauncher.Click += (_, _) => RestoreBaselineLauncher();
         btnRebuildOwnedVariant.Click += (_, _) => RebuildOwnedVariant();
         btnRemoveOwnedVariant.Click += (_, _) => RemoveOwnedVariantDirectory();
         btnReverseAllPreview.Click += (_, _) => PreviewReverseAllChanges();
-        lblRecoveryStatus.SetBounds(8, 246, 880, 28); lblRecoveryStatus.TextAlign = ContentAlignment.MiddleLeft;
-        lblVariantManagerTitle.SetBounds(8, 278, 250, 24); lblVariantManagerTitle.Font = new Font(Font, FontStyle.Bold);
-        lblVariantManagerHint.SetBounds(260, 278, 640, 24); lblVariantManagerHint.TextAlign = ContentAlignment.MiddleLeft;
+        lblRecoveryStatus.AutoSize = true;
+        lblRecoveryStatus.Dock = DockStyle.Top;
+        lblRecoveryStatus.TextAlign = ContentAlignment.MiddleLeft;
+        lblRecoveryStatus.Margin = new Padding(0, 4, 0, 0);
+        var managerHeaderFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        lblVariantManagerTitle.AutoSize = true;
+        lblVariantManagerTitle.Font = new Font(Font, FontStyle.Bold);
+        lblVariantManagerTitle.Margin = new Padding(0, 8, 8, 0);
+        lblVariantManagerHint.AutoSize = true;
+        lblVariantManagerHint.TextAlign = ContentAlignment.MiddleLeft;
+        lblVariantManagerHint.Margin = new Padding(0, 10, 0, 0);
         lblVariantManagerTitle.Text = UiText.Get("VariantManager.Title");
         lblVariantManagerHint.Text = UiText.Get("VariantManager.SelectHint");
-        variantManagerGrid.SetBounds(8, 304, 880, 102);
+        managerHeaderFlow.Controls.AddRange(new Control[] { lblVariantManagerTitle, lblVariantManagerHint });
+        variantManagerGrid.Dock = DockStyle.Top;
+        variantManagerGrid.Height = 102;
+        variantManagerGrid.Margin = new Padding(0, 4, 0, 0);
         variantManagerGrid.AllowUserToAddRows = false;
         variantManagerGrid.AllowUserToDeleteRows = false;
         variantManagerGrid.AllowUserToResizeRows = false;
@@ -804,20 +1014,33 @@ internal sealed class MainForm : Form
         variantManagerGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "BuildStatus", HeaderText = UiText.Get("VariantManager.BuildStatus"), Width = 100 });
         variantManagerGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Readiness", HeaderText = UiText.Get("VariantManager.Readiness"), Width = 170 });
         variantManagerGrid.SelectionChanged += (_, _) => SelectVariantManagerRow();
-        foreach (Button button in new[] { btnSelectLauncherFile, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher })
-        {
-            ConfigureCenteredButton(button);
-        }
+        // One shared configuration: EN widths stay minima, longer SK/CZ
+        // captions grow in width only; wrapping flows reflow the extra width.
+        foreach (Button button in new[] { btnSelectLauncherFile, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher, btnRunVariant, btnDebugVariant, btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview })
+            ConfigureCenteredButton(button, allowWidthGrowth: true);
         btnSelectLauncherFile.Click += (_, _) => SelectLauncherFile();
         btnPreviewLauncher.Click += (_, _) => PreviewLauncher();
         btnGenerateLauncher.Click += (_, _) => GenerateLauncher();
         btnRestoreLauncher.Click += (_, _) => RestoreLauncher();
         SetModsLauncherControls(active: false);
-        authoring.Controls.AddRange(new Control[] { lblLauncherFile, txtLauncherFile, btnSelectLauncherFile, lblModderName, txtModderName, lblDefaultVariant, cmbDefaultVariant, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher, btnRunVariant, btnDebugVariant, lblLauncherReadiness, lblRecoveryTitle, btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview, lblRecoveryStatus, lblVariantManagerTitle, lblVariantManagerHint, variantManagerGrid });
+        // Dock.Top stacking: last added docks first at the very top, so add
+        // bottom-up to obtain file/default/launcher/run/readiness/recovery/
+        // status/manager-header/grid visual order.
+        authoring.Controls.Add(variantManagerGrid);
+        authoring.Controls.Add(managerHeaderFlow);
+        authoring.Controls.Add(lblRecoveryStatus);
+        authoring.Controls.Add(recoveryFlow);
+        authoring.Controls.Add(lblRecoveryTitle);
+        authoring.Controls.Add(lblLauncherReadiness);
+        authoring.Controls.Add(runFlow);
+        authoring.Controls.Add(launcherFlow);
+        authoring.Controls.Add(defaultFlow);
+        authoring.Controls.Add(fileFlow);
         var actions = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 76,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Padding = new Padding(8),
             WrapContents = true
         };
@@ -826,7 +1049,7 @@ internal sealed class MainForm : Form
         {
             button.AutoSize = false;
             button.Width = button == btnVariantOpenDataFile ? 270 : button == btnVariantMoveDown ? 125 : button == btnVariantMoveUp ? 115 : 95;
-            ConfigureCenteredButton(button);
+            ConfigureCenteredButton(button, allowWidthGrowth: true);
             actions.Controls.Add(button);
         }
         btnVariantAdd.Click += (_, _) => AddVariant();
@@ -2122,11 +2345,6 @@ internal sealed class MainForm : Form
         cmbTextContext.SelectedIndex = Math.Min(contextIndex, cmbTextContext.Items.Count - 1);
         RefreshTranslationVariantSelector();
 
-        int gameProfileIndex = Math.Max(0, cmbGameProfile.SelectedIndex);
-        cmbGameProfile.Items.Clear();
-        cmbGameProfile.Items.AddRange(new object[] { UiText.Get("AutoDetect"), "Elvira I", "Elvira II" });
-        cmbGameProfile.SelectedIndex = Math.Min(gameProfileIndex, cmbGameProfile.Items.Count - 1);
-
         if (grid.Columns.Count >= 6)
         {
             grid.Columns[0].HeaderText = UiText.Get("Id");
@@ -2171,12 +2389,13 @@ internal sealed class MainForm : Form
         btnSpriteEditor.Text = UiText.Get("Graphics");
         btnClearEdit.Text = UiText.Get("CancelEdit");
         btnDeploy.Text = UiText.Get("ApplyGame");
+        btnSaveGraphicsProject.Text = UiText.Get("SaveToProject");
         lblPaletteCaption.Text = UiText.Get("Palette");
         btnPaletteAdvanced.Text = _paletteAdvancedVisible ? UiText.Get("PaletteBasic") : UiText.Get("PaletteAdvanced");
         chkPixelPerfect.Text = UiText.Get("PixelPerfect");
         lblInstallationCaption.Text = UiText.Get("Installation");
         lblActiveVariantCaption.Text = UiText.Get("ActiveVariant");
-        lblDetectedGameCaption.Text = UiText.Get("Detected");
+        lblDetectedGameCaption.Text = UiText.Get("Detected") + ":";
         lblLanguageCaption.Text = UiText.Get("InterfaceLanguage");
         RefreshGraphicsScopeItems();
         RefreshPreviewZoomItems();
@@ -2185,7 +2404,6 @@ internal sealed class MainForm : Form
         btnTextEditor.Text = UiText.Get("OpenTextEditor");
         btnFontEditor.Text = UiText.Get("FontTab");
         btnModsLauncher.Text = UiText.Get("ModsLauncherTab");
-        lblGameProfile.Text = UiText.Get("Game");
         lblVgaFileCaption.Text = UiText.Get("VgaFile");
         btnReloadPreview.Text = UiText.Get("ReloadPreview");
         RefreshInstallationSelector(selectedPath: txtGameDir.Text);
@@ -2203,6 +2421,10 @@ internal sealed class MainForm : Form
             _aboutViewer.SetLanguage(UiText.Language);
         UpdateGameProfileDisplay();
         UpdateModeButtons();
+        // Reflow the stabilized AutoSize/FlowLayoutPanel rows after caption
+        // lengths change (EN/SK/CZ). No semantics change; forces WinForms to
+        // recompute wrapping toolbar heights.
+        PerformLayout();
     }
 
     private string NeutralInstallationPrompt => UiText.Get(UiLocalizationKeys.NoGameSelected) + " " + UiText.Get(UiLocalizationKeys.FindGamesOrBrowseFolder);
@@ -2321,84 +2543,80 @@ internal sealed class MainForm : Form
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 128));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 172));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
 
         var top = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
-        var globalBar = new TableLayoutPanel
+        // One structural grid: column 0 is the shared label column, column 1
+        // the shared selector column with ONE fixed width (all three
+        // ComboBoxes share X, width and right edge without each claiming the
+        // whole remainder), column 2 the shared action column (Find games
+        // above Build variant, Detected caption below), column 3 the value
+        // column, column 4 the right area. A Percent selector column grew to
+        // 1300+ px on wide desktops and pushed the right header out of the
+        // visible area; the shared width matches the Installation dropdown
+        // width (620) so closed and opened selectors look identical, while
+        // long paths still truncate inside the box (full path in tooltip).
+        // Deterministic absolute rows fit one 32 px action row or one native
+        // ComboBox row.
+        var headerGrid = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 76,
-            ColumnCount = 4,
-            RowCount = 2,
+            Height = 108,
+            ColumnCount = 5,
+            RowCount = 3,
             Padding = Padding.Empty,
             Margin = Padding.Empty
         };
-        globalBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
-        globalBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
-        globalBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 26));
-        globalBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        globalBar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        globalBar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        _headerGrid = headerGrid;
+        headerGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        // 628 = 620 px shared selector width + 8 px ComboBox side margins,
+        // so closed width always equals DropDownWidth.
+        headerGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 628));
+        headerGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        headerGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        headerGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        headerGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        headerGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        headerGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
 
-        var installationRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty };
-        installationRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        installationRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        installationRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        installationRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-
-        var gameRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty };
-        gameRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        gameRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        gameRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        gameRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        var contextBlock = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = Padding.Empty, Padding = Padding.Empty };
-        contextBlock.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        contextBlock.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        contextBlock.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        contextBlock.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-
-        var rightHeader = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoScroll = true, Margin = Padding.Empty, Padding = Padding.Empty };
+        // AutoSize (not a measured Auto column): without it the flow reports
+        // a small preferred size, its Auto column starves (~200 px) and the
+        // language/help controls clip behind a scrollbar.
+        var rightHeader = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoScroll = true, Margin = Padding.Empty, Padding = Padding.Empty };
 
         lblInstallationCaption.Text = UiText.Get("Installation");
         lblInstallationCaption.AutoSize = true;
         lblInstallationCaption.Anchor = AnchorStyles.Left;
         cmbInstallations.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbInstallations.Dock = DockStyle.Fill;
-        cmbInstallations.Margin = new Padding(6, 3, 6, 3);
+        cmbInstallations.Margin = new Padding(6, 2, 2, 2);
         cmbInstallations.DropDownWidth = 620;
         cmbInstallations.SelectedIndexChanged += (_, _) => InstallationSelectionChanged();
         installationToolTip.SetToolTip(cmbInstallations, UiText.Get("InstallationPathTooltip"));
 
         btnFindGames.Text = UiText.Get("FindGames");
         btnFindGames.Width = 108;
-        ConfigureCenteredButton(btnFindGames);
+        ConfigureCenteredButton(btnFindGames, allowWidthGrowth: true);
         btnFindGames.Margin = new Padding(0, 2, 4, 2);
         btnFindGames.Click += (_, _) => FindGames();
 
         btnBrowseGame.Text = UiText.Get("Browse");
         btnBrowseGame.Width = 128;
-        ConfigureCenteredButton(btnBrowseGame);
+        ConfigureCenteredButton(btnBrowseGame, allowWidthGrowth: true);
         btnBrowseGame.Margin = new Padding(0, 2, 10, 2);
         btnBrowseGame.Click += (_, _) => BrowseGame();
 
-        lblGameProfile.Text = UiText.Get("Game");
-        lblGameProfile.AutoSize = true;
-        lblGameProfile.Anchor = AnchorStyles.Left;
-
-        cmbGameProfile.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbGameProfile.Width = 150;
-        cmbGameProfile.Margin = new Padding(6, 3, 10, 3);
-        cmbGameProfile.Items.AddRange(new object[] { UiText.Get("AutoDetect"), "Elvira I", "Elvira II" });
-        cmbGameProfile.SelectedIndexChanged += (_, _) => UpdateGameProfileDisplay();
-
-        lblDetectedGameCaption.Text = UiText.Get("Detected");
+        lblDetectedGameCaption.Text = UiText.Get("Detected") + ":";
         lblDetectedGameCaption.AutoSize = true;
         lblDetectedGameCaption.Anchor = AnchorStyles.Left;
-        lblDetectedGame.AutoSize = false;
-        lblDetectedGame.Dock = DockStyle.Fill;
+        // Single-line by construction: an AutoSize label never word-wraps,
+        // so E1/E2 display names cannot split across two rows. Anchored left
+        // keeps it vertically centered in the 36 px row; the Auto value
+        // column always allocates its full width.
+        lblDetectedGame.AutoSize = true;
+        lblDetectedGame.Anchor = AnchorStyles.Left;
         lblDetectedGame.TextAlign = ContentAlignment.MiddleLeft;
         lblDetectedGame.AutoEllipsis = true;
         installationToolTip.SetToolTip(lblDetectedGame, UiText.Get("Detected"));
@@ -2411,6 +2629,7 @@ internal sealed class MainForm : Form
         cmbActiveVariant.DisplayMember = nameof(VariantContext.DisplayName);
         cmbActiveVariant.Enabled = false;
         cmbActiveVariant.Dock = DockStyle.Fill;
+        cmbActiveVariant.DropDownWidth = 620;
         cmbActiveVariant.Margin = new Padding(6, 2, 2, 2);
         cmbActiveVariant.SelectedIndexChanged += (_, _) =>
         {
@@ -2426,6 +2645,7 @@ internal sealed class MainForm : Form
         lblActiveProjectCaption.Anchor = AnchorStyles.Left;
         cmbActiveProject.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbActiveProject.Dock = DockStyle.Fill;
+        cmbActiveProject.DropDownWidth = 620;
         cmbActiveProject.Enabled = false;
         cmbActiveProject.Margin = new Padding(6, 2, 2, 2);
         cmbActiveProject.SelectedIndexChanged += (_, _) =>
@@ -2437,8 +2657,8 @@ internal sealed class MainForm : Form
         btnBuildActiveVariant.Text = UiText.Get("BuildVariant");
         btnBuildActiveVariant.Width = 128;
         btnBuildActiveVariant.Enabled = false;
-        btnBuildActiveVariant.Margin = new Padding(4, 2, 8, 2);
-        ConfigureCenteredButton(btnBuildActiveVariant);
+        btnBuildActiveVariant.Margin = new Padding(0, 2, 8, 2);
+        ConfigureCenteredButton(btnBuildActiveVariant, allowWidthGrowth: true);
         btnBuildActiveVariant.Click += (_, _) => NavigateToActiveBuildTarget();
 
         lblLanguageCaption.Text = UiText.Get("InterfaceLanguage");
@@ -2461,61 +2681,66 @@ internal sealed class MainForm : Form
 
         btnHelp.Text = UiText.Get("Help");
         btnHelp.Width = 90;
-        ConfigureCenteredButton(btnHelp);
+        ConfigureCenteredButton(btnHelp, allowWidthGrowth: true);
         btnHelp.Margin = new Padding(0, 2, 4, 2);
         btnHelp.Click += (_, _) => OpenHelp();
 
         btnAbout.Text = UiText.Get("About");
         btnAbout.Width = 120;
-        ConfigureCenteredButton(btnAbout);
+        ConfigureCenteredButton(btnAbout, allowWidthGrowth: true);
         btnAbout.Margin = new Padding(0, 2, 0, 2);
         btnAbout.Click += (_, _) => OpenAbout();
 
-        installationRow.Controls.Add(lblInstallationCaption, 0, 0);
-        installationRow.Controls.Add(cmbInstallations, 1, 0);
-        installationRow.Controls.Add(btnFindGames, 2, 0);
-        installationRow.Controls.Add(btnBrowseGame, 3, 0);
-        gameRow.Controls.Add(lblGameProfile, 0, 0);
-        gameRow.Controls.Add(cmbGameProfile, 1, 0);
-        gameRow.Controls.Add(lblDetectedGameCaption, 2, 0);
-        gameRow.Controls.Add(lblDetectedGame, 3, 0);
-        contextBlock.Controls.Add(lblActiveVariantCaption, 0, 0);
-        contextBlock.Controls.Add(cmbActiveVariant, 1, 0);
-        contextBlock.Controls.Add(lblActiveProjectCaption, 0, 1);
-        contextBlock.Controls.Add(cmbActiveProject, 1, 1);
+        // One structural grid: shared label column (0), shared selector
+        // column (1), shared action column (2), value column (3), right
+        // area (4). Rows: installation / active variant / edition.
+        headerGrid.Controls.Add(lblInstallationCaption, 0, 0);
+        headerGrid.Controls.Add(cmbInstallations, 1, 0);
+        headerGrid.Controls.Add(btnFindGames, 2, 0);
+        headerGrid.Controls.Add(btnBrowseGame, 3, 0);
+        headerGrid.Controls.Add(lblActiveVariantCaption, 0, 1);
+        headerGrid.Controls.Add(cmbActiveVariant, 1, 1);
+        headerGrid.Controls.Add(btnBuildActiveVariant, 2, 1);
+        headerGrid.Controls.Add(lblActiveProjectCaption, 0, 2);
+        headerGrid.Controls.Add(cmbActiveProject, 1, 2);
+        headerGrid.Controls.Add(lblDetectedGameCaption, 2, 2);
+        headerGrid.Controls.Add(lblDetectedGame, 3, 2);
         rightHeader.Controls.AddRange(new Control[] { lblLanguageCaption, cmbUiLanguage, btnHelp, btnAbout });
-        globalBar.Controls.Add(installationRow, 0, 0);
-        globalBar.SetColumnSpan(installationRow, 2);
-        globalBar.Controls.Add(rightHeader, 2, 0);
-        globalBar.SetColumnSpan(rightHeader, 2);
-        globalBar.Controls.Add(gameRow, 0, 1);
-        globalBar.Controls.Add(contextBlock, 1, 1);
-        globalBar.SetColumnSpan(contextBlock, 2);
-        globalBar.Controls.Add(btnBuildActiveVariant, 3, 1);
+        headerGrid.Controls.Add(rightHeader, 4, 0);
 
+        // Fixed 48 px height with explicit bottom breathing room: content is
+        // top padding (4) + button margin (3) + 32 px button + margin (3) =
+        // 42, leaving 6 px of air below the buttons. Buttons keep y=7..39.
         var navigation = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 42,
-            Padding = new Padding(0, 4, 0, 0),
+            Height = 48,
+            Padding = new Padding(0, 4, 0, 6),
             WrapContents = false,
             AutoScroll = true
         };
+        _navigationRow = navigation;
 
         // Permanent mode navigation stays immediately below the global installation header.
         ConfigureModeButton(btnSpriteEditor);
         ConfigureModeButton(btnTextEditor);
         ConfigureModeButton(btnFontEditor);
 
+        // One shared deterministic width for the four mode buttons: caption
+        // length must never determine individual width. 140 px fits the
+        // longest EN/SK/CS caption ("Mods & Launcher", 104 px bold) plus
+        // padding, chrome and breathing room; Y/Height/spacing come from the
+        // shared helper and the common flow margins.
+        const int modeButtonWidth = 140;
         btnSpriteEditor.Text = UiText.Get("SpriteEditor");
         btnSpriteEditor.AutoSize = false;
-        btnSpriteEditor.Width = 105;
+        btnSpriteEditor.Width = modeButtonWidth;
         ConfigureCenteredButton(btnSpriteEditor);
         btnSpriteEditor.Click += (_, _) => SwitchMode(tabVga);
 
         btnTextEditor.Text = UiText.Get("OpenTextEditor");
         btnTextEditor.AutoSize = false;
-        btnTextEditor.Width = 105;
+        btnTextEditor.Width = modeButtonWidth;
         ConfigureCenteredButton(btnTextEditor);
         btnTextEditor.Click += (_, _) =>
         {
@@ -2525,7 +2750,7 @@ internal sealed class MainForm : Form
 
         btnFontEditor.Text = UiText.Get("FontEditor");
         btnFontEditor.AutoSize = false;
-        btnFontEditor.Width = 105;
+        btnFontEditor.Width = modeButtonWidth;
         ConfigureCenteredButton(btnFontEditor);
         btnFontEditor.Click += (_, _) =>
         {
@@ -2538,7 +2763,7 @@ internal sealed class MainForm : Form
         btnModsLauncher.Text = UiText.Get("ModsLauncherTab");
         btnModsLauncher.UseMnemonic = false;
         btnModsLauncher.AutoSize = false;
-        btnModsLauncher.Width = 205;
+        btnModsLauncher.Width = modeButtonWidth;
         ConfigureCenteredButton(btnModsLauncher);
         btnModsLauncher.Click += (_, _) =>
         {
@@ -2611,7 +2836,7 @@ internal sealed class MainForm : Form
         statusBar.Items.Add(lblStatus);
 
         top.Controls.Add(navigation);
-        top.Controls.Add(globalBar);
+        top.Controls.Add(headerGrid);
         mainSplit.Dock = DockStyle.Fill;
         mainSplit.Orientation = Orientation.Vertical;
         mainSplit.SplitterWidth = 6;
@@ -2771,20 +2996,28 @@ internal sealed class MainForm : Form
         preview.Location = new Point(0, 0);
         previewScroll.Controls.Add(preview);
 
-        var zoomBar = new Panel
+        // Stabilized: previously absolute SetBounds (label 42 px wide,
+        // combo at x=52, button at x=162) so longer SK/CZ "Zoom" captions
+        // overlapped at DPI scaling. Use a wrapping flow with auto-sized label.
+        var zoomBar = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
-            Height = 36,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
             Padding = new Padding(4)
         };
 
         lblPreviewZoom.Text = UiText.Get("Zoom");
         lblPreviewZoom.AutoSize = true;
-        lblPreviewZoom.SetBounds(4, 9, 42, 20);
+        lblPreviewZoom.TextAlign = ContentAlignment.MiddleLeft;
+        lblPreviewZoom.Margin = new Padding(0, 6, 6, 0);
 
         cmbPreviewZoom.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbPreviewZoom.SetBounds(52, 5, 100, 26);
-        btnReloadPreview.SetBounds(162, 5, 90, 26);
+        cmbPreviewZoom.Size = new Size(100, 26);
+        cmbPreviewZoom.Margin = new Padding(0, 2, 6, 0);
+        cmbPreviewZoom.Anchor = AnchorStyles.Left | AnchorStyles.Right;
         cmbPreviewZoom.Items.AddRange(new object[]
         {
             UiText.Get("Graphics.Fit"), "100%", "200%", "300%", "400%", "600%", "800%"
@@ -2792,7 +3025,9 @@ internal sealed class MainForm : Form
         cmbPreviewZoom.SelectedIndex = 0;
         cmbPreviewZoom.SelectedIndexChanged += (_, _) => ApplyPreviewZoom();
         btnReloadPreview.Text = UiText.Get("ReloadPreview");
-        btnReloadPreview.AutoSize = true;
+        btnReloadPreview.Size = new Size(90, 26);
+        btnReloadPreview.Margin = new Padding(0, 2, 0, 0);
+        ConfigureCenteredButton(btnReloadPreview, allowWidthGrowth: true);
         btnReloadPreview.Click += (_, _) => ReloadCurrentPreview();
 
         previewScroll.Resize += (_, _) => ApplyPreviewZoom();
@@ -2805,10 +3040,16 @@ internal sealed class MainForm : Form
         lblMeta.Height = 48;
         lblMeta.TextAlign = ContentAlignment.MiddleLeft;
 
+        // AutoSize with a 78 px floor: single-row content keeps the exact
+        // established 78 px geometry (layout-stress snapshot stays stable),
+        // while a wrapped second row at narrow widths grows the panel instead
+        // of clipping the buttons' lower border.
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
-            Height = 78,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(0, 84),
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(4)
         };
@@ -2824,8 +3065,11 @@ internal sealed class MainForm : Form
         btnClearEdit.Width = 100;
         btnExport.Width = 110;
         btnRestore.Width = 130;
+        // Unified with the other action buttons: EN widths stay minima so the
+        // SK captions ("Exportovať PNG...", "Obnoviť pôvodný obrázok") grow
+        // in width instead of truncating; height stays pinned at 32 px.
         foreach (Button button in new[] { btnReplace, btnClearEdit, btnExport, btnRestore })
-            ConfigureCenteredButton(button);
+            ConfigureCenteredButton(button, allowWidthGrowth: true);
 
         btnReplace.Click += (_, _) => ReplaceSelected();
         btnClearEdit.Click += (_, _) => ClearSelectedEdit();
@@ -2988,25 +3232,12 @@ internal sealed class MainForm : Form
         _currentDataFilePath = null;
         _variantCatalog = null;
         _detectedProfile = game == ElviraGame.Elvira2 ? ElviraGameProfile.Elvira2 : ElviraGameProfile.Elvira1;
-        // An EXE signature is stronger than a prior manual/folder heuristic, so return the UI to detected mode.
-        cmbGameProfile.SelectedIndex = 0;
         ScanGameFolder();
         LoadGamePcTexts();
         UpdateGameProfileDisplay();
     }
 
-    private ElviraGameProfile ActiveGameProfile
-    {
-        get
-        {
-            return cmbGameProfile.SelectedIndex switch
-            {
-                1 => ElviraGameProfile.Elvira1,
-                2 => ElviraGameProfile.Elvira2,
-                _ => _detectedProfile
-            };
-        }
-    }
+    private ElviraGameProfile ActiveGameProfile => _activeProject?.GameProfile ?? ElviraGameProfile.Unknown;
 
     private void UpdateGameProfileDisplay()
     {
@@ -3020,12 +3251,17 @@ internal sealed class MainForm : Form
             UpdateTextValidation();
             return;
         }
-        var active = ActiveGameProfile;
-        var info = GameProfileInfo.For(active);
-        string mode = cmbGameProfile.SelectedIndex == 0 ? UiText.Get("Detected") : UiText.Get("Selected");
-        lblDetectedGame.Text = $"{mode}: {info.DisplayName}";
+        // Authoritative identity: the validated active ProjectContext. An
+        // internal detection result disagreeing with it is a diagnostic
+        // invariant issue, never a user override (the manual Game selector
+        // was removed).
+        ElviraGameProfile profile = _activeProject.GameProfile;
+        if (_detectedProfile != ElviraGameProfile.Unknown && _detectedProfile != profile)
+            System.Diagnostics.Debug.WriteLine($"Detected profile {_detectedProfile} disagrees with validated project profile {profile}.");
+        var info = GameProfileInfo.For(profile);
+        lblDetectedGame.Text = info.DisplayName;
         installationToolTip.SetToolTip(lblDetectedGame, lblDetectedGame.Text);
-        lblDetectedGame.ForeColor = active == ElviraGameProfile.Unknown ? Color.DarkOrange : SystemColors.ControlText;
+        lblDetectedGame.ForeColor = profile == ElviraGameProfile.Unknown ? Color.DarkOrange : SystemColors.ControlText;
         UpdateTextOverview();
         UpdateRuntimeColumnVisibility();
         UpdateTextValidation();
@@ -3238,9 +3474,8 @@ internal sealed class MainForm : Form
             _modsVariant = _activeVariant;
             RefreshActiveVariantSelector();
             _variantCatalog = VariantConfigurationService.Load(_activeProject.GameRoot, _activeProject.GameProfile);
-            SetCurrentDataFile(Path.Combine(_activeProject.GameRoot, _activeVariant.LogicalDataFileName));
-            cmbGameProfile.SelectedIndex = 0;
-            ScanGameFolder();
+        SetCurrentDataFile(Path.Combine(_activeProject.GameRoot, _activeVariant.LogicalDataFileName));
+        ScanGameFolder();
             LoadGamePcTexts();
             _detectedProfile = installation.Game;
             UpdateGameProfileDisplay();
@@ -3666,12 +3901,18 @@ internal sealed class MainForm : Form
 
         if (zoomIndex == 0)
         {
-            // A fill-docked Fit preview must not retain ScrollableControl
-            // offsets from an earlier enlarged preview.
+            // Manual Fit centering from the live viewport client area and the
+            // image size only. Dock=Fill is deliberately not used: the
+            // placement must not depend on stale AutoScrollPosition, previous
+            // preview Location/Size, or previous zoom/edition state, so every
+            // input here is freshly read and the result is idempotent.
             previewScroll.AutoScroll = false;
             previewScroll.AutoScrollMinSize = Size.Empty;
-            preview.Dock = DockStyle.Fill;
+            preview.Dock = DockStyle.None;
             preview.SizeMode = PictureBoxSizeMode.Zoom;
+            (Size fitSize, Point fitLocation) = ComputeFitPlacement(previewScroll.ClientSize, preview.Image.Size);
+            preview.Size = fitSize;
+            preview.Location = fitLocation;
             previewScroll.AutoScrollPosition = Point.Empty;
             return;
         }
@@ -3723,6 +3964,23 @@ internal sealed class MainForm : Form
         }
         }
         finally { _applyingPreviewZoom = false; }
+    }
+
+    // Pure Fit geometry used by ApplyPreviewZoom and by the regression
+    // smoke. Same scale rounding as the PixelPerfectPictureBox paint path
+    // (ZoomRectangle), so the placed control matches what is painted.
+    // Depends only on the live viewport client area and image size:
+    // idempotent by construction. Free-space balance is exact to 1 px.
+    internal static (Size ScaledSize, Point Location) ComputeFitPlacement(Size viewportClientSize, Size imageSize)
+    {
+        if (viewportClientSize.Width <= 0 || viewportClientSize.Height <= 0 ||
+            imageSize.Width <= 0 || imageSize.Height <= 0)
+            return (Size.Empty, Point.Empty);
+        float scale = Math.Min((float)viewportClientSize.Width / imageSize.Width, (float)viewportClientSize.Height / imageSize.Height);
+        int width = Math.Max(1, (int)Math.Round(imageSize.Width * scale));
+        int height = Math.Max(1, (int)Math.Round(imageSize.Height * scale));
+        return (new Size(width, height),
+            new Point((viewportClientSize.Width - width) / 2, (viewportClientSize.Height - height) / 2));
     }
 
     private void RefreshGraphicsScopeItems()
@@ -4444,6 +4702,24 @@ internal sealed class MainForm : Form
         previewScroll.PerformLayout();
     }
 
+    internal void MaterializeTabLayoutsForTest()
+    {
+        // Extended fixture for locale-geometry tests: every tab page gets a
+        // realistic client area so no flow wraps merely because its host was
+        // never laid out. Wrapping that remains is genuine content reflow.
+        foreach (TabPage page in new[] { tabVga, tabText, tabFont, tabMods })
+        {
+            page.Size = new Size(1400, 700);
+            foreach (Control child in page.Controls)
+            {
+                child.Bounds = page.ClientRectangle;
+                child.PerformLayout();
+            }
+            page.PerformLayout();
+        }
+        MaterializeGraphicsLayoutForTest();
+    }
+
     internal EditionSwitchDiagnostics RunEditionSwitchStressForTest(int cycles)
     {
         if (cycles <= 0) throw new ArgumentOutOfRangeException(nameof(cycles));
@@ -4456,6 +4732,13 @@ internal sealed class MainForm : Form
         SelectGraphicsZoneForTest("382.VGA");
         Rectangle viewportBounds = previewViewport.Bounds;
         Rectangle previewBounds = previewScroll.Bounds;
+        // Validity gate (stress-harness correction): stability alone would
+        // accept a degenerate, never-laid-out geometry (e.g. negative
+        // height on an unmaterialized form). Require positive area first;
+        // the per-switch equality checks below then prove stability too.
+        if (viewportBounds.Width <= 0 || viewportBounds.Height <= 0 ||
+            previewBounds.Width <= 0 || previewBounds.Height <= 0)
+            throw new InvalidOperationException("Graphics preview geometry is degenerate; materialize the form layout before stress validation.");
         int controls = ControlTreeCount;
         int graphics = GraphicsLoadCount;
         int text = TextLoadCount;
@@ -4508,6 +4791,12 @@ internal sealed class MainForm : Form
     {
         if (_activeProject is null) throw new InvalidOperationException("An active project is required for layout stress validation.");
         GraphicsLayoutSnapshot baseline = CaptureGraphicsLayoutSnapshot();
+        // Validity gate (stress-harness correction): snapshot equality alone
+        // would accept degenerate rectangles. Baseline validity plus
+        // AssertStableGraphicsLayout equality together prove valid + stable.
+        if (baseline.PreviewViewportBounds.Width <= 0 || baseline.PreviewViewportBounds.Height <= 0 ||
+            baseline.PreviewScrollBounds.Width <= 0 || baseline.PreviewScrollBounds.Height <= 0)
+            throw new InvalidOperationException("Graphics layout snapshot is degenerate; materialize the form layout before stress validation.");
 
         for (int cycle = 0; cycle < 25; cycle++)
         {
@@ -4558,6 +4847,118 @@ internal sealed class MainForm : Form
         if (CaptureGraphicsLayoutSnapshot() != expected)
             throw new InvalidOperationException("Graphics layout changed after " + transition + ".");
     }
+
+    internal IReadOnlyList<ActionButtonGeometry> CaptureActionButtonGeometryForTest()
+    {
+        (Button Button, string Name)[] buttons =
+        [
+            (btnReplace, nameof(btnReplace)), (btnClearEdit, nameof(btnClearEdit)),
+            (btnExport, nameof(btnExport)), (btnRestore, nameof(btnRestore)),
+            (btnVerifyPristine, nameof(btnVerifyPristine)),
+            (btnRestoreBaselineLauncher, nameof(btnRestoreBaselineLauncher)),
+            (btnRebuildOwnedVariant, nameof(btnRebuildOwnedVariant)),
+            (btnRemoveOwnedVariant, nameof(btnRemoveOwnedVariant)),
+            (btnReverseAllPreview, nameof(btnReverseAllPreview)),
+            (btnRunVariant, nameof(btnRunVariant)), (btnDebugVariant, nameof(btnDebugVariant)),
+            (btnOpenDataFile, nameof(btnOpenDataFile)), (btnReloadTexts, nameof(btnReloadTexts)),
+            (btnSaveTexts, nameof(btnSaveTexts)), (btnSaveAsDataFile, nameof(btnSaveAsDataFile)),
+            (btnCreateDataVariant, nameof(btnCreateDataVariant)),
+            (btnExportTranslations, nameof(btnExportTranslations)),
+            (btnImportTranslations, nameof(btnImportTranslations)),
+            (btnReloadRuntimeUi, nameof(btnReloadRuntimeUi)),
+            (btnSaveRuntimeUi, nameof(btnSaveRuntimeUi)),
+            (btnResetRuntimeUi, nameof(btnResetRuntimeUi)),
+            (btnSelectLauncherFile, nameof(btnSelectLauncherFile)),
+            (btnPreviewLauncher, nameof(btnPreviewLauncher)),
+            (btnGenerateLauncher, nameof(btnGenerateLauncher)),
+            (btnRestoreLauncher, nameof(btnRestoreLauncher)),
+            (btnVariantAdd, nameof(btnVariantAdd)), (btnVariantEdit, nameof(btnVariantEdit)),
+            (btnVariantRemove, nameof(btnVariantRemove)), (btnVariantMoveUp, nameof(btnVariantMoveUp)),
+            (btnVariantMoveDown, nameof(btnVariantMoveDown)),
+            (btnVariantToggleEnabled, nameof(btnVariantToggleEnabled)),
+            (btnVariantOpenDataFile, nameof(btnVariantOpenDataFile)),
+            (btnFindGames, nameof(btnFindGames)), (btnBrowseGame, nameof(btnBrowseGame)),
+            (btnBuildActiveVariant, nameof(btnBuildActiveVariant)),
+            (btnHelp, nameof(btnHelp)), (btnAbout, nameof(btnAbout)),
+            (btnSpriteEditor, nameof(btnSpriteEditor)), (btnTextEditor, nameof(btnTextEditor)),
+            (btnFontEditor, nameof(btnFontEditor)), (btnModsLauncher, nameof(btnModsLauncher)),
+            (btnReload, nameof(btnReload)), (btnPaletteAdvanced, nameof(btnPaletteAdvanced)),
+            (btnSaveGraphicsProject, nameof(btnSaveGraphicsProject)),
+            (btnReloadPreview, nameof(btnReloadPreview)),
+        ];
+        return buttons.Select(item => new ActionButtonGeometry(
+            item.Name, item.Button.GetType().Name, item.Button.Bounds, item.Button.MinimumSize, item.Button.AutoSize,
+            item.Button.Padding, item.Button.TextAlign, item.Button.UseCompatibleTextRendering, item.Button.Enabled,
+            item.Button.Text ?? string.Empty)).ToArray();
+    }
+
+    internal void SetButtonEnabledForTest(string buttonFieldName, bool enabled)
+    {
+        if (GetType().GetField(buttonFieldName, BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(this) is Button button)
+            button.Enabled = enabled;
+        else
+            throw new InvalidOperationException($"Unknown action button '{buttonFieldName}'.");
+    }
+
+    internal Control FindControlForTest(string fieldName) =>
+        GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(this) as Control
+        ?? throw new InvalidOperationException($"Unknown control '{fieldName}'.");
+
+    internal IReadOnlyList<ContextComboGeometry> CaptureContextComboGeometryForTest() => [
+        new(nameof(cmbInstallations), cmbInstallations.Bounds, cmbInstallations.Margin),
+        new(nameof(cmbActiveVariant), cmbActiveVariant.Bounds, cmbActiveVariant.Margin),
+        new(nameof(cmbActiveProject), cmbActiveProject.Bounds, cmbActiveProject.Margin)];
+
+    internal IReadOnlyList<ContextCellGeometry> CaptureContextCellGeometryForTest()
+    {
+        if (_headerGrid is null)
+            throw new InvalidOperationException("Header layout is not built.");
+        int[] widths = _headerGrid.GetColumnWidths();
+        int[] heights = _headerGrid.GetRowHeights();
+        ContextCellGeometry cell(ComboBox combo, string name)
+        {
+            TableLayoutPanelCellPosition position = _headerGrid.GetCellPosition(combo);
+            int x = widths.Take(position.Column).Sum();
+            int y = heights.Take(position.Row).Sum();
+            return new ContextCellGeometry(name, combo.Bounds,
+                new Rectangle(x, y, widths[position.Column], heights[position.Row]),
+                _headerGrid.ClientRectangle);
+        }
+        return [cell(cmbInstallations, nameof(cmbInstallations)), cell(cmbActiveVariant, nameof(cmbActiveVariant)), cell(cmbActiveProject, nameof(cmbActiveProject))];
+    }
+
+    internal TableLayoutPanelCellPosition HeaderCellForTest(string controlFieldName)
+    {
+        if (_headerGrid is null)
+            throw new InvalidOperationException("Header layout is not built.");
+        if (GetType().GetField(controlFieldName, BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(this) is not Control control)
+            throw new InvalidOperationException($"Unknown header control '{controlFieldName}'.");
+        return _headerGrid.GetCellPosition(control);
+    }
+
+    internal Rectangle HeaderGridClientForTest => _headerGrid is null
+        ? Rectangle.Empty
+        : new Rectangle(Point.Empty, _headerGrid.ClientSize);
+
+    internal int[] HeaderRowHeightsForTest() =>
+        _headerGrid?.GetRowHeights() ?? [];
+
+    internal ElviraGameProfile ActiveGameProfileForTest => ActiveGameProfile;
+
+    internal Rectangle NavigationRowBoundsForTest => _navigationRow?.Bounds ?? Rectangle.Empty;
+
+    internal Rectangle NavigationRowClientForTest => _navigationRow is null
+        ? Rectangle.Empty
+        : new Rectangle(Point.Empty, _navigationRow.ClientSize);
+
+    internal Rectangle GraphicsActionRowBoundsForTest => _graphicsActionRow?.Bounds ?? Rectangle.Empty;
+
+    internal IReadOnlyList<Rectangle> GraphicsActionChildBoundsForTest() =>
+        (_graphicsActionRow?.Controls.Cast<Control>() ?? Enumerable.Empty<Control>()).Select(child => child.Bounds).ToArray();
+
+    internal int StatusStripItemCountForTest => statusBar.Items.Count;
+
+    internal Rectangle StatusStripBoundsForTest => statusBar.Bounds;
 
     internal void SelectTranslationForTest(string code)
     {
@@ -4701,6 +5102,29 @@ internal sealed record MainFormLayoutDiagnostics(
     int TabChanges,
     int LocaleChanges);
 
+internal sealed record ActionButtonGeometry(
+    string Name,
+    string Renderer,
+    Rectangle Bounds,
+    Size MinimumSize,
+    bool AutoSize,
+    Padding Padding,
+    ContentAlignment TextAlign,
+    bool UseCompatibleTextRendering,
+    bool Enabled,
+    string Text);
+
+internal sealed record ContextComboGeometry(
+    string Name,
+    Rectangle Bounds,
+    Padding Margin);
+
+internal sealed record ContextCellGeometry(
+    string Name,
+    Rectangle ControlBounds,
+    Rectangle CellBounds,
+    Rectangle PanelClient);
+
 internal sealed class ModeButtonFonts(Font regular, Font bold) : IDisposable
 {
     public Font Regular { get; } = regular;
@@ -4733,6 +5157,113 @@ internal sealed record TextTranslationSelection(string Code, string DisplayName,
     public override string ToString() => Code.Equals("EN", StringComparison.OrdinalIgnoreCase)
         ? $"{DisplayName} (EN)"
         : $"{DisplayName} ({Code})";
+}
+
+/// <summary>
+/// One shared caption-placement path for normal MainForm action buttons.
+/// The native framework paints the COMPLETE button (background, border and
+/// all normal/hot/pressed/disabled/focused/default and FlatStyle visuals);
+/// only the native caption is suppressed during that paint and drawn
+/// explicitly afterwards with a single common optical vertical offset that
+/// standard Button padding cannot reliably produce on the real themed
+/// display. Geometry, measurement, AutoSize, fonts and event behavior are
+/// inherited unchanged from Button. WinForms-level double buffering is
+/// deliberately left at the stock Button default: enabling it on top of the
+/// native themed paint pipeline produced incomplete first-paint chrome that
+/// only repaired on the next invalidation.
+/// </summary>
+internal sealed class CenteredCaptionButton : Button
+{
+    // Common optical correction, logical px at 96 dpi, scaled by DeviceDpi.
+    // Same implementation for EN/SK/CS and all states; no per-button or
+    // per-language offsets.
+    internal const int OpticalCaptionOffsetY = 1;
+
+    private bool _suppressCaption;
+
+    // Nullability note: base Control.Text accepts null (treated as empty);
+    // this override forwards verbatim, so behavior is identical.
+#pragma warning disable CS8765 // Nullability of type of parameter 'value' doesn't match overridden member
+    public override string Text
+    {
+        // During the native paint below the caption must read empty so the
+        // framework draws chrome without text. Outside paint the real caption
+        // is visible, so measurement, layout, accessibility and data binding
+        // all keep working on the true text.
+        get => _suppressCaption ? "" : base.Text;
+        set => base.Text = value;
+    }
+#pragma warning restore CS8765
+
+    // The native focus rectangle would hug the suppressed (empty) caption;
+    // hide it and draw our own around the real caption instead.
+    protected override bool ShowFocusCues => false;
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        // Image-bearing buttons keep fully native painting (no MainForm
+        // action button uses images; a future one must not lose content).
+        if (Image is not null || BackgroundImage is not null)
+        {
+            base.OnPaint(e);
+            return;
+        }
+
+        _suppressCaption = true;
+        try
+        {
+            base.OnPaint(e);
+        }
+        finally
+        {
+            _suppressCaption = false;
+        }
+
+        if (Focused && base.ShowFocusCues)
+            ControlPaint.DrawFocusRectangle(e.Graphics, CaptionRectangle());
+
+        PaintCaption(e.Graphics);
+    }
+
+    private Rectangle CaptionRectangle()
+    {
+        Rectangle client = ClientRectangle;
+        Rectangle text = new(
+            client.X + Padding.Left,
+            client.Y + Padding.Top,
+            Math.Max(0, client.Width - Padding.Horizontal),
+            Math.Max(0, client.Height - Padding.Vertical));
+        text.Y += (int)Math.Round(OpticalCaptionOffsetY * DeviceDpi / 96f);
+        return text;
+    }
+
+    private void PaintCaption(Graphics graphics)
+    {
+        Rectangle text = CaptionRectangle();
+        if (text.Width <= 0 || text.Height <= 0)
+            return;
+        TextFormatFlags flags = TextAlign switch
+        {
+            ContentAlignment.TopLeft => TextFormatFlags.Left | TextFormatFlags.Top,
+            ContentAlignment.TopCenter => TextFormatFlags.HorizontalCenter | TextFormatFlags.Top,
+            ContentAlignment.TopRight => TextFormatFlags.Right | TextFormatFlags.Top,
+            ContentAlignment.MiddleLeft => TextFormatFlags.Left | TextFormatFlags.VerticalCenter,
+            ContentAlignment.MiddleRight => TextFormatFlags.Right | TextFormatFlags.VerticalCenter,
+            ContentAlignment.BottomLeft => TextFormatFlags.Left | TextFormatFlags.Bottom,
+            ContentAlignment.BottomCenter => TextFormatFlags.HorizontalCenter | TextFormatFlags.Bottom,
+            ContentAlignment.BottomRight => TextFormatFlags.Right | TextFormatFlags.Bottom,
+            _ => TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter,
+        };
+        flags |= TextFormatFlags.SingleLine;
+        // Showing & mnemonics is the default; HidePrefix only while keyboard
+        // cues are hidden, NoPrefix when mnemonics are disabled entirely.
+        flags |= !UseMnemonic ? TextFormatFlags.NoPrefix
+            : ShowKeyboardCues ? (TextFormatFlags)0 : TextFormatFlags.HidePrefix;
+        if (RightToLeft == RightToLeft.Yes)
+            flags |= TextFormatFlags.RightToLeft;
+        Color color = Enabled ? ForeColor : SystemColors.GrayText;
+        TextRenderer.DrawText(graphics, Text, Font, text, color, flags);
+    }
 }
 
 internal sealed class PixelPerfectPictureBox : PictureBox

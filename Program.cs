@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace ElviraVgaEditor;
 
 internal static class Program
@@ -129,6 +131,30 @@ internal static class Program
         {
             try { VerifyProjectVariantOwnershipSmoke(args[1], editionStressOnly: true, layoutStress: true); Console.WriteLine("MainForm layout stress: PASS"); Environment.ExitCode = 0; }
             catch (Exception ex) { Console.Error.WriteLine("MainForm layout stress: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 1 && args[0].Equals("--button-geometry-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyButtonGeometrySmoke(); Console.WriteLine("Button geometry: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Button geometry: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 1 && args[0].Equals("--graphics-fit-centering-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyGraphicsFitCenteringSmoke(); Console.WriteLine("Graphics Fit centering: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Graphics Fit centering: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 1 && args[0].Equals("--first-paint-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyFirstPaintSmoke(); Console.WriteLine("First paint: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("First paint: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--header-alignment-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyHeaderAlignmentSmoke(args[1], args[2]); Console.WriteLine("Header alignment: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Header alignment: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
         if (args.Length == 2 && args[0].Equals("--runvga-composite-smoke", StringComparison.OrdinalIgnoreCase))
@@ -3750,6 +3776,482 @@ internal static class Program
             .ToArray();
     }
 
+    // Narrow PRE-R9D visual-polish regression: one shared action-button
+    // configuration (fixed logical height, common optical padding) plus a
+    // single-line no-game StatusStrip. Locale switches may change caption
+    // text and horizontal width only — never Y, Height, padding, alignment
+    // or renderer. Validity (positive geometry) is required, not just
+    // Before == After stability.
+    private static void VerifyButtonGeometrySmoke()
+    {
+        string priorLocale = UiText.LocaleId;
+        try
+        {
+            using var form = new MainForm();
+            form.Size = new Size(1450, 900);
+            form.CreateControl();
+            form.PerformLayout();
+            form.MaterializeTabLayoutsForTest();
+            form.PerformLayout();
+            form.InitializeInstallationStateForTest();
+            // Prime ApplyLanguage once so the baseline below already carries
+            // localized captions: several selectors only receive their text
+            // through ApplyLanguage/ApplyVariantLanguage.
+            UiText.SetLocale("sk");
+            UiText.SetLocale("en");
+
+            // The obsolete manual Game selector must be gone completely: no
+            // production fields remain and neutral identity is Unknown.
+            if (typeof(MainForm).GetField("cmbGameProfile", BindingFlags.NonPublic | BindingFlags.Instance) is not null ||
+                typeof(MainForm).GetField("lblGameProfile", BindingFlags.NonPublic | BindingFlags.Instance) is not null)
+                throw new InvalidDataException("Obsolete Game selector UI still exists.");
+            if (form.ActiveGameProfileForTest != ElviraGameProfile.Unknown)
+                throw new InvalidDataException("Neutral game identity is not Unknown.");
+
+            // Text-editor action buttons live in a wrapping flow: their Y may
+            // legitimately reflow when captions grow, so only Height/padding/
+            // geometry validity plus EN-roundtrip determinism applies to them.
+            // Every other audited button must also keep Y.
+
+            // Text-editor action buttons live in a wrapping flow: their Y may
+            // legitimately reflow, so only Height/padding/geometry validity
+            // applies to them. Every other audited button must also keep Y.
+            var wrappingFlowButtons = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "btnOpenDataFile", "btnReloadTexts", "btnSaveTexts", "btnSaveAsDataFile",
+                "btnCreateDataVariant", "btnExportTranslations", "btnImportTranslations"
+            };
+
+            void RequireSharedConfiguration(IReadOnlyList<ActionButtonGeometry> snapshot)
+            {
+                // All standard buttons share one caption-rendering rule: the
+                // common renderer plus the pinned optical offset. Magnitude is
+                // QA-accepted; pin it against accidental drift.
+                if (CenteredCaptionButton.OpticalCaptionOffsetY != 1)
+                    throw new InvalidDataException("The shared caption offset drifted from its accepted value.");
+                foreach (ActionButtonGeometry button in snapshot)
+                {
+                    if (button.Bounds.Width <= 0 || button.Bounds.Height <= 0)
+                        throw new InvalidDataException($"Action button {button.Name} has invalid bounds {button.Bounds}.");
+                    if (button.Renderer != nameof(CenteredCaptionButton))
+                        throw new InvalidDataException($"Action button {button.Name} does not use the shared renderer.");
+                    if (button.MinimumSize.Height != button.Bounds.Height)
+                        throw new InvalidDataException($"Action button {button.Name} height is not pinned by its minimum size.");
+                    if (button.Padding != new Padding(6, 2, 6, 0))
+                        throw new InvalidDataException($"Action button {button.Name} does not use the shared optical padding {button.Padding}.");
+                    if (button.TextAlign != ContentAlignment.MiddleCenter || button.UseCompatibleTextRendering)
+                        throw new InvalidDataException($"Action button {button.Name} does not use the shared caption configuration.");
+                }
+                int height = snapshot[0].Bounds.Height;
+                if (snapshot.Any(button => button.Bounds.Height != height))
+                    throw new InvalidDataException("Standard action buttons do not share one logical height.");
+            }
+
+            IReadOnlyList<ActionButtonGeometry> baseline = form.CaptureActionButtonGeometryForTest();
+            RequireSharedConfiguration(baseline);
+            foreach (string locale in new[] { "sk", "cs", "en" })
+            {
+                UiText.SetLocale(locale);
+                IReadOnlyList<ActionButtonGeometry> current = form.CaptureActionButtonGeometryForTest();
+                RequireSharedConfiguration(current);
+                foreach ((ActionButtonGeometry before, ActionButtonGeometry after) in baseline.Zip(current))
+                {
+                    if (!before.Name.Equals(after.Name, StringComparison.Ordinal) ||
+                        !before.Renderer.Equals(after.Renderer, StringComparison.Ordinal) ||
+                        before.Bounds.Height != after.Bounds.Height ||
+                        before.Padding != after.Padding ||
+                        before.TextAlign != after.TextAlign ||
+                        before.UseCompatibleTextRendering != after.UseCompatibleTextRendering)
+                        throw new InvalidDataException($"Locale {locale} changed the shared configuration of {after.Name}.");
+                    if (!wrappingFlowButtons.Contains(after.Name) && before.Bounds.Y != after.Bounds.Y)
+                        throw new InvalidDataException($"Locale {locale} moved {after.Name} vertically.");
+                }
+                // Graphics action row: single row, fully inside its container.
+                IReadOnlyList<Rectangle> children = form.GraphicsActionChildBoundsForTest();
+                Rectangle row = form.GraphicsActionRowBoundsForTest;
+                if (row is { Width: <= 0 } || row.Height <= 0)
+                    throw new InvalidDataException("Graphics action row has invalid bounds.");
+                if (children.Select(child => child.Y).Distinct().Count() != 1)
+                    throw new InvalidDataException($"Graphics action buttons wrapped in locale {locale}.");
+                // Children are positioned below the panel's top padding; the
+                // standard button bottom margin (3) plus panel bottom padding
+                // (4) plus breathing room must fit inside the taller row.
+                int contentBottom = children.Max(child => child.Bottom);
+                if (contentBottom + 7 > row.Height)
+                    throw new InvalidDataException($"Graphics action buttons are clipped by their row in locale {locale}.");
+                if (row.Height - contentBottom < 40)
+                    throw new InvalidDataException($"Graphics action row lost its lower breathing room in locale {locale}.");
+                if (locale.Equals("en", StringComparison.Ordinal) &&
+                    !current.Zip(baseline).All(pair =>
+                        pair.First.Bounds == pair.Second.Bounds && pair.First.Text == pair.Second.Text))
+                    throw new InvalidDataException("EN roundtrip did not restore the baseline button geometry.");
+                if ((locale.Equals("sk", StringComparison.Ordinal) || locale.Equals("cs", StringComparison.Ordinal)) &&
+                    current.Single(button => button.Name == "btnSaveGraphicsProject").Text == "Save to project")
+                    throw new InvalidDataException($"Graphics Save button did not localize in {locale}.");
+
+                // Micro-polish invariants: the four mode buttons share one
+                // deterministic size and row; the Active Variant / Edition
+                // combos share width, height, X and right edge.
+                string[] modeButtons = ["btnSpriteEditor", "btnTextEditor", "btnFontEditor", "btnModsLauncher"];
+                Size[] modeSizes = current.Where(button => modeButtons.Contains(button.Name)).Select(button => button.Bounds.Size).ToArray();
+                int[] modeRows = current.Where(button => modeButtons.Contains(button.Name)).Select(button => button.Bounds.Y).ToArray();
+                if (modeSizes.Length != 4 || modeSizes.Distinct().Count() != 1 || modeRows.Distinct().Count() != 1)
+                    throw new InvalidDataException($"Mode buttons diverged in locale {locale}.");
+                IReadOnlyList<ContextComboGeometry> combos = form.CaptureContextComboGeometryForTest();
+                if (combos.Count != 3 ||
+                    combos.Select(combo => combo.Bounds.Size).Distinct().Count() != 1 ||
+                    combos.Select(combo => combo.Bounds.X).Distinct().Count() != 1 ||
+                    combos.Select(combo => combo.Bounds.Right).Distinct().Count() != 1)
+                    throw new InvalidDataException($"Header selector combos diverged in locale {locale}.");
+                if (combos[1].Margin != combos[2].Margin)
+                    throw new InvalidDataException($"Active Variant / Edition combo margins diverged in locale {locale}.");
+                // ONE shared selector width matched to the Installation
+                // dropdown width (620): a Percent column once claimed 1300+
+                // px and pushed the right header out of the client area.
+                // Normalized by live DPI.
+                foreach (ContextComboGeometry combo in combos)
+                {
+                    double logicalWidth = combo.Bounds.Width * 96.0 / form.DeviceDpi;
+                    if (Math.Abs(logicalWidth - 620) > 1.0)
+                        throw new InvalidDataException($"Selector {combo.Name} width {logicalWidth:F0} px does not match the shared 620 px in locale {locale}.");
+                }
+                foreach (string comboName in new[] { "cmbInstallations", "cmbActiveVariant", "cmbActiveProject" })
+                {
+                    var selector = (ComboBox)form.FindControlForTest(comboName);
+                    if (selector.DropDownWidth != selector.Width)
+                        throw new InvalidDataException($"Selector {comboName} dropdown ({selector.DropDownWidth}) is wider than its control ({selector.Width}) in locale {locale}.");
+                }
+
+                // Header rows keep their deterministic heights in every locale.
+                if (!form.HeaderRowHeightsForTest().SequenceEqual(new[] { 36, 36, 36 }))
+                    throw new InvalidDataException($"Header rows changed height in locale {locale}.");
+
+                // Parent-cell geometry: each combo must fit inside its
+                // allocated TableLayoutPanel cell and the visible client area.
+                IReadOnlyList<ContextCellGeometry> cells = form.CaptureContextCellGeometryForTest();
+                foreach (ContextCellGeometry cell in cells)
+                {
+                    if (cell.ControlBounds is not { Width: > 0, Height: > 0 } || cell.CellBounds.Height <= 0)
+                        throw new InvalidDataException($"Context cell geometry is invalid for {cell.Name} in locale {locale}.");
+                    if (cell.ControlBounds.Height > cell.CellBounds.Height)
+                        throw new InvalidDataException($"Combo {cell.Name} is taller than its allocated cell in locale {locale}.");
+                    if (cell.ControlBounds.Top < 0 || cell.ControlBounds.Left < 0 ||
+                        cell.ControlBounds.Bottom > cell.PanelClient.Height ||
+                        cell.ControlBounds.Right > cell.PanelClient.Width)
+                        throw new InvalidDataException($"Combo {cell.Name} is not fully visible in locale {locale}.");
+                }
+                if (cells.Select(cell => cell.ControlBounds.Height).Distinct().Count() != 1)
+                    throw new InvalidDataException($"Header selector visible heights differ in locale {locale}.");
+
+                // Navigation breathing room: every mode-button bottom border
+                // must lie inside the panel client area with spare space.
+                Rectangle navigationClient = form.NavigationRowClientForTest;
+                int[] modeBottoms = current.Where(button => modeButtons.Contains(button.Name)).Select(button => button.Bounds.Bottom).ToArray();
+                if (modeBottoms.Any(bottom => bottom > navigationClient.Height))
+                    throw new InvalidDataException($"Mode button border escapes the navigation row in locale {locale}.");
+                if (navigationClient.Height - modeBottoms.Max() < 6)
+                    throw new InvalidDataException($"Navigation row lost its lower breathing room in locale {locale}.");
+
+                // Header structural invariants (no manual Game selector left):
+                // Find games shares its action column with Build variant;
+                // the Detected caption sits in that same column on row 2.
+                TableLayoutPanelCellPosition findCell = form.HeaderCellForTest("btnFindGames");
+                TableLayoutPanelCellPosition buildCell = form.HeaderCellForTest("btnBuildActiveVariant");
+                TableLayoutPanelCellPosition detectedCell = form.HeaderCellForTest("lblDetectedGameCaption");
+                TableLayoutPanelCellPosition detectedValueCell = form.HeaderCellForTest("lblDetectedGame");
+                if (findCell.Column != buildCell.Column || buildCell.Column != detectedCell.Column ||
+                    detectedCell.Row != 2 || detectedValueCell.Row != 2)
+                    throw new InvalidDataException($"Header action column layout diverged in locale {locale}.");
+                ActionButtonGeometry findButton = current.Single(button => button.Name == "btnFindGames");
+                ActionButtonGeometry buildButton = current.Single(button => button.Name == "btnBuildActiveVariant");
+                if (findButton.Bounds.X != buildButton.Bounds.X)
+                    throw new InvalidDataException($"Build variant is not under Find games in locale {locale}.");
+                Rectangle headerClient = form.HeaderGridClientForTest;
+                var detectedValue = (Control)form.FindControlForTest("lblDetectedGame");
+                if (detectedValue.Bounds is not { Width: > 0, Height: > 0 } ||
+                    detectedValue.Bounds.Right > headerClient.Width || detectedValue.Bounds.Bottom > headerClient.Height)
+                    throw new InvalidDataException($"Detected value is not fully visible in locale {locale}.");
+            }
+
+            // Representative client widths (neutral state): trio alignment is
+            // structural and must hold everywhere; right-header containment
+            // is asserted where everything reasonably fits (1600/1920 — the
+            // 620 px selector column plus neutral content exceeds 1366, which
+            // is reported, not redesigned, per task scope).
+            foreach (int formWidth in new[] { 1920, 1600, 1366 })
+            {
+                foreach (string widthLocale in new[] { "en", "sk" })
+                {
+                    using var wideForm = new MainForm();
+                    wideForm.Size = new Size(formWidth, 900);
+                    wideForm.CreateControl();
+                    wideForm.PerformLayout();
+                    UiText.SetLocale(widthLocale);
+                    IReadOnlyList<ContextComboGeometry> wideCombos = wideForm.CaptureContextComboGeometryForTest();
+                    if (wideCombos.Select(combo => combo.Bounds.X).Distinct().Count() != 1 ||
+                        wideCombos.Select(combo => combo.Bounds.Width).Distinct().Count() != 1 ||
+                        wideCombos.Select(combo => combo.Bounds.Right).Distinct().Count() != 1)
+                        throw new InvalidDataException($"Selector trio diverged at width {formWidth} in locale {widthLocale}.");
+                    if (formWidth < 1600)
+                        continue;
+                    Control wideRight = wideForm.FindControlForTest("btnHelp").Parent
+                        ?? throw new InvalidDataException("Right header has no parent.");
+                    foreach (Control child in wideRight.Controls)
+                    {
+                        if (child.Bounds.Right + child.Margin.Right > wideRight.ClientSize.Width ||
+                            child.Bounds.Bottom + child.Margin.Bottom > wideRight.ClientSize.Height)
+                            throw new InvalidDataException($"Right header clips at width {formWidth} in locale {widthLocale}.");
+                    }
+                    if (wideRight.Bounds.Right > wideForm.HeaderGridClientForTest.Width)
+                        throw new InvalidDataException($"Right header escapes the grid at width {formWidth} in locale {widthLocale}.");
+                }
+            }
+
+            // DPI/layout-scale spot checks: the shared selector column must
+            // survive uniform scaling with X/Width/Right/Height identical.
+            // Only relative equality is asserted here: form.Scale() does not
+            // scale fonts in this harness, so absolute containment under
+            // Scale() would mix scaled bounds with unscaled text metrics (a
+            // combination real DPI sessions never produce); absolute fit is
+            // asserted at 100% above and budgeted analytically per DPI.
+            foreach (float scale in new[] { 1.25f, 1.5f, 1.75f })
+            {
+                using var scaledForm = new MainForm();
+                scaledForm.Size = new Size(1450, 900);
+                scaledForm.CreateControl();
+                scaledForm.PerformLayout();
+                scaledForm.Scale(new SizeF(scale, scale));
+                scaledForm.PerformLayout();
+                IReadOnlyList<ContextComboGeometry> scaledCombos = scaledForm.CaptureContextComboGeometryForTest();
+                if (scaledCombos.Select(combo => combo.Bounds.X).Distinct().Count() != 1 ||
+                    scaledCombos.Select(combo => combo.Bounds.Width).Distinct().Count() != 1 ||
+                    scaledCombos.Select(combo => combo.Bounds.Height).Distinct().Count() != 1)
+                    throw new InvalidDataException($"Selector trio diverged at scale {scale}.");
+            }
+
+            // Mode switching swaps regular/bold caption fonts and repaints
+            // focus: button rectangles must not move.
+            IReadOnlyList<ActionButtonGeometry> beforeModes = form.CaptureActionButtonGeometryForTest();
+            form.ActivateTextModeForTest();
+            form.ActivateGraphicsModeForTest();
+            IReadOnlyList<ActionButtonGeometry> afterModes = form.CaptureActionButtonGeometryForTest();
+            if (!beforeModes.Zip(afterModes).All(pair => pair.First.Bounds == pair.Second.Bounds))
+                throw new InvalidDataException("Mode switching moved button rectangles.");
+
+            // Enabled/disabled states share identical caption geometry.
+            foreach (string buttonName in new[] { "btnReplace", "btnVerifyPristine" })
+            {
+                IReadOnlyList<ActionButtonGeometry> enabled =
+                    form.CaptureActionButtonGeometryForTest().Where(button => button.Name == buttonName).ToArray();
+                form.SetButtonEnabledForTest(buttonName, !enabled[0].Enabled);
+                IReadOnlyList<ActionButtonGeometry> disabled =
+                    form.CaptureActionButtonGeometryForTest().Where(button => button.Name == buttonName).ToArray();
+                form.SetButtonEnabledForTest(buttonName, enabled[0].Enabled);
+                if (enabled[0].Bounds != disabled[0].Bounds || enabled[0].Padding != disabled[0].Padding ||
+                    enabled[0].TextAlign != disabled[0].TextAlign || enabled[0].Renderer != disabled[0].Renderer)
+                    throw new InvalidDataException($"Enabled/disabled caption geometry differs for {buttonName}.");
+            }
+
+            // Neutral header state (locale is back to EN here): Detected shows
+            // the neutral message without a "Selected:" prefix, and the
+            // context selectors plus Build action stay disabled.
+            var neutralDetected = form.FindControlForTest("lblDetectedGame");
+            if (neutralDetected.Text != UiText.Get(UiLocalizationKeys.NoGameSelected) ||
+                neutralDetected.Text.Contains("Selected"))
+                throw new InvalidDataException("Neutral Detected presentation diverged.");
+            if (((ComboBox)form.FindControlForTest("cmbActiveVariant")).Enabled ||
+                ((ComboBox)form.FindControlForTest("cmbActiveProject")).Enabled ||
+                form.CaptureActionButtonGeometryForTest().Single(button => button.Name == "btnBuildActiveVariant").Enabled)
+                throw new InvalidDataException("Neutral context selectors are not disabled.");
+
+            // No-game StatusStrip: exactly one row, one item, no newline,
+            // positive bounds. neutral installation state was initialized above.
+            if (form.StatusStripItemCountForTest != 1)
+                throw new InvalidDataException("No-game StatusStrip does not expose exactly one item.");
+            if (form.StatusStripBoundsForTest is not { Width: > 0, Height: > 0 })
+                throw new InvalidDataException("No-game StatusStrip has invalid bounds.");
+            if (form.InstallationStatusForTest.Contains('\n'))
+                throw new InvalidDataException("No-game status text spans multiple lines.");
+            Console.WriteLine($"Button geometry: buttons={baseline.Count}; height={baseline[0].Bounds.Height}; status='{form.InstallationStatusForTest}'");
+        }
+        finally { UiText.SetLocale(priorLocale); }
+    }
+
+    // Deterministic Fit-placement regression over MainForm.ComputeFitPlacement:
+    // containment, at most 1 px free-space imbalance per axis, aspect
+    // preservation within rounding, degenerate-input handling, idempotency.
+    private static void VerifyGraphicsFitCenteringSmoke()
+    {
+        (Size Viewport, Size Image)[] cases =
+        [
+            (new Size(682, 482), new Size(320, 200)),
+            (new Size(682, 482), new Size(64, 200)),
+            (new Size(682, 482), new Size(32, 32)),
+            (new Size(682, 482), new Size(2000, 10)),
+            (new Size(500, 500), new Size(800, 100)),
+            (new Size(100, 100), new Size(320, 200)),
+            (new Size(1, 1), new Size(1, 1)),
+            (new Size(0, 100), new Size(10, 10)),
+            (new Size(100, 0), new Size(10, 10)),
+            (new Size(100, 100), new Size(0, 5)),
+            (new Size(100, 100), new Size(7, 5)),
+        ];
+        foreach ((Size viewport, Size image) in cases)
+        {
+            (Size scaled, Point location) = MainForm.ComputeFitPlacement(viewport, image);
+            bool degenerate = viewport.Width <= 0 || viewport.Height <= 0 || image.Width <= 0 || image.Height <= 0;
+            if (degenerate)
+            {
+                if (scaled != Size.Empty)
+                    throw new InvalidDataException($"Degenerate Fit input {viewport}/{image} did not yield an empty placement.");
+                continue;
+            }
+            if (scaled.Width <= 0 || scaled.Height <= 0 || scaled.Width > viewport.Width || scaled.Height > viewport.Height)
+                throw new InvalidDataException($"Fit placement {scaled} escapes viewport {viewport} for image {image}.");
+            if (location.X < 0 || location.Y < 0 || location.X + scaled.Width > viewport.Width || location.Y + scaled.Height > viewport.Height)
+                throw new InvalidDataException($"Fit location {location} escapes viewport {viewport} for scaled {scaled}.");
+            int freeX = viewport.Width - scaled.Width, freeY = viewport.Height - scaled.Height;
+            if (Math.Abs(freeX - 2 * location.X) > 1 || Math.Abs(freeY - 2 * location.Y) > 1)
+                throw new InvalidDataException($"Fit placement is not centered within 1 px: viewport {viewport}, scaled {scaled}, location {location}.");
+            if (Math.Abs((long)scaled.Width * image.Height - (long)scaled.Height * image.Width) > Math.Max(image.Width, image.Height))
+                throw new InvalidDataException($"Fit placement distorts aspect for image {image}: {scaled}.");
+            // Idempotency: same inputs always yield the same placement.
+            if (MainForm.ComputeFitPlacement(viewport, image) != (scaled, location))
+                throw new InvalidDataException("Fit placement is not idempotent.");
+        }
+        Console.WriteLine($"Fit centering: cases={cases.Length}");
+    }
+
+    // First-paint regression for the native-chrome caption buttons: construct
+    // and lay out without any mouse/focus interaction, capture, force an
+    // ordinary repaint, and require pixel-identical chrome (guards against
+    // stateful paint where the first paint differs from later repaints).
+    // Also requires a visible bottom border from the very first paint and
+    // identical Active Variant / Edition combo geometry. Headless captures
+    // cannot reproduce displayed-window show-pipeline quirks, so real-window
+    // QA remains authoritative for the visual result.
+    private static void VerifyFirstPaintSmoke()
+    {
+        using var form = new MainForm();
+        form.Size = new Size(1450, 900);
+        form.CreateControl();
+        form.PerformLayout();
+
+        static Bitmap Shot(Control control)
+        {
+            var bitmap = new Bitmap(Math.Max(1, control.Width), Math.Max(1, control.Height));
+            control.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+            return bitmap;
+        }
+
+        static bool SamePixels(Bitmap first, Bitmap second)
+        {
+            if (first.Size != second.Size)
+                return false;
+            for (int y = 0; y < first.Height; y++)
+                for (int x = 0; x < first.Width; x++)
+                    if (first.GetPixel(x, y) != second.GetPixel(x, y))
+                        return false;
+            return true;
+        }
+
+        static void RequireBottomBorder(Bitmap first, string name)
+        {
+            int dark = 0;
+            for (int x = 0; x < first.Width; x += 2)
+                if (Math.Max(first.GetPixel(x, first.Height - 1).R,
+                    Math.Max(first.GetPixel(x, first.Height - 1).G, first.GetPixel(x, first.Height - 1).B)) < 200)
+                    dark++;
+            if (dark == 0)
+                throw new InvalidDataException($"Control {name} has no visible bottom border on first paint.");
+            first.Dispose();
+        }
+
+        foreach (string name in new[] { "btnSpriteEditor", "btnVerifyPristine", "btnReplace" })
+        {
+            var button = (Button)form.FindControlForTest(name);
+            using Bitmap before = Shot(button);
+            button.Invalidate();
+            button.Update();
+            using Bitmap after = Shot(button);
+            if (!SamePixels(before, after))
+                throw new InvalidDataException($"Control {name} changed merely because an ordinary repaint occurred.");
+            RequireBottomBorder(before, name);
+        }
+
+        var variantCombo = (ComboBox)form.FindControlForTest("cmbActiveVariant");
+        var projectCombo = (ComboBox)form.FindControlForTest("cmbActiveProject");
+        if (variantCombo.Height != projectCombo.Height || variantCombo.Bounds.Size != projectCombo.Bounds.Size)
+            throw new InvalidDataException("Active Variant / Edition combos differ on first paint.");
+        using (Bitmap before = Shot(variantCombo))
+        {
+            variantCombo.Invalidate();
+            variantCombo.Update();
+            using Bitmap after = Shot(variantCombo);
+            if (!SamePixels(before, after))
+                throw new InvalidDataException("Active Variant combo changed merely because an ordinary repaint occurred.");
+        }
+        Console.WriteLine("First paint: buttons=3; combos=2");
+    }
+
+    // Header identity regression (no manual Game selector): Installation →
+    // ProjectContext.GameProfile is the only game identity. Active E1/E2 and
+    // E1 → E2 → E1 switching must update the Detected display and every
+    // former ActiveGameProfile consumer without any override control.
+    private static void VerifyHeaderAlignmentSmoke(string elvira1Source, string elvira2Source)
+    {
+        string priorLocale = UiText.LocaleId;
+        string root = Path.Combine(Path.GetTempPath(), "Pi1HeaderAlignmentSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            UiText.SetLocale("en");
+            Directory.CreateDirectory(root);
+            ProjectContext e1Project = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            ProjectContext e2Project = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
+            if (!GameInstallationValidator.TryValidate(e1Project.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e1) || e1 is null ||
+                !GameInstallationValidator.TryValidate(e2Project.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e2) || e2 is null)
+                throw new InvalidDataException("Header alignment fixtures did not validate as installations.");
+            using var form = new MainForm();
+            form.Size = new Size(1450, 900);
+            form.CreateControl();
+            form.PerformLayout();
+            form.InitializeInstallationStateForTest();
+
+            string detectedCaption = UiText.Get("Detected") + ":";
+            void RequireDisplay(ElviraGameProfile expected, string stage)
+            {
+                if (form.ActiveProjectForTest?.GameProfile != expected || form.ActiveGameProfileForTest != expected)
+                    throw new InvalidDataException($"Header {stage} is not authoritative for {expected}.");
+                if (form.FindControlForTest("lblDetectedGameCaption").Text != detectedCaption)
+                    throw new InvalidDataException($"Header {stage} lost its Detected caption.");
+                var detectedValue = (Control)form.FindControlForTest("lblDetectedGame");
+                if (detectedValue.Text != GameProfileInfo.For(expected).DisplayName)
+                    throw new InvalidDataException($"Header {stage} does not identify {expected}.");
+                // Single line: a wrapped value would be at least two text
+                // rows tall; rows themselves must stay 36 px.
+                if (detectedValue.Bounds.Height > 23)
+                    throw new InvalidDataException($"Header {stage} wrapped its Detected value.");
+                if (!form.HeaderRowHeightsForTest().SequenceEqual(new[] { 36, 36, 36 }))
+                    throw new InvalidDataException($"Header {stage} changed row heights.");
+            }
+
+            form.BrowseValidatedInstallationForTest(e1);
+            form.ActivateInstallationForTest(e1);
+            RequireDisplay(ElviraGameProfile.Elvira1, "E1");
+            form.SelectGraphicsZoneForTest("382.VGA");
+            if (form.ActiveGameProfileForTest != ElviraGameProfile.Elvira1)
+                throw new InvalidDataException("Graphics consumer did not operate as Elvira I.");
+            form.BrowseValidatedInstallationForTest(e2);
+            form.ActivateInstallationForTest(e2);
+            RequireDisplay(ElviraGameProfile.Elvira2, "E2");
+            form.BrowseValidatedInstallationForTest(e1);
+            form.ActivateInstallationForTest(e1);
+            RequireDisplay(ElviraGameProfile.Elvira1, "E1-again");
+            Console.WriteLine($"Header alignment: E1='{GameProfileInfo.For(ElviraGameProfile.Elvira1).DisplayName}'; E2='{GameProfileInfo.For(ElviraGameProfile.Elvira2).DisplayName}'; switches=3");
+        }
+        finally { UiText.SetLocale(priorLocale); if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
     private static void VerifyProjectVariantOwnershipSmoke(string elvira1Source, bool editionStressOnly = false, bool layoutStress = false)
     {
         string root = Path.Combine(Path.GetTempPath(), "Pi1ProjectVariantOwnership", Guid.NewGuid().ToString("N"));
@@ -3864,7 +4366,19 @@ internal static class Program
                 if (form.HasUnsavedTextChangesForTest)
                     throw new InvalidDataException("Returning to saved S1 created a false text dirty state.");
 
+                // Materialize a realistic graphics-client layout without showing
+                // the window (established pattern from VerifyTextPristineRootSmoke).
+                // Without this, previewViewport/previewScroll keep degenerate,
+                // never-laid-out bounds and the stress below would validate
+                // stability of an invalid geometry.
+                form.Size = new Size(1450, 900);
+                form.CreateControl();
+                form.PerformLayout();
+                form.MaterializeGraphicsLayoutForTest();
                 EditionSwitchDiagnostics stress = form.RunEditionSwitchStressForTest(50);
+                if (stress.ViewportBefore.Width <= 0 || stress.ViewportBefore.Height <= 0 ||
+                    stress.PreviewBefore.Width <= 0 || stress.PreviewBefore.Height <= 0)
+                    throw new InvalidDataException("Graphics preview geometry is not valid before stress switching.");
                 if (stress.ViewportBefore != stress.ViewportAfter || stress.PreviewBefore != stress.PreviewAfter ||
                     stress.GraphicsLoads != 200 || stress.TextLoads != 200 || stress.RuntimeUiLoads != 200 || stress.FontBinds != 200 ||
                     stress.ControlsBefore != stress.ControlsAfter || HashFile(gamePc) != originalHash)
@@ -3874,6 +4388,9 @@ internal static class Program
                 if (layoutStress)
                 {
                     MainFormLayoutDiagnostics layout = form.RunMainFormLayoutStressForTest();
+                    if (layout.Before.PreviewViewportBounds.Width <= 0 || layout.Before.PreviewViewportBounds.Height <= 0 ||
+                        layout.Before.PreviewScrollBounds.Width <= 0 || layout.Before.PreviewScrollBounds.Height <= 0)
+                        throw new InvalidDataException("MainForm layout snapshot is not valid before stress transitions.");
                     if (layout.Before != layout.After || layout.EditionChanges != 100 || layout.TabChanges != 20 || layout.LocaleChanges != 10)
                         throw new InvalidDataException("MainForm layout did not remain stable across stress transitions.");
                     Console.WriteLine($"Layout stress: edition={layout.EditionChanges}; tabs={layout.TabChanges}; locales={layout.LocaleChanges}; splitter={layout.After.SplitterDistance}");

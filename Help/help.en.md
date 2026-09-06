@@ -1,7 +1,7 @@
 # π1 Elvira I & II Editor Help
 
 ## [getting-started] Getting Started
-Use the **Installation** selector to choose a supported VGA game. The editor remembers valid installations in your user application settings, never in the game folder. **Find games...** performs a fast, bounded check of common GOG locations and remembered paths; it does not scan entire disks automatically at startup. **Browse folder...** always lets you validate and add a game folder manually. Multiple Elvira I/II installations remain separate entries, and **Game: Auto-detect** immediately shows the selected validated game. Select English, Slovak, or Czech in **Interface language**. Use Graphics, Text, Font, and Mods & Launcher; Help is read-only and About is a short product summary.
+Use the **Installation** selector to choose a supported VGA game. The editor remembers valid installations in your user application settings, never in the game folder. **Find games...** performs a fast, bounded check of common GOG locations and remembered paths; it does not scan entire disks automatically at startup. **Browse folder...** always lets you validate and add a game folder manually. Multiple Elvira I/II installations remain separate entries, and the selected installation identifies and activates the supported game automatically. Select English, Slovak, or Czech in **Interface language**. Use Graphics, Text, Font, and Mods & Launcher; Help is read-only and About is a short product summary.
 
 Supported games: **Elvira: Mistress of the Dark** and **Elvira II: The Jaws of Cerberus**.
 
