@@ -74,8 +74,6 @@ internal sealed class MainForm : Form
     private readonly Label lblTranslationVariantCaption = new();
     private readonly ComboBox cmbTranslationVariant = new();
     private readonly Label lblTextValidation = new();
-    private readonly CheckBox chkOnlyTextRisks = new();
-    private readonly CheckBox chkIgnoreTextWarning = new();
     private TextDiagnosticStore? _textDiagnosticStore;
     private readonly Label lblSearchCaption = new();
     private readonly Label lblEncodingCaption = new();
@@ -172,7 +170,6 @@ internal sealed class MainForm : Form
     private readonly CenteredCaptionButton btnReplace = new();
     private readonly CenteredCaptionButton btnClearEdit = new();
     private readonly CenteredCaptionButton btnExport = new();
-    private readonly Button btnDeploy = new();
     private readonly CenteredCaptionButton btnRestore = new();
     private readonly CheckBox chkPixelPerfect = new();
     private readonly Label lblGraphicsVariant = new();
@@ -264,7 +261,7 @@ internal sealed class MainForm : Form
     internal bool HasNeutralGraphicsPresentationForTest =>
         _activeProject is null && _currentVga is null && _table is null &&
         !btnReload.Enabled && !btnReplace.Enabled && !btnExport.Enabled && !btnRestore.Enabled &&
-        !btnDeploy.Enabled && !btnReloadPreview.Enabled &&
+        !btnReloadPreview.Enabled &&
         cmbGraphicsScope.SelectedIndex < 0 && !cmbGraphicsScope.Enabled &&
         lblGraphicsVariant.Text == UiText.Get("Graphics.ProjectUnavailable") + ": —" &&
         lblPaletteMode.Text == "—" && !panelPaletteSwatches.Enabled;
@@ -273,7 +270,6 @@ internal sealed class MainForm : Form
         btnReload.Enabled && cmbGraphicsScope.SelectedIndex >= 0 &&
         lblGraphicsVariant.Text != UiText.Get("Graphics.ProjectUnavailable") + ": —";
     internal string TextNavigationCaptionForTest => btnTextEditor.Text;
-    internal bool IsDirectGameDeployHiddenForTest => btnDeploy.Parent is null && !btnDeploy.Enabled;
     internal void ActivateTextModeForTest() => SwitchMode(tabText);
     internal void ActivateGraphicsModeForTest() => SwitchMode(tabVga);
     internal bool HasGraphicsValidationErrorForTest => _graphicsStatusIsError;
@@ -289,7 +285,7 @@ internal sealed class MainForm : Form
         HasNeutralGraphicsPresentationForTest &&
         !lblTextOverview.Text.Contains(GamePcOriginalService.OriginalFileName, StringComparison.OrdinalIgnoreCase);
     internal string NeutralStartupDiagnosticForTest =>
-        $"project={_activeProject is not null};variant={_activeVariant is not null};detected='{lblDetectedGame.Text}';status='{lblStatus.Text}';graphics='{lblGraphicsVariant.Text}';palette='{lblPaletteMode.Text}';actions={btnReload.Enabled}/{btnReplace.Enabled}/{btnExport.Enabled}/{btnRestore.Enabled}/{btnDeploy.Enabled}/{btnReloadPreview.Enabled};text='{lblTextOverview.Text}'";
+        $"project={_activeProject is not null};variant={_activeVariant is not null};detected='{lblDetectedGame.Text}';status='{lblStatus.Text}';graphics='{lblGraphicsVariant.Text}';palette='{lblPaletteMode.Text}';actions={btnReload.Enabled}/{btnReplace.Enabled}/{btnExport.Enabled}/{btnRestore.Enabled}/{btnReloadPreview.Enabled};text='{lblTextOverview.Text}'";
     internal string UiStateDiagnosticForTest =>
         $"neutral={HasNeutralStartupPresentationForTest};text={HasNeutralTextActionStateForTest};variantAdd={btnVariantAdd.Enabled};" +
         $"textActions={btnOpenDataFile.Enabled}/{btnReloadTexts.Enabled}/{btnSaveTexts.Enabled}/{btnSaveAsDataFile.Enabled}/{btnCreateDataVariant.Enabled}/{btnExportTranslations.Enabled}/{btnImportTranslations.Enabled}; " +
@@ -603,8 +599,6 @@ internal sealed class MainForm : Form
         btnCreateDataVariant.Click += (_, _) => SaveTextDataFileAs(createVariant: true);
 
         lblTextContextCaption.Text = UiText.Get("TextContext");
-        chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
-        chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
         lblTextContextCaption.AutoSize = true;
         lblTextContextCaption.TextAlign = ContentAlignment.MiddleLeft;
         lblTextContextCaption.Margin = new Padding(0, 5, 10, 0);
@@ -625,20 +619,6 @@ internal sealed class MainForm : Form
         lblTextValidation.AutoSize = true;
         lblTextValidation.TextAlign = ContentAlignment.MiddleLeft;
         lblTextValidation.Margin = new Padding(6, 5, 0, 0);
-
-        chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
-        chkOnlyTextRisks.AutoSize = true;
-        chkOnlyTextRisks.Margin = new Padding(6, 6, 6, 0);
-        chkOnlyTextRisks.Visible = false;
-        chkOnlyTextRisks.Enabled = false;
-        chkOnlyTextRisks.Checked = false;
-        chkOnlyTextRisks.CheckedChanged += (_, _) => RefreshTextGrid();
-
-        chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
-        chkIgnoreTextWarning.AutoSize = true;
-        chkIgnoreTextWarning.Margin = new Padding(6, 6, 0, 0);
-        chkIgnoreTextWarning.Visible = false;
-        chkIgnoreTextWarning.Enabled = false;
 
         var textContextGroup = new FlowLayoutPanel
         {
@@ -675,7 +655,7 @@ internal sealed class MainForm : Form
         filterFlow.Controls.AddRange(new Control[]
         {
             lblSearchCaption, txtSearch, lblEncodingCaption, cmbTextEncoding,
-            lblTextValidation, chkOnlyTextRisks, chkIgnoreTextWarning
+            lblTextValidation
         });
 
         actionFlow.Controls.AddRange(new Control[]
@@ -2337,8 +2317,6 @@ internal sealed class MainForm : Form
         lblEncodingCaption.Text = UiText.Get("Encoding");
         lblTextContextCaption.Text = UiText.Get("TextContext");
         lblTranslationVariantCaption.Text = UiText.Get("Edition") + ":";
-        chkOnlyTextRisks.Text = UiText.Get("OnlyRisks");
-        chkIgnoreTextWarning.Text = UiText.Get("IgnoreWarning");
         int contextIndex = Math.Max(0, cmbTextContext.SelectedIndex);
         cmbTextContext.Items.Clear();
         cmbTextContext.Items.AddRange(new object[] { UiText.Get("ContextAuto"), UiText.Get("ContextGeneric"), UiText.Get("ContextNpc") });
@@ -2388,7 +2366,6 @@ internal sealed class MainForm : Form
         btnHelp.Text = UiText.Get("Help");
         btnSpriteEditor.Text = UiText.Get("Graphics");
         btnClearEdit.Text = UiText.Get("CancelEdit");
-        btnDeploy.Text = UiText.Get("ApplyGame");
         btnSaveGraphicsProject.Text = UiText.Get("SaveToProject");
         lblPaletteCaption.Text = UiText.Get("Palette");
         btnPaletteAdvanced.Text = _paletteAdvancedVisible ? UiText.Get("PaletteBasic") : UiText.Get("PaletteAdvanced");
@@ -3058,7 +3035,6 @@ internal sealed class MainForm : Form
         btnReplace.Text = UiText.Get("ReplacePng");
         btnClearEdit.Text = UiText.Get("CancelEdit");
         btnExport.Text = UiText.Get("ExportPng");
-        btnDeploy.Text = UiText.Get("ApplyGame");
         btnRestore.Text = UiText.Get("RestoreOriginal");
 
         btnReplace.Width = 120;
@@ -3076,11 +3052,6 @@ internal sealed class MainForm : Form
         btnExport.Click += (_, _) => ExportSelected();
         btnRestore.Click += (_, _) => RestoreOriginal();
 
-        // Directly writing a VGA file in pristine GameRoot conflicts with the
-        // project -> build variant workflow. Keep the old private helper only
-        // for legacy source compatibility; it is not a normal UI action.
-        btnDeploy.Enabled = false;
-        btnDeploy.Visible = false;
         buttons.Controls.AddRange(new Control[] { btnReplace, btnClearEdit, btnExport, btnRestore });
 
         previewViewport.Dock = DockStyle.Fill;
@@ -3845,7 +3816,6 @@ internal sealed class MainForm : Form
         btnExport.Enabled = selected;
         btnRestore.Enabled = selected && _currentVga is not null && File.Exists(SafeDeployer.OriginalBackupPath(_currentVga));
         btnClearEdit.Enabled = selected && editableProject && _edits.ContainsKey(SelectedEntry()!.ImageId);
-        btnDeploy.Enabled = false;
         if (!imageReady)
         {
             lblPaletteMode.Text = "—";
@@ -4402,51 +4372,6 @@ internal sealed class MainForm : Form
 
             bmp.Save(dlg.FileName, ImageFormat.Png);
             SetGraphicsStatus(string.Format(UiText.Get("Graphics.Exported"), dlg.FileName), false);
-        }
-        catch (Exception ex)
-        {
-            Error(ex);
-        }
-    }
-
-    private void Deploy()
-    {
-        if (_currentVga is null) return;
-        if (_edits.Count == 0)
-        {
-            MessageBox.Show(this, UiText.Get("NoEditedPng"), AppInfo.ProductTitle,
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-
-        if (!ValidatePendingGraphicsReplacements()) return;
-
-        var answer = MessageBox.Show(this,
-            string.Format(UiText.Get("Graphics.ConfirmDeploy"), _edits.Count, Path.GetFileName(_currentVga)),
-            UiText.Get("Graphics.DeployTitle"),
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning);
-
-        if (answer != DialogResult.Yes) return;
-
-        try
-        {
-            SafeDeployer.Deploy(_currentVga, _edits, EffectivePalette());
-            SetGraphicsStatus(UiText.Get("Graphics.Deployed"), false);
-            LoadSelectedZone();
-            MessageBox.Show(this,
-                UiText.Get("Graphics.DeployComplete"),
-                AppInfo.ProductTitle,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-        }
-        catch (InvalidDataException ex)
-        {
-            // A replacement may have changed externally after Replace PNG was
-            // accepted.  Keep this normal input failure concise and private.
-            System.Diagnostics.Debug.WriteLine(ex);
-            SetGraphicsStatus(UiText.Get("Graphics.ReplaceUnexpected"), true);
-            MessageBox.Show(this, UiText.Get("Graphics.ReplaceUnexpected"), UiText.Get("Graphics.ReplaceValidationTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (Exception ex)
         {

@@ -35,7 +35,7 @@ internal sealed record GameProfileInfo(
             ElviraGameProfile.AutoDetect,
             "Auto-detect",
             null,
-            "Detect from supported executable signatures and resource characteristics; manual override is always available.")
+            "Detect from supported executable signatures and resource characteristics; the Installation selector is the only game authority.")
     };
 }
 
@@ -46,8 +46,10 @@ internal static class GameProfileDetector
         if (GameInstallationValidator.TryValidate(directory, InstallationDiscoverySource.Manual, out GameInstallation? installation) && installation is not null)
             return installation.Game;
 
-        // Secondary heuristics derived from the currently tested GOG installations.
-        // They are intentionally conservative; manual override remains available.
+        // Secondary heuristics used only when no validated Installation is
+        // available. A validated Installation -> ProjectContext.GameProfile is
+        // the sole game identity; the removed manual game selector was never
+        // an override authority.
         if (zoneCount >= 85)
             return ElviraGameProfile.Elvira2;
 

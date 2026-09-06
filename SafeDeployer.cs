@@ -15,21 +15,6 @@ internal static class SafeDeployer
         throw new InvalidOperationException("Immutable O-file naming is defined only for GAMEPC and VGA resources.");
     }
 
-    /// <summary>Rebuilds, parses, and transactionally installs a VGA file. Merely reading a VGA never calls this method.</summary>
-    public static void Deploy(string sourceVga, IReadOnlyDictionary<int, string> edits, IReadOnlyList<System.Drawing.Color>? activePalette = null)
-    {
-        if (!File.Exists(sourceVga)) throw new FileNotFoundException("Active VGA file is missing.", sourceVga);
-        _ = new VgaImageTableParser(File.ReadAllBytes(sourceVga)).Parse();
-        string tempPatch = TemporaryPath(sourceVga, "vga");
-        try
-        {
-            new VgaFileRebuilder().Rebuild(sourceVga, edits, tempPatch, activePalette);
-            _ = new VgaImageTableParser(File.ReadAllBytes(tempPatch)).Parse();
-            ReplaceActiveWithPrepared(sourceVga, tempPatch);
-        }
-        finally { DeleteIfExists(tempPatch); }
-    }
-
     /// <summary>Installs a validated temporary GAMEPC/VGA file while preserving the first active version as an O-file.</summary>
     public static void ReplaceActiveWithPrepared(string activePath, string preparedPath)
     {

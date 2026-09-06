@@ -1330,14 +1330,6 @@ internal static class Program
         string saveAs = Path.Combine(persistence, "SKFIX");
         GameDataFileService.SaveAsNew(saved, saveAs, new Dictionary<int, string>(), savedEntries, cp852, ElviraGameProfile.Elvira1, original);
         if (!File.ReadAllBytes(saveAs).SequenceEqual(repaired)) throw new InvalidDataException("Save As did not preserve terminal delimiters.");
-
-        string creation = Path.Combine(root, "create-variant"); Directory.CreateDirectory(creation);
-        File.Copy(gamePcOriginal, Path.Combine(creation, "GAMEPCO"));
-        File.WriteAllBytes(Path.Combine(creation, "RUNVGA.EXE"), [0]);
-        var catalog = new VariantCatalog(creation, ElviraGameProfile.Elvira1, [new VariantEntry("English", "GAMEPC", true, 0, "EN", "RUNVGA.EXE")], false);
-        VariantEntry created = TranslationVariantService.Create(creation, ElviraGameProfile.Elvira1, catalog, "Slovak", "SK");
-        if (!File.ReadAllBytes(Path.Combine(creation, created.DataFile)).SequenceEqual(originalBytes))
-            throw new InvalidDataException("Create Variant did not copy the immutable GAMEPCO data exactly.");
     }
 
     private static void RunElvira1FixedHotspotLayoutSmoke(string gamePcOriginal, string gamePcSk, string elvira2, string root)
@@ -1411,13 +1403,6 @@ internal static class Program
         if (!File.ReadAllBytes(saved).SequenceEqual(repaired)) throw new InvalidDataException("Save did not apply fixed-hotspot layout repair.");
         string saveAs = GameDataFileService.SaveAsNew(saved, Path.Combine(persistence, "SKFIX"), new Dictionary<int, string>(), savedEntries, cp852, ElviraGameProfile.Elvira1, original);
         if (!File.ReadAllBytes(saveAs).SequenceEqual(repaired)) throw new InvalidDataException("Save As did not preserve fixed-hotspot layout repair.");
-
-        string createRoot = Path.Combine(root, "create-variant"); Directory.CreateDirectory(createRoot);
-        File.Copy(gamePcOriginal, Path.Combine(createRoot, "GAMEPCO")); File.WriteAllBytes(Path.Combine(createRoot, "RUNVGA.EXE"), [0]);
-        var catalog = new VariantCatalog(createRoot, ElviraGameProfile.Elvira1, [new VariantEntry("English", "GAMEPC", true, 0, "EN", "RUNVGA.EXE")], false);
-        VariantEntry created = TranslationVariantService.Create(createRoot, ElviraGameProfile.Elvira1, catalog, "Slovak", "SK");
-        if (GamePcTextEditor.LoadEntries(Path.Combine(createRoot, created.DataFile), ElviraGameProfile.Elvira1).Count != 689)
-            throw new InvalidDataException("Create Variant did not preserve the Elvira I logical text sequence.");
     }
 
     private static void VerifyProductionRepack(string name, string sourcePath, ElviraGameProfile profile, int expectedCount, int emptyIndex, int longIndex, int lastIndex, string root)
@@ -5187,8 +5172,10 @@ internal static class Program
                 if (!form.HasNeutralStartupPresentationForTest || form.InstallationStatusForTest !=
                     UiText.Get(UiLocalizationKeys.NoGameSelected) + " " + UiText.Get(UiLocalizationKeys.FindGamesOrBrowseFolder))
                     throw new InvalidDataException($"Neutral startup presentation regressed for locale '{localeId}': {form.NeutralStartupDiagnosticForTest}");
-                if (form.TextNavigationCaptionForTest != UiText.Get("OpenTextEditor") || !form.IsDirectGameDeployHiddenForTest)
-                    throw new InvalidDataException($"Localized Text navigation or direct GameRoot deployment gating regressed for locale '{localeId}'.");
+                if (form.TextNavigationCaptionForTest != UiText.Get("OpenTextEditor"))
+                    throw new InvalidDataException($"Localized Text navigation regressed for locale '{localeId}'.");
+                if (typeof(MainForm).GetField("btnDeploy", BindingFlags.NonPublic | BindingFlags.Instance) is not null)
+                    throw new InvalidDataException($"Legacy direct GameRoot VGA deploy control regressed for locale '{localeId}'.");
                 form.ActivateTextModeForTest();
                 if (form.TextNavigationCaptionForTest != UiText.Get("OpenTextEditor"))
                     throw new InvalidDataException($"Text navigation caption changed after selecting the Text view for locale '{localeId}'.");

@@ -10,7 +10,7 @@ internal enum GamePcOriginalStatus
 
 internal sealed record GamePcOriginalReference(string Path, GamePcOriginalStatus Status, IReadOnlyList<GamePcStringEntry> Entries);
 
-/// <summary>Creates GAMEPCO once from a strictly valid active GAMEPC and never rewrites it.</summary>
+/// <summary>Read-only access to the frozen GAMEPC baseline already protected by <see cref="ProjectContext"/>.</summary>
 internal static class GamePcOriginalService
 {
     internal const string OriginalFileName = "GAMEPCO";
@@ -33,8 +33,10 @@ internal static class GamePcOriginalService
 
     /// <summary>
     /// Resolves the frozen GAMEPC already protected by <see cref="ProjectContext"/>.
-    /// Unlike the retired migration helper below, this normal project workflow is
-    /// strictly read-only and never creates a root-side GAMEPCO file.
+    /// This normal project workflow is strictly read-only and never creates a
+    /// root-side GAMEPCO file. The retired GAMEPCO migration helper was removed
+    /// in R10; historical root-side GAMEPCO copies are recognized read-only by
+    /// <see cref="IsVerifiedLegacyRootOriginal"/> for inventory compatibility.
     /// </summary>
     public static GamePcOriginalReference LoadProjectBaseline(ProjectContext project)
     {
@@ -49,37 +51,6 @@ internal static class GamePcOriginalService
             _ => false
         };
         return new GamePcOriginalReference(path, verified ? GamePcOriginalStatus.VerifiedOriginal : GamePcOriginalStatus.BaselineCopy, entries);
-    }
-
-    [Obsolete("Legacy migration helper only. Project workflows must use LoadProjectBaseline.")]
-    public static GamePcOriginalReference Ensure(string installationDirectory, ElviraGameProfile profile)
-    {
-        string directory = Path.GetFullPath(installationDirectory);
-        string active = Path.Combine(directory, "GAMEPC");
-        string original = Path.Combine(directory, OriginalFileName);
-        if (!File.Exists(original))
-        {
-            // Strict parsing must succeed before the immutable baseline is made.
-            _ = GamePcTextEditor.LoadEntries(active, profile);
-            string temporary = original + ".pi1_original_" + Guid.NewGuid().ToString("N") + ".tmp";
-            try
-            {
-                File.Copy(active, temporary, overwrite: false);
-                _ = GamePcTextEditor.LoadEntries(temporary, profile);
-                File.Move(temporary, original, overwrite: false);
-            }
-            finally { try { if (File.Exists(temporary)) File.Delete(temporary); } catch { } }
-        }
-
-        IReadOnlyList<GamePcStringEntry> entries = GamePcTextEditor.LoadEntries(original, profile);
-        string hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(original)));
-        bool verified = profile switch
-        {
-            ElviraGameProfile.Elvira1 => hash.Equals(Elvira1OriginalHash, StringComparison.OrdinalIgnoreCase),
-            ElviraGameProfile.Elvira2 => hash.Equals(Elvira2OriginalHash, StringComparison.OrdinalIgnoreCase),
-            _ => false
-        };
-        return new GamePcOriginalReference(original, verified ? GamePcOriginalStatus.VerifiedOriginal : GamePcOriginalStatus.BaselineCopy, entries);
     }
 
     public static void RejectProtectedPath(string path)

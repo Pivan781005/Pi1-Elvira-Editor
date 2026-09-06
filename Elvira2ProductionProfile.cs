@@ -31,7 +31,7 @@ internal static class Elvira2ProductionProfile
     internal const string DiscoveryContract =
         "Installation discovery requires GAMEPC, a VGA zone, and RUNIT in OriginalPacked, CanonicalUnpackedAscii98, or ExtendedCp852 state; no Elvira II EGA executable is modeled.";
     internal const string VariantContract =
-        "VariantNaming and TranslationVariantService bind GAMEPCSK to RUNITSK.EXE and create from immutable GAMEPCO/RUNITO sources without overwriting destinations.";
+        "VariantNaming binds GAMEPCSK to RUNITSK.EXE; TranslationProjectService plus CompositeBuild materialize owned variants from immutable sources without overwriting destinations.";
 
     internal static readonly FrozenFontDescriptor LowFont = new(
         RunItBootstrapService.OriginalFontOffset, 0x154CA, RunItBootstrapService.OriginalFontGlyphCount * RunVgaFontService.GlyphBytes,
