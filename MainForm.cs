@@ -1942,14 +1942,20 @@ internal sealed class MainForm : Form
 
     private static string FriendlyRuntimeUiStatus(RuntimeUiLayoutValidationResult result) => result.Status switch
     {
-        RuntimeUiLayoutValidationStatus.Valid => "Valid",
-        RuntimeUiLayoutValidationStatus.MappingIncomplete => "Mapping incomplete",
-        RuntimeUiLayoutValidationStatus.DefaultTextUnavailable => "Original text unavailable",
-        RuntimeUiLayoutValidationStatus.EncodingFailure => "Unsupported character",
-        RuntimeUiLayoutValidationStatus.UnsupportedGlyph => "Unsupported glyph",
-        RuntimeUiLayoutValidationStatus.RecordCapacityExceeded or RuntimeUiLayoutValidationStatus.TextTooLong => "Text too long",
-        RuntimeUiLayoutValidationStatus.BankCapacityExceeded => "Bank capacity exceeded",
-        RuntimeUiLayoutValidationStatus.InvalidFrozenDescriptor => "Layout unavailable",
+        RuntimeUiLayoutValidationStatus.Valid => UiText.Get("RuntimeUi.Status.Valid"),
+        // Route evidence and layout safety are separate concepts: proven routes
+        // report their evidence while staying blocked; unknown routes stay
+        // generic. Readiness remains incomplete in both cases.
+        RuntimeUiLayoutValidationStatus.MappingIncomplete => result.EvidenceStatus is RuntimeUiEvidenceStatus.Proven or RuntimeUiEvidenceStatus.ProvenByBinary or RuntimeUiEvidenceStatus.ProvenLive or RuntimeUiEvidenceStatus.StrongEvidence
+            ? UiText.Get("RuntimeUi.Status.RouteProvenLayoutIncomplete")
+            : UiText.Get("RuntimeUi.Status.MappingIncomplete"),
+        RuntimeUiLayoutValidationStatus.DefaultTextUnavailable => UiText.Get("RuntimeUi.OriginalUnavailable"),
+        RuntimeUiLayoutValidationStatus.EncodingFailure => UiText.Get("RuntimeUi.Status.EncodingFailure"),
+        RuntimeUiLayoutValidationStatus.UnsupportedGlyph => UiText.Get("RuntimeUi.Status.UnsupportedGlyph"),
+        RuntimeUiLayoutValidationStatus.RecordCapacityExceeded or RuntimeUiLayoutValidationStatus.TextTooLong => UiText.Get("RuntimeUi.Status.TextTooLong"),
+        RuntimeUiLayoutValidationStatus.BankCapacityExceeded => UiText.Get("RuntimeUi.Status.BankCapacityExceeded"),
+        RuntimeUiLayoutValidationStatus.InvalidFrozenDescriptor => UiText.Get("RuntimeUi.Status.LayoutUnavailable"),
+        RuntimeUiLayoutValidationStatus.UnsupportedRecord => UiText.Get("RuntimeUi.Status.UnsupportedRecord"),
         _ => result.Status.ToString()
     };
 

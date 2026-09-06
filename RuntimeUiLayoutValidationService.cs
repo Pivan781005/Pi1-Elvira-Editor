@@ -53,11 +53,19 @@ internal sealed class RuntimeUiLayoutValidationService
         if (variant is null) throw new ArgumentNullException(nameof(variant));
         RuntimeUiRuntimeProjection? projection = _texts.GetEffectiveRecords(variant, state).SingleOrDefault(value => value.LogicalRecordId == logicalRecordId);
         if (projection is null)
-            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedRecord, "The logical record does not apply to this runtime.", [], 0, null, null, RuntimeUiMappingReadiness.Unsupported, RuntimeUiEvidenceStatus.Unknown);
+            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedRecord, UiText.Get("RuntimeUi.Detail.UnsupportedRecord"), [], 0, null, null, RuntimeUiMappingReadiness.Unsupported, RuntimeUiEvidenceStatus.Unknown);
         if (projection.MappingReadiness == RuntimeUiMappingReadiness.KnownButMappingIncomplete)
-            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.MappingIncomplete, "Frozen route/layout mapping is incomplete.", [], 0, null, BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
+        {
+            // Route evidence and layout safety are separate: proven routes report
+            // their evidence while staying blocked; unknown routes stay generic.
+            // Neither branch manufactures a capacity or makes anything editable.
+            string incompleteDetail = projection.EvidenceStatus is RuntimeUiEvidenceStatus.Proven or RuntimeUiEvidenceStatus.ProvenByBinary or RuntimeUiEvidenceStatus.ProvenLive or RuntimeUiEvidenceStatus.StrongEvidence
+                ? UiText.Get("RuntimeUi.Detail.RouteProvenLayoutIncomplete")
+                : UiText.Get("RuntimeUi.Detail.MappingIncomplete");
+            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.MappingIncomplete, incompleteDetail, [], 0, null, BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
+        }
         if (projection.EffectiveText is null)
-            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.DefaultTextUnavailable, "Frozen Unicode default text is not materialized by the authoritative descriptor.", [], 0, RecordCapacity(variant, logicalRecordId), BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
+            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.DefaultTextUnavailable, UiText.Get("RuntimeUi.Detail.DefaultTextUnavailable"), [], 0, RecordCapacity(variant, logicalRecordId), BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
         if (!TryGetFrozenRecord(variant, logicalRecordId, out FrozenRuntimeUiRecord? frozen, out string? descriptorError))
             return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.InvalidFrozenDescriptor, descriptorError!, [], 0, null, BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
         FrozenRuntimeUiRecord frozenRecord = frozen!;
@@ -66,17 +74,17 @@ internal sealed class RuntimeUiLayoutValidationService
             return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.EncodingFailure, encodingError!, [], 0, frozenRecord.Length, BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
         int control = Array.FindIndex(payload, value => value != 0x0D && (value < 0x20 || value == 0x7F));
         if (control >= 0)
-            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedGlyph, $"Control byte 0x{payload[control]:X2} is not a permitted runtime UI text byte.", payload, payload.Length + 1, frozenRecord.Length, BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
+            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedGlyph, string.Format(UiText.Get("RuntimeUi.Detail.ControlByte"), payload[control]), payload, payload.Length + 1, frozenRecord.Length, BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
         int reserved = Array.IndexOf(payload, (byte)FontSlotMetadata.HudEraseGlyph);
         if (reserved >= 0)
-            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedGlyph, "CP852 byte 0x81 is reserved for HUD erase behavior and is not text-editable.", payload, payload.Length + 1, frozenRecord.Length, BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
+            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedGlyph, UiText.Get("RuntimeUi.Detail.ReservedHudGlyph"), payload, payload.Length + 1, frozenRecord.Length, BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
 
         int required = checked(payload.Length + 1); // NUL is mandatory in every frozen descriptor span.
         if (required > frozenRecord.Length)
-            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.RecordCapacityExceeded, $"Encoded payload needs {required} bytes including NUL; frozen record capacity is {frozenRecord.Length}.", payload, required, frozenRecord.Length, BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
+            return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.RecordCapacityExceeded, string.Format(UiText.Get("RuntimeUi.Detail.RecordCapacityExceeded"), required, frozenRecord.Length), payload, required, frozenRecord.Length, BankCapacity(variant), projection.MappingReadiness, projection.EvidenceStatus);
         if (!FitsFrozenBank(variant, frozenRecord, out int bankCapacity, out string? bankError))
             return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.BankCapacityExceeded, bankError!, payload, required, frozenRecord.Length, bankCapacity, projection.MappingReadiness, projection.EvidenceStatus);
-        return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.Valid, "Encoded CP852 payload fits the frozen record and bank; no bytes were written.", payload, required, frozenRecord.Length, bankCapacity, projection.MappingReadiness, projection.EvidenceStatus);
+        return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.Valid, UiText.Get("RuntimeUi.Detail.Valid"), payload, required, frozenRecord.Length, bankCapacity, projection.MappingReadiness, projection.EvidenceStatus);
     }
 
     public RuntimeUiLayoutValidationBatchResult ValidateAll(VariantContext variant, RuntimeUiTextState state) =>
@@ -85,16 +93,16 @@ internal sealed class RuntimeUiLayoutValidationService
     private static bool TryEncodeStrict(string text, out byte[] bytes, out string? error)
     {
         bytes = []; error = null;
-        if (text.IndexOf('\0') >= 0) { error = "Embedded NUL is not permitted."; return false; }
+        if (text.IndexOf('\0') >= 0) { error = UiText.Get("RuntimeUi.Detail.EmbeddedNul"); return false; }
         try
         {
             Encoding source = GamePcTextEditor.GetEncoding("CP852");
             Encoding strict = Encoding.GetEncoding(source.CodePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
             bytes = strict.GetBytes(text);
-            if (!string.Equals(text, strict.GetString(bytes), StringComparison.Ordinal)) { error = "Text cannot round-trip through CP852."; return false; }
+            if (!string.Equals(text, strict.GetString(bytes), StringComparison.Ordinal)) { error = UiText.Get("RuntimeUi.Detail.Cp852RoundTrip"); return false; }
             return true;
         }
-        catch (EncoderFallbackException) { error = "Text contains a character not representable in CP852."; return false; }
+        catch (EncoderFallbackException) { error = UiText.Get("RuntimeUi.Detail.Cp852Unrepresentable"); return false; }
     }
 
     private static bool TryGetFrozenRecord(VariantContext variant, RuntimeUiLogicalRecordId id, out FrozenRuntimeUiRecord? record, out string? error)
@@ -109,7 +117,7 @@ internal sealed class RuntimeUiLayoutValidationService
             VariantRuntimeKind.Elvira1Vga => Elvira1ProductionProfile.RunVga.RuntimeUi,
             _ => throw new ArgumentOutOfRangeException(nameof(variant))
         };
-        if (!descriptor.IsFrozen) { error = "Runtime UI descriptor is not frozen."; return false; }
+        if (!descriptor.IsFrozen) { error = UiText.Get("RuntimeUi.Detail.DescriptorNotFrozen"); return false; }
         string? name = (variant.RuntimeKind, id) switch
         {
             (VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.PauseMenu) => "Pause.menu",
@@ -123,9 +131,9 @@ internal sealed class RuntimeUiLayoutValidationService
             (VariantRuntimeKind.Elvira2Vga, RuntimeUiLogicalRecordId.SaveFailure) => "SAVE_FAILURE",
             _ => null
         };
-        if (name is null) { error = "Frozen descriptor has no exact per-record layout for this logical runtime UI record."; return false; }
+        if (name is null) { error = UiText.Get("RuntimeUi.Detail.NoRecordLayout"); return false; }
         record = descriptor.RuntimeRecords.SingleOrDefault(value => value.Name.Equals(name, StringComparison.Ordinal));
-        if (record is null) { error = "Frozen descriptor is missing its named runtime UI record."; return false; }
+        if (record is null) { error = UiText.Get("RuntimeUi.Detail.MissingRecord"); return false; }
         return true;
     }
 
@@ -142,9 +150,9 @@ internal sealed class RuntimeUiLayoutValidationService
     private static bool FitsFrozenBank(VariantContext variant, FrozenRuntimeUiRecord record, out int capacity, out string? error)
     {
         capacity = BankCapacity(variant) ?? 0; error = null;
-        if (capacity <= 0) { error = "Frozen runtime UI bank capacity is unavailable."; return false; }
+        if (capacity <= 0) { error = UiText.Get("RuntimeUi.Detail.BankCapacityUnavailable"); return false; }
         if (record.BankOffset < 0 || record.Length <= 0 || record.BankOffset + record.Length > capacity)
-        { error = "Frozen record span escapes the frozen runtime UI bank."; return false; }
+        { error = UiText.Get("RuntimeUi.Detail.RecordEscapesBank"); return false; }
         return true;
     }
 

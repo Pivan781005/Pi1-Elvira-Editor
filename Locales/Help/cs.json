@@ -4,7 +4,7 @@
       "id": "getting-started",
       "group": "Obecné",
       "title": "Začínáme",
-      "body": "1. Vyberte podporovanou instalaci pomocí **Najít hry...** nebo **Vybrat adresář...**.\n2. Instalaci výslovně aktivujte. Editor se spouští bez aktivní hry.\n3. Vyberte požadovanou **Aktivní variantu**: Elvira I VGA, Elvira I EGA nebo Elvira II VGA.\n4. Vyberte **edici**: Original (EN) je pouze pro čtení; edice typu SK/S1 vlastní oddělený upravitelný stav projektu.\n5. Upravujte Grafiku, Herní text, Runtime UI nebo Písmo a potom použijte **Uložit do projektu**. Tím se nemění čistá hra ani nevznikají spustitelné soubory.\n6. **Sestavit variantu...** otevře cíl pro aktivní runtime a edici; variantu sestavte/znovu sestavte, ověřte manifest/připravenost a teprve potom použijte **Spustit** nebo **Ladit**.\n\nPro exportované PNG spriteů nepoužívejte Microsoft Paint, protože může změnit průhledné pixely na neprůhlednou bílou; použijte editor zachovávající RGBA, například FireAlpaca, Paint.NET nebo GIMP. Změna jazyka rozhraní hru nikdy neaktivuje, nesestavuje, nespouští ani neupravuje."
+      "body": "1. Vyberte podporovanou instalaci pomocí **Najít hry...** nebo **Vybrat adresář...**.\n2. Instalaci výslovně aktivujte. Editor se spouští bez aktivní hry.\n3. Vyberte požadovanou **Aktivní variantu**: Elvira I VGA, Elvira I EGA nebo Elvira II VGA.\n4. Vyberte **edici**: Original (EN) je pouze pro čtení; edice typu SK/S1 vlastní oddělený upravitelný stav projektu.\n5. Upravujte Grafiku, Herní text, Runtime UI nebo Písmo a potom použijte **Uložit do projektu**. Tím se nemění čistá hra ani nevznikají spustitelné soubory. Úpravy textů a grafiky materializuje pozdější sestavení varianty; uložená přepsání písma a Runtime UI jsou ověřeným stavem projektu, ale sestavení varianty je ve v1.0 NEMATERIALIZUJE.\n6. **Sestavit variantu...** otevře cíl pro aktivní runtime a edici; variantu sestavte/znovu sestavte, ověřte manifest/připravenost a teprve potom použijte **Spustit** nebo **Ladit**. Přepsání písma používají výslovný samostatný workflow Aplikovat do EXE tam, kde je podporován, nikoli sestavení varianty.\n\nPro exportované PNG spriteů nepoužívejte Microsoft Paint, protože může změnit průhledné pixely na neprůhlednou bílou; použijte editor zachovávající RGBA, například FireAlpaca, Paint.NET nebo GIMP. Změna jazyka rozhraní hru nikdy neaktivuje, nesestavuje, nespouští ani neupravuje."
     },
     {
       "id": "active-variant",
@@ -58,7 +58,7 @@
       "id": "recommended-workflow",
       "group": "Obecné",
       "title": "Doporučený pracovní postup",
-      "body": "**Vybrat instalaci → Vybrat aktivní variantu → Upravit projekt → Zkontrolovat Stav sestavení → Sestavit variantu → Ověřit připravenost/manifest → Spustit nebo Ladit.**\n\nPůvodní instalaci zachovávejte jako referenční baseline. Generované runtime výstupy patří do variant vlastněných editorem. Pokud Obnova a bezpečnost hlásí neočekávaný soubor, před pokračováním jej prověřte."
+      "body": "**Vybrat instalaci → Vybrat aktivní variantu → Upravit projekt → Zkontrolovat Stav sestavení → Sestavit variantu → Ověřit připravenost/manifest → Spustit nebo Ladit.**\n\nPůvodní instalaci zachovávejte jako referenční baseline. Generované runtime výstupy patří do variant vlastněných editorem. Sestavení materializuje úpravy textů a grafiky; uložená přepsání písma a Runtime UI sestavení varianty ve v1.0 nematerializuje. Pokud Obnova a bezpečnost hlásí neočekávaný soubor, před pokračováním jej prověřte."
     },
     {
       "id": "troubleshooting",
@@ -100,7 +100,7 @@
       "id": "runtime-ui-e1-vga",
       "group": "Runtime UI",
       "title": "Elvira I — VGA / RUNVGA",
-      "body": "Úpravy Runtime UI jsou projektový stav oddělený od textů GAMEPC. Uložení projektového stavu Runtime UI nesmí přepsat GAMEPC.\n\nU RUNVGA zatím není pro každý záznam prokázáno úplné produkční mapování rozsahu/kapacity. Záznamy bez ověřeného mapování zůstávají **MappingIncomplete** a nesmí se patchovat odhadem.\n\nDostupné záznamy lze prohlížet a kontrolovat, ale MappingIncomplete je záměrná bezpečnostní blokace."
+      "body": "Úpravy Runtime UI jsou projektový stav oddělený od textů GAMEPC. Uložení projektového stavu Runtime UI nesmí přepsat GAMEPC.\n\nU RUNVGA jsou binární trasy frozen pro každý záznam (Pause.menu je PROVEN LIVE; ostatní uvedené trasy jsou PROVEN BY BINARY), ale úplné produkční mapování rozsahu/kapacity pro každý záznam zatím není prokázáno. Záznamy bez prokázaného rozložení zůstávají **MappingIncomplete** a nesmí se patchovat odhadem.\n\nDostupné záznamy lze prohlížet a kontrolovat, ale MappingIncomplete je záměrná bezpečnostní blokace. Mřížka zobrazuje prokázané trasy jako s prokázanou trasou, ale s neúplným rozložením; patchování zůstává blokováno a materializace přepsání Runtime UI v CompositeBuild není ve v1.0 dostupná."
     },
     {
       "id": "runtime-ui-e1-ega",
@@ -124,7 +124,7 @@
       "id": "font-e1-ega",
       "group": "Písmo",
       "title": "Elvira I — EGA / RUNEGA",
-      "body": "RUNEGA má vlastní podporovaný profil písma a je třeba jej zpracovávat odděleně od RUNVGA. Před načtením nebo použitím projektového písma vyberte Elvira I EGA.\n\nPlatí stejné principy CP852: zachovat ověřená pravidla uložení/rozložení a znak **0x81** ponechat rezervovaný pro engine.\n\nPoznámka ke kompatibilitě: správné vykreslování RUNEGA bylo ověřeno v DOSBox 0.74-2 a DOSBox Staging; DOSBox-X může v některých konfiguracích zobrazovat odlišné znaky."
+      "body": "Elvira I EGA / RUNEGA je podporovaný runtime cíl s vlastními frozen důkazy Runtime UI, nezávislý na RUNVGA. Mutace písma/CP852 v RUNEGA NENÍ podporována: neexistuje podporovaný zapisovač písma ani důvěryhodný mutační workflow pro RUNEGA, proto nenačítejte ani nepoužívejte projekt písma RUNEGA.\n\nStejné principy CP852 platí všude, kde se zobrazuje náhled písma: zachovat ověřená pravidla uložení/rozložení a znak **0x81** ponechat rezervovaný pro engine.\n\nPoznámka ke kompatibilitě: správné vykreslování RUNEGA bylo ověřeno v DOSBox 0.74-2 a DOSBox Staging; DOSBox-X může v některých konfiguracích zobrazovat odlišné znaky."
     },
     {
       "id": "font-e2",

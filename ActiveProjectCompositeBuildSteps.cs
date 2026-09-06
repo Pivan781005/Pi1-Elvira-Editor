@@ -163,7 +163,7 @@ internal sealed class RuntimeUiProjectBuildStep : ICompositeBuildStep
     public CompositeBuildStage Stage => CompositeBuildStage.ApplyRuntimeUiTransformations;
     public string Name => "Runtime UI project state";
     public bool AppliesTo(VariantContext variant) => variant is not null;
-    public string? Preflight(ProjectContext project, VariantContext variant) => _state.Overrides.Count == 0 ? null : "Runtime UI overrides are saved project state but their executable materializer is not configured.";
+    public string? Preflight(ProjectContext project, VariantContext variant) => _state.Overrides.Count == 0 ? null : UiText.Get("RuntimeUi.BuildNotMaterialized");
     public string? Execute(ProjectContext project, VariantContext variant) => null;
 }
 

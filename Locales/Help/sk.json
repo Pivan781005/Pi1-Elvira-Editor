@@ -4,7 +4,7 @@
       "id": "getting-started",
       "group": "Všeobecné",
       "title": "Začíname",
-      "body": "1. Vyberte podporovanú inštaláciu pomocou **Nájsť hry...** alebo **Vybrať adresár...**.\n2. Inštaláciu výslovne aktivujte. Editor sa spúšťa bez aktívnej hry.\n3. Vyberte požadovaný **Aktívny variant**: Elvira I VGA, Elvira I EGA alebo Elvira II VGA.\n4. Vyberte **edíciu**: Original (EN) je iba na čítanie; edície typu SK/S1 vlastnia oddelený upraviteľný stav projektu.\n5. Upravujte Grafiku, Herný text, Runtime UI alebo Písmo a potom použite **Uložiť do projektu**. Tým sa nemení čistá hra ani nevytvárajú spustiteľné súbory.\n6. **Zostaviť variant...** otvorí cieľ pre aktívny runtime a edíciu; variant zostavte/znovu zostavte, overte manifest/pripravenosť a až potom použite **Spustiť** alebo **Ladiť**.\n\nNa exportované PNG spriteov nepoužívajte Microsoft Paint, pretože môže zmeniť priehľadné pixely na nepriehľadnú bielu; použite editor zachovávajúci RGBA, napríklad FireAlpaca, Paint.NET alebo GIMP. Zmena jazyka rozhrania hru nikdy neaktivuje, nezostavuje, nespúšťa ani neupravuje."
+      "body": "1. Vyberte podporovanú inštaláciu pomocou **Nájsť hry...** alebo **Vybrať adresár...**.\n2. Inštaláciu výslovne aktivujte. Editor sa spúšťa bez aktívnej hry.\n3. Vyberte požadovaný **Aktívny variant**: Elvira I VGA, Elvira I EGA alebo Elvira II VGA.\n4. Vyberte **edíciu**: Original (EN) je iba na čítanie; edície typu SK/S1 vlastnia oddelený upraviteľný stav projektu.\n5. Upravujte Grafiku, Herný text, Runtime UI alebo Písmo a potom použite **Uložiť do projektu**. Tým sa nemení čistá hra ani nevytvárajú spustiteľné súbory. Úpravy textov a grafiky materializuje neskoršie zostavenie variantu; uložené prepísania písma a Runtime UI sú overeným stavom projektu, ale zostavenie variantu ich vo v1.0 NEMATERIALIZUJE.\n6. **Zostaviť variant...** otvorí cieľ pre aktívny runtime a edíciu; variant zostavte/znovu zostavte, overte manifest/pripravenosť a až potom použite **Spustiť** alebo **Ladiť**. Prepísania písma používajú výslovný samostatný workflow Aplikovať do EXE tam, kde je podporovaný, nie zostavenie variantu.\n\nNa exportované PNG spriteov nepoužívajte Microsoft Paint, pretože môže zmeniť priehľadné pixely na nepriehľadnú bielu; použite editor zachovávajúci RGBA, napríklad FireAlpaca, Paint.NET alebo GIMP. Zmena jazyka rozhrania hru nikdy neaktivuje, nezostavuje, nespúšťa ani neupravuje."
     },
     {
       "id": "active-variant",
@@ -58,7 +58,7 @@
       "id": "recommended-workflow",
       "group": "Všeobecné",
       "title": "Odporúčaný pracovný postup",
-      "body": "**Vybrať inštaláciu → Vybrať aktívny variant → Upraviť projekt → Skontrolovať Stav zostavenia → Zostaviť variant → Overiť pripravenosť/manifest → Spustiť alebo Ladiť.**\n\nPôvodnú inštaláciu zachovávajte ako referenčnú baseline. Generované runtime výstupy patria do variantov vlastnených editorom. Ak Obnova a bezpečnosť hlási neočakávaný súbor, pred pokračovaním ho preverte."
+      "body": "**Vybrať inštaláciu → Vybrať aktívny variant → Upraviť projekt → Skontrolovať Stav zostavenia → Zostaviť variant → Overiť pripravenosť/manifest → Spustiť alebo Ladiť.**\n\nPôvodnú inštaláciu zachovávajte ako referenčnú baseline. Generované runtime výstupy patria do variantov vlastnených editorom. Zostavenie materializuje úpravy textov a grafiky; uložené prepísania písma a Runtime UI zostavenie variantu vo v1.0 nematerializuje. Ak Obnova a bezpečnosť hlási neočakávaný súbor, pred pokračovaním ho preverte."
     },
     {
       "id": "troubleshooting",
@@ -100,7 +100,7 @@
       "id": "runtime-ui-e1-vga",
       "group": "Runtime UI",
       "title": "Elvira I — VGA / RUNVGA",
-      "body": "Úpravy Runtime UI sú projektový stav oddelený od textov GAMEPC. Uloženie projektového stavu Runtime UI nesmie prepísať GAMEPC.\n\nPri RUNVGA zatiaľ nie je pre každý záznam preukázané úplné produkčné mapovanie rozsahu/kapacity. Záznamy bez overeného mapovania zostávajú **MappingIncomplete** a nesmú sa patchovať odhadom.\n\nDostupné záznamy môžete prezerať a kontrolovať, ale MappingIncomplete je zámerná bezpečnostná blokácia."
+      "body": "Úpravy Runtime UI sú projektový stav oddelený od textov GAMEPC. Uloženie projektového stavu Runtime UI nesmie prepísať GAMEPC.\n\nPri RUNVGA sú binárne trasy frozen pre každý záznam (Pause.menu je PROVEN LIVE; ostatné uvedené trasy sú PROVEN BY BINARY), ale úplné produkčné mapovanie rozsahu/kapacity pre každý záznam zatiaľ nie je preukázané. Záznamy bez preukázaného rozloženia zostávajú **MappingIncomplete** a nesmú sa patchovať odhadom.\n\nDostupné záznamy môžete prezerať a kontrolovať, ale MappingIncomplete je zámerná bezpečnostná blokácia. Mriežka zobrazuje preukázané trasy ako s preukázanou trasou, ale s neúplným rozložením; patchovanie zostáva blokované a materializácia prepísaní Runtime UI v CompositeBuild nie je vo v1.0 dostupná."
     },
     {
       "id": "runtime-ui-e1-ega",
@@ -124,7 +124,7 @@
       "id": "font-e1-ega",
       "group": "Písmo",
       "title": "Elvira I — EGA / RUNEGA",
-      "body": "RUNEGA má vlastný podporovaný profil písma a treba ho spracúvať oddelene od RUNVGA. Pred načítaním alebo použitím projektového písma vyberte Elvira I EGA.\n\nPlatia rovnaké princípy CP852: zachovať overené pravidlá uloženia/rozloženia a znak **0x81** ponechať rezervovaný pre engine.\n\nPoznámka ku kompatibilite: správne vykresľovanie RUNEGA bolo overené v DOSBox 0.74-2 a DOSBox Staging; DOSBox-X môže v niektorých konfiguráciách zobrazovať odlišné znaky."
+      "body": "Elvira I EGA / RUNEGA je podporovaný runtime cieľ s vlastnými frozen dôkazmi Runtime UI, nezávislý od RUNVGA. Mutácia písma/CP852 v RUNEGA NIE je podporovaná: neexistuje podporovaný zapisovač písma ani dôveryhodný mutačný workflow pre RUNEGA, preto nenačítavajte ani nepoužívajte projekt písma RUNEGA.\n\nRovnaké princípy CP852 platia všade, kde sa zobrazuje náhľad písma: zachovať overené pravidlá uloženia/rozloženia a znak **0x81** ponechať rezervovaný pre engine.\n\nPoznámka ku kompatibilite: správne vykresľovanie RUNEGA bolo overené v DOSBox 0.74-2 a DOSBox Staging; DOSBox-X môže v niektorých konfiguráciách zobrazovať odlišné znaky."
     },
     {
       "id": "font-e2",

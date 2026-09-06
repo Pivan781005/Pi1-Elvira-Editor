@@ -3303,6 +3303,21 @@ internal static class Program
             if (vga is not { IsOverridden: true, TextOrigin: RuntimeUiTextOrigin.ProjectOverride, EffectiveText: "Pauza – Unicode žľť", MappingReadiness: RuntimeUiMappingReadiness.KnownButMappingIncomplete } ||
                 ega is not { IsOverridden: true, TextOrigin: RuntimeUiTextOrigin.ProjectOverride, EffectiveText: "Pauza – Unicode žľť", MappingReadiness: RuntimeUiMappingReadiness.SupportedAndMapped })
                 throw new InvalidDataException("Elvira I VGA/EGA did not project one shared logical override.");
+            // RUNVGA route evidence is frozen per record: Pause.menu is PROVEN
+            // LIVE, the other listed binary routes are PROVEN BY BINARY, while
+            // layout readiness stays incomplete. EGA evidence is unchanged.
+            if (vga.EvidenceStatus != RuntimeUiEvidenceStatus.ProvenLive ||
+                ega.EvidenceStatus != RuntimeUiEvidenceStatus.ProvenByBinary)
+                throw new InvalidDataException("Elvira I VGA/EGA route evidence regressed.");
+            RuntimeUiRuntimeProjection vgaPrompt = service.GetEffectiveRecords(e1Vga, e1State).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.SavePrompt);
+            if (vgaPrompt is not { MappingReadiness: RuntimeUiMappingReadiness.KnownButMappingIncomplete, EvidenceStatus: RuntimeUiEvidenceStatus.ProvenByBinary })
+                throw new InvalidDataException("RUNVGA binary-routed record evidence regressed from PROVEN BY BINARY.");
+            // Saved Runtime UI overrides must keep blocking a full configured
+            // build; an empty project state must not block it.
+            if (new RuntimeUiProjectBuildStep(e1State).Preflight(e1, e1Vga) is null)
+                throw new InvalidDataException("RUNVGA Runtime UI saved-override materialization became silently buildable.");
+            if (new RuntimeUiProjectBuildStep(RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1)).Preflight(e1, e1Vga) is not null)
+                throw new InvalidDataException("Empty Runtime UI project state falsely blocked a configured build.");
             RuntimeUiTextSaveResult saved = service.Save(e1, e1State);
             if (!saved.Succeeded || !File.ReadAllText(saved.Path).Contains("Pauza – Unicode žľť", StringComparison.Ordinal) ||
                 File.ReadAllText(saved.Path).Contains("PointerSitePhysicalOffset", StringComparison.Ordinal))
@@ -3370,8 +3385,8 @@ internal static class Program
             if (validEga is not { Status: RuntimeUiLayoutValidationStatus.Valid, PayloadBytesIncludingTerminator: 12, RecordCapacity: 18 } ||
                 !validEga.EncodedPayload.SequenceEqual(GamePcTextEditor.GetEncoding("CP852").GetBytes("Save failed")))
                 throw new InvalidDataException("Valid EGA CP852 record did not validate deterministically.");
-            if (layouts.Validate(vga, e1State, RuntimeUiLogicalRecordId.SaveFailure).Status != RuntimeUiLayoutValidationStatus.MappingIncomplete)
-                throw new InvalidDataException("RUNVGA layout validation borrowed an unproven EGA record capacity.");
+            if (layouts.Validate(vga, e1State, RuntimeUiLogicalRecordId.SaveFailure) is not { Status: RuntimeUiLayoutValidationStatus.MappingIncomplete, RecordCapacity: null })
+                throw new InvalidDataException("RUNVGA layout validation borrowed an unproven EGA record capacity or manufactured a span.");
 
             RuntimeUiTextState exact = texts.SetOverride(e1, e1State, RuntimeUiLogicalRecordId.SaveFailure, new string('A', 17));
             RuntimeUiTextState oversized = texts.SetOverride(e1, exact, RuntimeUiLogicalRecordId.SaveFailure, new string('A', 18));
@@ -4777,7 +4792,9 @@ internal static class Program
             [
                 "AppTitle", "Graphics", "TextTab", "FontEditor", "ModsLauncherTab",
                 "RuntimeUi.Title", "RuntimeUi.Save", "Recovery.Title", "Recovery.VerifyPristine",
-                "Execution.Run", "Execution.Debug", "Graphics.SaveProject", "Error.Title"
+                "Execution.Run", "Execution.Debug", "Graphics.SaveProject", "Error.Title",
+                "RuntimeUi.Status.RouteProvenLayoutIncomplete", "RuntimeUi.Detail.RouteProvenLayoutIncomplete",
+                "RuntimeUi.BuildNotMaterialized"
             ];
             JsonUiLocaleProvider canonicalLocales = JsonUiLocaleProvider.Discover(Path.Combine(AppContext.BaseDirectory, "Locales"));
             foreach (string key in representativeKeys)
@@ -4803,6 +4820,11 @@ internal static class Program
             UiText.SetLocale("sk");
             if (UiText.Get("RuntimeUi.Title") != "Runtime UI" || !ReferenceEquals(e1Context, form.ActiveProjectForTest) || !ReferenceEquals(e1Variant, form.ActiveVariantForTest))
                 throw new InvalidDataException("Partial Slovak locale fallback or E1 context preservation regressed.");
+            if (UiText.Get("RuntimeUi.Status.RouteProvenLayoutIncomplete") == UiText.Get("en", "RuntimeUi.Status.RouteProvenLayoutIncomplete"))
+                throw new InvalidDataException("Slovak Runtime UI status localization regressed to fallback.");
+            UiText.SetLocale("cs");
+            if (UiText.Get("RuntimeUi.Status.RouteProvenLayoutIncomplete") == UiText.Get("en", "RuntimeUi.Status.RouteProvenLayoutIncomplete"))
+                throw new InvalidDataException("Czech Runtime UI status localization regressed to fallback.");
             form.ActivateInstallationForTest(e2);
             ProjectContext? e2Context = form.ActiveProjectForTest;
             VariantContext? e2Variant = form.ActiveVariantForTest;
@@ -5019,8 +5041,13 @@ internal static class Program
         JsonUiLocaleProvider provider = JsonUiLocaleProvider.Discover(localeDirectory);
         if (!provider.TryGet("en", UiLocalizationKeys.NoGameSelected, out string english) || english != "No game selected." ||
             !provider.TryGet("sk", UiLocalizationKeys.NoGameSelected, out string slovak) || slovak != "Nie je vybraná žiadna hra." ||
-            !slovak.Contains('á') || provider.TryGet("cs", UiLocalizationKeys.NoGameSelected, out _))
-            throw new InvalidDataException("Initial JSON locale lookup did not retain the explicit en/sk bootstrap contract.");
+            !slovak.Contains('á') || !provider.TryGet("cs", UiLocalizationKeys.NoGameSelected, out string czech) || czech != "Není vybrána žádná hra.")
+            throw new InvalidDataException("Initial JSON locale lookup did not retain the explicit en/sk/cs bootstrap contract.");
+        // Fallback coverage must use a synthetic key that no production locale
+        // defines, never the deliberate absence of a real production key.
+        if (provider.TryGet("en", "Synthetic.Nonexistent.Locale.Key", out _) || provider.TryGet("cs", "Synthetic.Nonexistent.Locale.Key", out _) ||
+            provider.Resolve("cs", "Synthetic.Nonexistent.Locale.Key") is not { Source: UiLocaleLookupSource.MissingKey })
+            throw new InvalidDataException("JSON locale fallback did not report a synthetic missing key deterministically.");
 
         string parseRoot = Path.Combine(Path.GetTempPath(), "Pi1JsonLocaleSmoke", Guid.NewGuid().ToString("N"));
         UiLanguage priorLocale = UiText.Language;
@@ -5107,12 +5134,15 @@ internal static class Program
             UiText.SetLanguage(UiLanguage.English);
             using var form = new MainForm();
             form.InitializeInstallationStateForTest();
-            string englishNeutral = UiText.Get(UiLocalizationKeys.NoGameSelected) + "\r\n" + UiText.Get(UiLocalizationKeys.FindGamesOrBrowseFolder);
+            // The production neutral prompt joins with a space (see
+            // MainForm.NeutralInstallationPrompt); the smoke must assert that
+            // current contract, not a historical newline layout.
+            string englishNeutral = UiText.Get(UiLocalizationKeys.NoGameSelected) + " " + UiText.Get(UiLocalizationKeys.FindGamesOrBrowseFolder);
             if (!form.IsNeutralInstallationStateForTest || form.InstallationStatusForTest != englishNeutral)
                 throw new InvalidDataException("MainForm did not expose the localized neutral startup state.");
 
             UiText.SetLanguage(UiLanguage.Slovak);
-            string slovakNeutral = UiText.Get(UiLocalizationKeys.NoGameSelected) + "\r\n" + UiText.Get(UiLocalizationKeys.FindGamesOrBrowseFolder);
+            string slovakNeutral = UiText.Get(UiLocalizationKeys.NoGameSelected) + " " + UiText.Get(UiLocalizationKeys.FindGamesOrBrowseFolder);
             if (form.InstallationStatusForTest != slovakNeutral || form.ModsPresentationForTest != slovakNeutral)
                 throw new InvalidDataException("MainForm did not refresh representative localized neutral controls.");
 
@@ -5247,8 +5277,10 @@ internal static class Program
             string e2GamePc = HashFile(Path.Combine(e2Project.GameRoot, "GAMEPC"));
             using var form = new MainForm();
             form.InitializeInstallationStateForTest();
+            // Same production contract as the ui-localization smoke: the neutral
+            // prompt joins with a space (MainForm.NeutralInstallationPrompt).
             if (!form.IsNeutralInstallationStateForTest || form.InstallationOptionCountForTest != 0 ||
-                form.InstallationStatusForTest != "No game selected.\r\nUse Find games... or Browse folder...")
+                form.InstallationStatusForTest != "No game selected. Use Find games... or Browse folder...")
                 throw new InvalidDataException("Startup was not the authoritative empty installation state.");
 
             form.DiscoverInstallationsForTest([e1, e2]);
@@ -5444,7 +5476,8 @@ internal static class Program
             UiText.SetLocale("sk");
             if (UiText.Get("ApplyGame") != "Aplikovať zmeny do hry" ||
                 UiText.Get("Recovery.VerifyPristine") != "Overiť pôvodnú inštaláciu" ||
-                UiText.Get("OpenGameExe") != "Open game EXE...")
+                UiText.Get("OpenGameExe") != "Otvoriť EXE hry..." ||
+                UiText.Get("Synthetic.Nonexistent.Button.Key") != "Synthetic.Nonexistent.Button.Key")
                 throw new InvalidDataException("R8B Slovak translation/fallback behavior diverged.");
         }
         finally { UiText.SetLocale(priorLocale); }

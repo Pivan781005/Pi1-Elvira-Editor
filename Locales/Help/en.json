@@ -4,7 +4,7 @@
       "id": "getting-started",
       "group": "General",
       "title": "Getting Started",
-      "body": "1. Choose a supported installation with **Find games...** or **Browse folder...**.\n2. Select the installation explicitly. The editor starts with no active game.\n3. Choose the required **Active Variant**: Elvira I VGA, Elvira I EGA, or Elvira II VGA.\n4. Choose an **Edition**: Original (EN) is read-only; SK/S1-style editions own isolated editable project state.\n5. Make edits in Graphics, Game Text, Runtime UI, or Font, then use **Save to project**. This does not modify the pristine game and does not create runnable files.\n6. Use **Build variant...** to open the active Runtime + Edition build target, build/rebuild it, review its manifest/readiness, and only then use **Run** or **Debug**.\n\nFor exported sprite PNG files, avoid Microsoft Paint because it may turn transparent pixels opaque white; use an RGBA-preserving editor such as FireAlpaca, Paint.NET, or GIMP. Changing the interface language never activates, builds, runs, or modifies a game."
+      "body": "1. Choose a supported installation with **Find games...** or **Browse folder...**.\n2. Select the installation explicitly. The editor starts with no active game.\n3. Choose the required **Active Variant**: Elvira I VGA, Elvira I EGA, or Elvira II VGA.\n4. Choose an **Edition**: Original (EN) is read-only; SK/S1-style editions own isolated editable project state.\n5. Make edits in Graphics, Game Text, Runtime UI, or Font, then use **Save to project**. This does not modify the pristine game and does not create runnable files. Text and Graphics edits are materialized by a later variant build; saved Font and Runtime UI overrides are validated project state but are NOT materialized by Build variant in v1.0.\n6. Use **Build variant...** to open the active Runtime + Edition build target, build/rebuild it, review its manifest/readiness, and only then use **Run** or **Debug**. Font overrides use the explicit standalone Apply-to-EXE workflow where supported, not the variant build.\n\nFor exported sprite PNG files, avoid Microsoft Paint because it may turn transparent pixels opaque white; use an RGBA-preserving editor such as FireAlpaca, Paint.NET, or GIMP. Changing the interface language never activates, builds, runs, or modifies a game."
     },
     {
       "id": "active-variant",
@@ -58,7 +58,7 @@
       "id": "recommended-workflow",
       "group": "General",
       "title": "Recommended Project Workflow",
-      "body": "**Select installation → Select active variant → Edit project content → Check Build Status → Build variant → Review readiness/manifest → Run or Debug.**\n\nKeep the original installation as the reference baseline. Generated runtime outputs belong to editor-owned variant builds. If Recovery & Safety reports an unexpected file, investigate it before continuing."
+      "body": "**Select installation → Select active variant → Edit project content → Check Build Status → Build variant → Review readiness/manifest → Run or Debug.**\n\nKeep the original installation as the reference baseline. Generated runtime outputs belong to editor-owned variant builds. Text and Graphics edits are materialized by the build; saved Font and Runtime UI overrides are not materialized by Build variant in v1.0. If Recovery & Safety reports an unexpected file, investigate it before continuing."
     },
     {
       "id": "troubleshooting",
@@ -100,7 +100,7 @@
       "id": "runtime-ui-e1-vga",
       "group": "Runtime UI",
       "title": "Elvira I — VGA / RUNVGA",
-      "body": "Runtime UI overrides are project state stored separately from GAMEPC text. Saving Runtime UI project state must not rewrite GAMEPC.\n\nFor RUNVGA, the complete per-record production span/capacity mapping is not yet proven for every Runtime UI record. Records without a proven mapping remain **MappingIncomplete** and must not be patched by guesswork.\n\nPreview and validate available records, but treat MappingIncomplete as a deliberate safety block."
+      "body": "Runtime UI overrides are project state stored separately from GAMEPC text. Saving Runtime UI project state must not rewrite GAMEPC.\n\nFor RUNVGA, the binary routes are frozen per record (Pause.menu is PROVEN LIVE; the other listed routes are PROVEN BY BINARY), but the complete per-record production span/capacity mapping is not yet proven. Records without a proven layout remain **MappingIncomplete** and must not be patched by guesswork.\n\nPreview and validate available records, but treat MappingIncomplete as a deliberate safety block. The grid reports proven routes as route-proven yet layout-incomplete; patching stays blocked and CompositeBuild Runtime UI override materialization is unavailable in v1.0."
     },
     {
       "id": "runtime-ui-e1-ega",
@@ -124,7 +124,7 @@
       "id": "font-e1-ega",
       "group": "Font",
       "title": "Elvira I — EGA / RUNEGA",
-      "body": "RUNEGA has its own supported font profile and must be treated separately from RUNVGA. Select Elvira I EGA before loading or applying font project state.\n\nThe same CP852 editing principles apply: preserve validated storage/layout rules and keep character **0x81** reserved for the engine.\n\nCompatibility note: RUNEGA rendering has been observed correctly in DOSBox 0.74-2 and DOSBox Staging; DOSBox-X may display different characters in some configurations."
+      "body": "Elvira I EGA / RUNEGA is a supported runtime target with its own frozen Runtime UI evidence, independent of RUNVGA. RUNEGA font/CP852 mutation is NOT supported: there is no supported RUNEGA font writer or trusted mutation workflow, so do not load or apply a RUNEGA font project.\n\nThe same CP852 editing principles apply wherever a font is previewed: preserve validated storage/layout rules and keep character **0x81** reserved for the engine.\n\nCompatibility note: RUNEGA rendering has been observed correctly in DOSBox 0.74-2 and DOSBox Staging; DOSBox-X may display different characters in some configurations."
     },
     {
       "id": "font-e2",

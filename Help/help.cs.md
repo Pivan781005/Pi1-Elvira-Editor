@@ -6,10 +6,12 @@ V selektoru **Instalace** vyberte podporovanou VGA hru. Editor si platné instal
 Podporované hry: **Elvira: Mistress of the Dark** a **Elvira II: The Jaws of Cerberus**.
 
 ## [graphics] Editor grafiky
-Vyberte VGA soubor, paletu, položku sprite a pixelové zvětšení. Seznam označuje RAW/RLE položky, kde to platí, a náhled ukazuje vybraný obraz. Nahradit PNG nebo Import PNG vytvoří úpravu, Export PNG uloží kopii, Zrušit edit ji zahodí, Aplikovat do hry ji uloží a Obnovit originál použije dostupnou zálohu. Nabízeny jsou pouze aktuálně podporované VGA postupy.
+Vyberte VGA soubor, paletu, položku sprite a pixelové zvětšení. Seznam označuje RAW/RLE položky, kde to platí, a náhled ukazuje vybraný obraz. Nahradit PNG nebo Import PNG vytvoří úpravu, Export PNG uloží kopii, Zrušit edit ji zahodí, **Uložit do projektu** ji uloží do projektu, a Obnovit originál použije dostupnou zálohu. Nabízeny jsou pouze aktuálně podporované VGA postupy.
 
 ## [text] Editor textu
 Otevřete kompatibilní datový soubor typu GAMEPC, načtěte jej znovu, hledejte, zvolte kódování/kontext a potom Uložte, Uložte jako nebo Vytvořte variantu. Kompatibilní názvy jsou GAMEPC, GAMEPCSK, GAMEPCCZ, GAMEPCDE a MYMOD: rozhoduje podporovaný formát a kontext, nikoli doslovný název. GAMEPC při změně délky překladu automaticky znovu sestaví celý textový pool a zachová logické indexy i netextová data souboru. Původní B, Překlad B a Δ B jsou informativní počty kódovaných bajtů; pevný runtime limit délky textu Elviry I ani Elviry II se nyní nezobrazuje.
+
+**Původní EN edice** je read-only baseline. Upravitelné edice (např. SK, S1) vlastní izolovaný projektový stav. **Uložit** zapíše pouze stav projektu. **Sestavit variantu** materializuje GAMEPCxx do editorem vlastněných VARIANTS.
 
 ## [game-data] Herní datové soubory
 Aktuální datový soubor je soubor právě otevřený v Editoru textu. Varianta má zobrazovaný název, datový soubor, povolení, pořadí a dostupnost. Katalog ukládá **ELVIRA_MODS.INI**. Samotné otevření Modů a spouštěče jej nikdy nevytvoří ani nepřepíše. Chybějící soubor zůstane v katalogu jako Chybí/nedostupný a nikdy se potichu nesmaže.
@@ -31,7 +33,7 @@ Generované spouštěče jsou specifické pro hru.
 ### Elvira II
 `RUNIT <DataFile> <sound option>`: /p PC Internal speaker; /t IBM/Tandy 3 voice; /a AdLib sound card; /s Soundblaster music card; /m Roland MT-32 / LAPC-1.
 
-Sound Setup vytváří/aktualizuje `SET PI1SND=/s` v PI1SND.BAT, ne v ELVIRA_MODS.INI. Chybějící/neplatný PI1SND.BAT vynutí nastavení: Back/ESC/ENTER se ignorují do platné volby. Běžné nastavení umožňuje 0 = Back.
+Runtime Sound Setup vytváří/aktualizuje `SET PI1SND=/s` v PI1SND.BAT, ne v ELVIRA_MODS.INI. Chybějící/neplatný PI1SND.BAT vynutí nastavení: Back/ESC/ENTER se ignorují do platné volby. Běžné nastavení umožňuje 0 = Back.
 
 ## [font] Editor fontu
 Prohlížejte originální font, pracujte v editovatelné kopii a používejte **Import font...**, Export font..., Apply Font, Save Patched Copy, filtry, editor glyphů, Original/Edited, posuny a náhledy 1x/2x/4x/8x. „Import font...” záměrně podporuje více formátů než TTF.
@@ -42,24 +44,25 @@ Všechny obnovené renderery používají 8 řádků a zobrazují 6 sloupců z b
 Originál RUNVGA: 0x1A216..0x1A525, 784 bajtů, 98 glyphů, 0x20..0x81. V5: 0x3AE60..0x3B65F, 2048 bajtů, 256x8 CP852-compatible. Originál RUNIT: 0x168CA..0x16BD9, stejný rozsah. RUNIT V2 je split: LOW 0x20..0x81 originál; HIGH 0x82..0xFF na 0x28480..0x2886F (126x8=1008), helper 0x28870. Jde o ověřené podporované layouty, ne univerzální offsety.
 
 ## [backups] Zálohy a obnovení
-Otevření/náhled nevytvoří zálohu. První trvalá úprava fontu/dat/grafiky chrání neměnné O-soubory, například RUNVGAO.EXE/RUNITO.EXE, GAMEPCO nebo 012O.VGA. Generování launcheru používá `ELVIRA.BAT` -> `ELVIRA.BAK`: BAK je neměnný, nikdy se nepřepíše/nesmaže a Obnovit jej zkopíruje zpět do aktivního BAT.
+Otevření/náhled nevytvoří zálohu. Samostatný Editor písma **Aplikovat změny do EXE** vytvoří neměnnou O-zálohu (RUNVGAO.EXE/RUNITO.EXE) před zápisem. Generování launcheru vytvoří neměnný .BAK jednou. Normální projektové Text/Grafika úpravy nezapisují O-soubory do GameRoot; ukládají se do stavu projektu a materializují se přes CompositeBuild do vlastních VARIANTS. Obnovovací operace jsou výslovné a ohraničené na editorem vlastněné měnitelné zálohy.
 
 ## [technical] Technické podrobnosti
-Elvira I V5 poskytuje tabulku 256x8; Elvira II RUNIT V2 používá split low/high font. PI1MENU.COM je DOS helper projektu pro BIOS vstup, filtrování platných kláves, ENTER/Setup/Variant/ESC a pevné 17x8 Pi1 logo. Nespouští hry, negeneruje BAT, nespravuje varianty ani neukládá zvuk: BAT je logika, COM je UI/vstup. Logo používá CP437 0xDB, Pi atribut 07 a číslice 1 atribut 0F. Cíl: classic DOSBox, DOSBox-X, DOSBox Staging a kompatibilní DOS prostředí.
+Elvira I V5 poskytuje tabulku 256x8; Elvira II RUNIT V2 používá split low/high font. PI1MENU.COM je DOS helper projektu pro BIOS vstup, filtrování platných kláves, ENTER/Setup/Variant/ESC a pevné 17x8 Pi1 logo. Nespouští hry, negeneruje BAT, nespravuje varianty ani neukládá zvuk: BAT je logika, COM je UI/vstup. Logo používá CP437 block 0xDB, Pi attribute 07, digit 1 attribute 0F. Cíl: classic DOSBox, DOSBox-X, DOSBox Staging a kompatibilní DOS prostředí.
 
 ## [troubleshooting] Řešení potíží
-Pokud hra není rozpoznána, vyberte správnou VGA instalaci; nepodporované EXE nelze patchovat. Zkontrolujte chybějící datový soubor/variantu a dostupnou výchozí variantu. Náhled nic nezapisuje. Při chybějícím/neplatném PI1SND dokončete vynucený Sound Setup. Import/Apply Font je dostupný až po načtení podporovaného zdroje/pracovní kopie; 0x81 se záměrně nedá upravit. Nepřepisujte BAT zálohu bez kontroly ručně upraveného launcheru.
+Pokud hra není rozpoznána, vyberte správnou VGA instalaci; nepodporované EXE nelze patchovat. Zkontrolujte chybějící datový soubor/variantu a dostupnou výchozí variantu. Náhled nic nezapisuje. Při chybějícím/neplatném PI1SND dokončete vynucený Sound Setup. Import/Apply Font je dostupný až po načítaní podporovaného zdroje/pracovní kopie; 0x81 se záměrně nedá upravit. Nepřepisujte BAT zálohu bez kontroly ručně upraveného launcheru.
 
 ## [supported] Podporované / nepodporované
 ### Podporované ve v1.0
 - **Elvira: Mistress of the Dark — VGA**
+- **Elvira: Mistress of the Dark — EGA**
 - **Elvira II: The Jaws of Cerberus — VGA**
 
 ### Aktuálně nepodporované
-`RUNEGA` a EGA patchování EXE/fontů jsou mimo podporovaný rozsah. **Editor RUNEGA nikdy nemění a patche V5/V2 se na něj nevztahují.**
+`RUNEGA` font/CP852 mutace je mimo podporovaný rozsah. EGA/RUNEGA je podporovaný runtime cíl pro CompositeBuild; pouze RUNEGA patchování EXE/fontů je nepodporované.
 
 ## [about] O programu / Credits
-**π1 Elvira I & II Editor v1.0** podporuje VGA grafiku, textové/datové varianty kompatibilní s GAMEPC, rozšířené fonty kompatibilní s CP852, Mody a spouštěč a přenosný DOS helper. Glyph `0x81` je chráněný glyph pro mazání HUD; RUNEGA/EGA není podporován a nikdy se nemění.
+**π1 Elvira I & II Editor v1.0** podporuje VGA/EGA grafiku, textové/datové varianty kompatibilní s GAMEPC, rozšířené fonty kompatibilní s CP852, Mody a spouštěč a přenosný DOS helper. Glyph `0x81` je chráněný glyph pro mazání HUD. RUNEGA font/CP852 mutace není podporována; EGA/RUNEGA zůstává podporovaný runtime cíl.
 
 Projekt: `https://github.com/Pivan781005/Pi1-Elvira-I-II-Editor`
 

@@ -65,6 +65,44 @@ internal static class Elvira1ProductionProfile
         "DOSBox-X", "Some characters may render incorrectly in the current test environment.", "UNKNOWN",
         ["DOSBox Staging: PASS", "DOSBox 0.74-2: PASS", "RUNVGA/VGA in DOSBox-X: PASS"]);
 
+    /// <summary>
+    /// Frozen RUNVGA route evidence. Route addresses are approximate historical
+    /// call sites (direct renderer calls and shared dispatchers). Pause.menu is
+    /// PROVEN LIVE: relocation was tested live with "Game Paused - Relocation
+    /// Test" visibly appearing in the running game, and Continue/Quit hotspot
+    /// behavior was debugged live. All other listed routes are at minimum
+    /// PROVEN BY BINARY. Layout flags are R4B constraints, not edit contracts.
+    /// </summary>
+    internal static readonly FrozenRunVgaRouteEvidence RunVgaRoutes = new(
+        [
+            new("Pause.menu", 0x1A625, 0x2CB5, RunVgaRouteSourceKind.DataAddress, FrozenRuntimeUiDispatch.Direct, 0xCCF7, FrozenRuntimeEvidence.ProvenLive, "FORMATTED|HOTSPOT_SENSITIVE|SINGLE_LINE_REQUIRED|FIXED_COLUMN_REQUIRED"),
+            new("Confirm.generic", 0x1A64C, 0x2CDC, RunVgaRouteSourceKind.DataAddress, FrozenRuntimeUiDispatch.Direct, 0xCD29, FrozenRuntimeEvidence.ProvenByBinary, "FORMATTED|HOTSPOT_SENSITIVE|FIXED_COLUMN_REQUIRED"),
+            new("Save.prompt", 0x1A674, 0x2D04, RunVgaRouteSourceKind.DataAddress, FrozenRuntimeUiDispatch.Direct, 0xCB1B, FrozenRuntimeEvidence.ProvenByBinary, "FORMATTED"),
+            new("Save.failed", 0x1A6A8, 0x2D38, RunVgaRouteSourceKind.DataAddress, FrozenRuntimeUiDispatch.FirstSharedDispatch, 0xCC5A, FrozenRuntimeEvidence.ProvenByBinary, "FORMATTED"),
+            new("Restore.loadFailed", 0x1A6BA, 0x2D4A, RunVgaRouteSourceKind.DataAddress, FrozenRuntimeUiDispatch.FirstSharedDispatch, 0xCC5A, FrozenRuntimeEvidence.ProvenByBinary, "FORMATTED"),
+            new("Restore.fileNotFound", 0x1A6CC, 0x2D5C, RunVgaRouteSourceKind.BreakpointAddress, FrozenRuntimeUiDispatch.SecondSharedDispatch, 0xCC60, FrozenRuntimeEvidence.ProvenByBinary, "FORMATTED"),
+            new("Disk.retry", 0x1A6E0, 0x2D70, RunVgaRouteSourceKind.BreakpointAddress, FrozenRuntimeUiDispatch.SecondSharedDispatch, 0xCC60, FrozenRuntimeEvidence.ProvenByBinary, "FORMATTED"),
+            new("Save.overwrite", 0x1A6F6, 0x2D86, RunVgaRouteSourceKind.DataAddress, FrozenRuntimeUiDispatch.Direct, 0xCBFC, FrozenRuntimeEvidence.ProvenByBinary, "FORMATTED|HOTSPOT_SENSITIVE|FIXED_COLUMN_REQUIRED")
+        ],
+        [
+            new("Save.failed", "Disk.retry"),
+            new("Restore.loadFailed", "Restore.fileNotFound")
+        ]);
+
+    internal static FrozenRuntimeEvidence RunVgaRouteEvidence(RuntimeUiLogicalRecordId id) =>
+        RunVgaRoutes.Route(id switch
+        {
+            RuntimeUiLogicalRecordId.PauseMenu => "Pause.menu",
+            RuntimeUiLogicalRecordId.ConfirmGeneric => "Confirm.generic",
+            RuntimeUiLogicalRecordId.SavePrompt => "Save.prompt",
+            RuntimeUiLogicalRecordId.SaveFailure => "Save.failed",
+            RuntimeUiLogicalRecordId.LoadFailure => "Restore.loadFailed",
+            RuntimeUiLogicalRecordId.FileNotFound => "Restore.fileNotFound",
+            RuntimeUiLogicalRecordId.TryAnotherDisk => "Disk.retry",
+            RuntimeUiLogicalRecordId.SaveOverwrite => "Save.overwrite",
+            _ => throw new ArgumentOutOfRangeException(nameof(id))
+        }).Evidence;
+
     // Deferred R6 scope; intentionally descriptive, with no deployment implementation here.
     internal static readonly IReadOnlyList<string> DeferredR6Items =
     [
@@ -101,6 +139,7 @@ internal static class Elvira1ProductionProfile
         if (RunEga.InitialStack is not { Ss: 0x2502, Sp: 0x0A00 })
             throw new InvalidDataException("RUNEGA initial stack metadata is invalid.");
         VerifyRuneGaRuntimeUi(RunEga.RuntimeUi);
+        VerifyRunVgaRoutes(RunVgaRoutes);
         if (RunEga.PackedOriginal.Matches(0x198F0, RunEga.PackedOriginal.Sha256) ||
             RunEga.CanonicalUnpacked.Matches(0x25CD1, RunEga.CanonicalUnpacked.Sha256))
             throw new InvalidDataException("RUNEGA fingerprint matching must reject incorrect file sizes.");
@@ -144,6 +183,22 @@ internal static class Elvira1ProductionProfile
             !runtimeUi.RuntimeRecords.Select(record => record.Selector).Order().SequenceEqual(Enumerable.Range(0xF000, 8)))
             throw new InvalidDataException("RUNEGA runtime UI selectors must be unique and contiguous F000..F007.");
     }
+
+    private static void VerifyRunVgaRoutes(FrozenRunVgaRouteEvidence routes)
+    {
+        string[] names = ["Pause.menu", "Confirm.generic", "Save.prompt", "Save.failed", "Restore.loadFailed", "Restore.fileNotFound", "Disk.retry", "Save.overwrite"];
+        if (!routes.Routes.Select(route => route.Name).SequenceEqual(names, StringComparer.Ordinal))
+            throw new InvalidDataException("RUNVGA frozen route evidence diverges from the proven record map.");
+        if (routes.Route("Pause.menu").Evidence != FrozenRuntimeEvidence.ProvenLive ||
+            routes.Routes.Where(route => !route.Name.Equals("Pause.menu", StringComparison.Ordinal)).Any(route => route.Evidence != FrozenRuntimeEvidence.ProvenByBinary))
+            throw new InvalidDataException("RUNVGA route evidence levels diverge from the frozen debugger/binary findings.");
+        if (routes.ProvenPairs.Count != 2 ||
+            routes.ProvenPairs[0] is not { From: "Save.failed", To: "Disk.retry" } ||
+            routes.ProvenPairs[1] is not { From: "Restore.loadFailed", To: "Restore.fileNotFound" })
+            throw new InvalidDataException("RUNVGA SAVE/RESTORE route pairing diverges from the proven binary map.");
+        if (routes.Routes.Any(route => route.OriginalBlockStart <= 0 || route.RuntimeSourceAddress <= 0 || route.RouteAddress <= 0 || string.IsNullOrWhiteSpace(route.LayoutConstraints)))
+            throw new InvalidDataException("RUNVGA route evidence is missing source, route, or layout-constraint metadata.");
+    }
 }
 
 internal sealed record ExecutableFingerprint(int Size, string Sha256)
@@ -167,6 +222,47 @@ internal sealed record FrozenStackDescriptor(int Ss, int Sp);
 
 internal enum FrozenRuntimeUiDispatch { Direct, FirstSharedDispatch, SecondSharedDispatch }
 internal enum FrozenRuntimeEvidence { ProvenLive, ProvenByBinary }
+
+/// <summary>How a RUNVGA runtime source address was established.</summary>
+internal enum RunVgaRouteSourceKind { DataAddress, BreakpointAddress }
+
+/// <summary>
+/// Frozen RUNVGA runtime-route evidence. This describes binary routes only:
+/// original text-block starts, runtime source addresses (DI data addresses or
+/// BP breakpoint addresses), approximate renderer/dispatcher call sites, and the
+/// R4B layout-constraint flags. It deliberately carries no storage spans or
+/// capacities, so it can never be borrowed as an edit-size contract. Route
+/// evidence, layout safety, and build materialization are three separate
+/// concepts: proven routes here do not imply safe arbitrary lengths.
+/// </summary>
+internal sealed record FrozenRunVgaRouteRecord(
+    string Name,
+    int OriginalBlockStart,
+    int RuntimeSourceAddress,
+    RunVgaRouteSourceKind RuntimeSourceKind,
+    FrozenRuntimeUiDispatch Dispatch,
+    int RouteAddress,
+    FrozenRuntimeEvidence Evidence,
+    string LayoutConstraints);
+
+internal sealed record FrozenRunVgaRoutePair(string From, string To);
+
+/// <summary>
+/// Owner-supplied frozen RUNVGA route evidence from historical debugger and
+/// reverse-engineering work. Pause.menu relocation was tested live (modified
+/// text visibly appeared in the running game; Continue/Quit hotspot behavior
+/// was debugged live). SAVE/RESTORE pairings are proven by binary. Route
+/// addresses are approximate call sites; exact debugger-step counts were never
+/// recorded and must not be invented.
+/// </summary>
+internal sealed record FrozenRunVgaRouteEvidence(
+    IReadOnlyList<FrozenRunVgaRouteRecord> Routes,
+    IReadOnlyList<FrozenRunVgaRoutePair> ProvenPairs)
+{
+    internal FrozenRunVgaRouteRecord Route(string name) =>
+        Routes.SingleOrDefault(route => route.Name.Equals(name, StringComparison.Ordinal))
+        ?? throw new InvalidDataException($"Frozen RUNVGA route evidence has no record '{name}'.");
+}
 
 internal sealed record FrozenRuntimeUiRecord(
     string Name, int Selector, int BankOffset, int Length, int PointerSitePhysicalOffset,

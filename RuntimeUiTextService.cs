@@ -88,12 +88,12 @@ internal sealed class RuntimeUiTextService
         {
             PersistedDocument? document = JsonSerializer.Deserialize<PersistedDocument>(File.ReadAllText(path), JsonOptions);
             if (document is null || string.IsNullOrWhiteSpace(document.GameId) || document.Records is null)
-                return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: "The runtime UI document is incomplete.");
+                return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: UiText.Get("RuntimeUi.Detail.DocumentIncomplete"));
             if (document.SchemaVersion != SchemaVersion)
-                return new(RuntimeUiTextLoadStatus.UnsupportedSchema, Detail: $"Schema {document.SchemaVersion} is not supported.");
+                return new(RuntimeUiTextLoadStatus.UnsupportedSchema, Detail: string.Format(UiText.Get("RuntimeUi.Detail.UnsupportedSchema"), document.SchemaVersion));
             string expectedGameId = PristineManifestService.GameIdFor(project.GameProfile);
             if (!document.GameId.Equals(expectedGameId, StringComparison.Ordinal))
-                return new(RuntimeUiTextLoadStatus.GameMismatch, Detail: "The runtime UI document belongs to another game.");
+                return new(RuntimeUiTextLoadStatus.GameMismatch, Detail: UiText.Get("RuntimeUi.Detail.GameMismatch"));
             return ValidatePersisted(project.GameProfile, document);
         }
         catch (JsonException ex) { return new(RuntimeUiTextLoadStatus.InvalidJson, Detail: ex.Message); }
@@ -155,7 +155,7 @@ internal sealed class RuntimeUiTextService
     public RuntimeUiTextSaveResult Save(ProjectContext project, string projectVariantCode, RuntimeUiTextState state)
     {
         project = RequireProject(project);
-        if (ProjectVariantOwnership.IsOriginal(projectVariantCode)) return new(false, string.Empty, "The Original project is read-only. Create or select an editable project variant first.");
+        if (ProjectVariantOwnership.IsOriginal(projectVariantCode)) return new(false, string.Empty, UiText.Get("RuntimeUi.Detail.ReadOnlyOriginal"));
         return SavePath(project, state, GetPath(project, projectVariantCode));
     }
 
@@ -166,9 +166,9 @@ internal sealed class RuntimeUiTextService
         {
             PersistedDocument? document = JsonSerializer.Deserialize<PersistedDocument>(File.ReadAllText(path), JsonOptions);
             if (document is null || string.IsNullOrWhiteSpace(document.GameId) || document.Records is null)
-                return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: "The runtime UI document is incomplete.");
-            if (document.SchemaVersion != SchemaVersion) return new(RuntimeUiTextLoadStatus.UnsupportedSchema, Detail: $"Schema {document.SchemaVersion} is not supported.");
-            if (!document.GameId.Equals(PristineManifestService.GameIdFor(project.GameProfile), StringComparison.Ordinal)) return new(RuntimeUiTextLoadStatus.GameMismatch, Detail: "The runtime UI document belongs to another game.");
+                return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: UiText.Get("RuntimeUi.Detail.DocumentIncomplete"));
+            if (document.SchemaVersion != SchemaVersion) return new(RuntimeUiTextLoadStatus.UnsupportedSchema, Detail: string.Format(UiText.Get("RuntimeUi.Detail.UnsupportedSchema"), document.SchemaVersion));
+            if (!document.GameId.Equals(PristineManifestService.GameIdFor(project.GameProfile), StringComparison.Ordinal)) return new(RuntimeUiTextLoadStatus.GameMismatch, Detail: UiText.Get("RuntimeUi.Detail.GameMismatch"));
             return ValidatePersisted(project.GameProfile, document);
         }
         catch (JsonException ex) { return new(RuntimeUiTextLoadStatus.InvalidJson, Detail: ex.Message); }
@@ -197,10 +197,10 @@ internal sealed class RuntimeUiTextService
         foreach (PersistedRecord record in document.Records)
         {
             if (record is null || string.IsNullOrWhiteSpace(record.LogicalRecordId) || record.Text is null)
-                return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: "A runtime UI record is incomplete.");
-            if (!seen.Add(record.LogicalRecordId)) return new(RuntimeUiTextLoadStatus.DuplicateLogicalId, Detail: record.LogicalRecordId);
+                return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: UiText.Get("RuntimeUi.Detail.RecordIncomplete"));
+            if (!seen.Add(record.LogicalRecordId)) return new(RuntimeUiTextLoadStatus.DuplicateLogicalId, Detail: string.Format(UiText.Get("RuntimeUi.Detail.DuplicateLogicalId"), record.LogicalRecordId));
             if (!Enum.TryParse(record.LogicalRecordId, true, out RuntimeUiLogicalRecordId id) || !DefinitionsFor(game).Any(definition => definition.LogicalRecordId == id))
-                return new(RuntimeUiTextLoadStatus.UnknownLogicalId, Detail: record.LogicalRecordId);
+                return new(RuntimeUiTextLoadStatus.UnknownLogicalId, Detail: string.Format(UiText.Get("RuntimeUi.Detail.UnknownLogicalId"), record.LogicalRecordId));
             values.Add(new(id, record.Text));
         }
         return new(RuntimeUiTextLoadStatus.Success, new(PristineManifestService.GameIdFor(game), values.OrderBy(value => value.LogicalRecordId).ToArray()));
@@ -228,12 +228,25 @@ internal sealed class RuntimeUiTextService
                 ? (RuntimeUiMappingReadiness.SupportedAndMapped, RuntimeUiEvidenceStatus.ProvenByBinary)
                 : (RuntimeUiMappingReadiness.KnownButMappingIncomplete, RuntimeUiEvidenceStatus.Unknown);
         // The shared E1 project identity does not prove identical binary layout.
-        // RUNEGA has frozen record spans; RUNVGA deliberately has only its high-level
-        // descriptor, so its per-record layout remains incomplete for later validation.
+        // RUNEGA has frozen record spans; RUNVGA has frozen binary ROUTES (source
+        // blocks, runtime sources, renderer/dispatcher call sites) but no frozen
+        // storage spans or capacities. Readiness therefore stays
+        // KnownButMappingIncomplete while evidence comes per record from the
+        // frozen RUNVGA route table: Pause.menu is PROVEN LIVE, the other listed
+        // routes are PROVEN BY BINARY. EGA spans must never be borrowed for
+        // RUNVGA capacities. Route evidence, layout safety, and build
+        // materialization remain three separate concepts.
         return runtime == VariantRuntimeKind.Elvira1Ega
             ? (RuntimeUiMappingReadiness.SupportedAndMapped, RuntimeUiEvidenceStatus.ProvenByBinary)
-            : (RuntimeUiMappingReadiness.KnownButMappingIncomplete, RuntimeUiEvidenceStatus.Unknown);
+            : (RuntimeUiMappingReadiness.KnownButMappingIncomplete, RunVgaEvidence(id));
     }
+
+    private static RuntimeUiEvidenceStatus RunVgaEvidence(RuntimeUiLogicalRecordId id) =>
+        Elvira1ProductionProfile.RunVgaRouteEvidence(id) switch
+        {
+            FrozenRuntimeEvidence.ProvenLive => RuntimeUiEvidenceStatus.ProvenLive,
+            _ => RuntimeUiEvidenceStatus.ProvenByBinary
+        };
 
     private static IReadOnlyList<RuntimeUiTextDefinition> DefinitionsFor(ElviraGameProfile game) => game switch
     {
