@@ -18,6 +18,9 @@ internal static class RunEgaBootstrapService
 
     internal static string CreateFrozenCp852(string sourcePath, string destinationPath, IReadOnlyList<GlyphModel> glyphs)
     {
+        // R9D: a missing source is a different result from an unsupported one.
+        if (!File.Exists(sourcePath))
+            throw new FileNotFoundException("RUNEGA source is missing; bootstrap was blocked. No files were changed.", sourcePath);
         if (Path.GetFullPath(sourcePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("RUNEGA bootstrap never overwrites its source.");
         if (File.Exists(destinationPath)) throw new IOException("RUNEGA destination already exists.");

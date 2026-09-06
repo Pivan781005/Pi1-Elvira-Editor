@@ -25,7 +25,9 @@ internal sealed class RunEgaCompositeBuildStep : ICompositeBuildStep
         try
         {
             string root = _directories.GetVariantDirectoryPath(project, variant), source = Path.Combine(root, Elvira1ProductionProfile.ActiveEgaExecutable), output = Path.Combine(root, Elvira1ProductionProfile.GeneratedSlovakEgaExecutable);
-            if (!File.Exists(source) || !RunEgaBootstrapService.IsPacked(File.ReadAllBytes(source))) return "Fresh variant RUNEGA.EXE is not the frozen packed original.";
+            // R9D: fail closed with a Missing vs Unsupported distinction; never patch an unknown binary.
+            SupportedExecutableClassification identity = SupportedExecutableIdentityService.ClassifyRunEga(source);
+            if (identity.Identity != SupportedExecutableIdentity.SupportedPacked) return SupportedExecutableIdentityService.DescribeBlocked(identity, "RUNEGA bootstrap");
             if (File.Exists(output)) return "Fresh variant already contains generated RUNEGASK.EXE.";
             string hash = RunEgaBootstrapService.CreateFrozenCp852(source, output, GlyphRepository.CreateAllCp852Slots());
             byte[] image = File.ReadAllBytes(output); RunEgaBootstrapService.ValidateOutput(image);

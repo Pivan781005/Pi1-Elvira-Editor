@@ -303,6 +303,17 @@ internal static class RunVgaFontService
     public static void SaveCopy(FontLoadResult loaded, string destinationPath)
     {
         if (!loaded.CanApply) throw new InvalidOperationException("Unknown font layout; refusing to create a modified executable.");
+        // R9D: font binary patching must fail closed on unknown/modified executables.
+        // Signature-based layout detection alone never proves a supported identity, and
+        // structural recognition of a generated V5/V2 FORMAT alone never authorizes a
+        // mutation: only immutable-region-proven trusted targets may be patched.
+        SupportedExecutableClassification identity = loaded.Game switch
+        {
+            ElviraGame.Elvira1 => SupportedExecutableIdentityService.ClassifyRunVga(loaded.SourcePath),
+            ElviraGame.Elvira2 => SupportedExecutableIdentityService.ClassifyRunIt(loaded.SourcePath),
+            _ => throw new InvalidDataException("The executable game type is unknown; font patching was blocked. No files were changed.")
+        };
+        SupportedExecutableIdentityService.RequireTrustedPatchTarget(identity, loaded.SourcePath, "font patching");
         File.Copy(loaded.SourcePath, destinationPath, true);
         WriteEditedGlyphs(loaded, destinationPath);
     }

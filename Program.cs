@@ -343,6 +343,12 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("Rebuild reproducibility: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 3 && args[0].Equals("--r9d-binary-rejection-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyR9DBinaryRejectionSmoke(args[1], args[2]); Console.WriteLine("R9D binary rejection: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("R9D binary rejection: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 3 && args[0].Equals("--ui-startup-localization-smoke", StringComparison.OrdinalIgnoreCase))
         {
             try { VerifyUiStartupLocalizationSmoke(args[1], args[2]); Console.WriteLine("UI startup/localization: PASS"); Environment.ExitCode = 0; }
@@ -5574,7 +5580,10 @@ internal static class Program
             var directories = new VariantDirectoryService();
             ICompositeBuildStep[] steps = CompleteFixtureStages(null, null).Take(4).Append(
                 new FixtureCompositeStep(CompositeBuildStage.ApplyExecutableTransformation, "fixture-executable", _ => true, _ => null,
-                    variant => { File.WriteAllBytes(Path.Combine(variant.FutureVariantRoot, variant.GeneratedExecutableName), [0x4D, 0x5A, 0x90]); return null; })).ToArray();
+                    // R9D: readiness requires a supported executable identity, so the
+                    // fixture materializes the genuine pristine source executable under
+                    // the generated name instead of arbitrary fake bytes.
+                    variant => { File.Copy(Path.Combine(variant.FutureVariantRoot, variant.SourceExecutableName), Path.Combine(variant.FutureVariantRoot, variant.GeneratedExecutableName), true); return null; })).ToArray();
             var composite = new CompositeBuildService(new DisposableVariantBuildService(directories), directories, steps);
             var launcher = new VariantLauncherService(directories, composite);
             var status = new VariantBuildStatusService(composite, launcher);
@@ -5671,6 +5680,270 @@ internal static class Program
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
+
+    private static void VerifyR9DBinaryRejectionSmoke(string elvira1Source, string elvira2Source)
+    {
+        // Temporary/copied fixtures only. The real GameRoots are snapshotted read-only
+        // and re-verified at the end; they are never written by this smoke.
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1R9DBinaryRejectionSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            string vgaPacked = CopyFixture(elvira1Source, root, "RUNVGA.EXE", "RUNVGA_PACKED.EXE");
+            string egaPacked = CopyFixture(elvira1Source, root, "RUNEGA.EXE", "RUNEGA_PACKED.EXE");
+            string runitPacked = CopyFixture(elvira2Source, root, "RUNIT.EXE", "RUNIT_PACKED.EXE");
+
+            // 1-3: proven supported packed forms are accepted.
+            Require(SupportedExecutableIdentityService.ClassifyRunVga(vgaPacked).Identity == SupportedExecutableIdentity.SupportedPacked, "Proven packed RUNVGA was not accepted.");
+            Require(SupportedExecutableIdentityService.ClassifyRunEga(egaPacked).Identity == SupportedExecutableIdentity.SupportedPacked, "Proven packed RUNEGA was not accepted.");
+            Require(SupportedExecutableIdentityService.ClassifyRunIt(runitPacked).Identity == SupportedExecutableIdentity.SupportedPacked, "Proven packed RUNIT was not accepted.");
+
+            // 8a: proven canonical unpacked forms are accepted (unpacked in memory, materialized as temp copies only).
+            string vgaCanonical = Path.Combine(root, "RUNVGA_CANONICAL.EXE");
+            string egaCanonical = Path.Combine(root, "RUNEGA_CANONICAL.EXE");
+            string runitCanonical = Path.Combine(root, "RUNIT_CANONICAL.EXE");
+            File.WriteAllBytes(vgaCanonical, RunVgaBootstrapService.UnpackVerifiedOriginal(File.ReadAllBytes(vgaPacked)));
+            File.WriteAllBytes(egaCanonical, RunEgaBootstrapService.CanonicalizePacked(File.ReadAllBytes(egaPacked)));
+            File.WriteAllBytes(runitCanonical, RunItBootstrapService.UnpackCanonicalOriginal(File.ReadAllBytes(runitPacked)));
+            Require(SupportedExecutableIdentityService.ClassifyRunVga(vgaCanonical).Identity == SupportedExecutableIdentity.SupportedCanonical, "Proven canonical RUNVGA was not accepted.");
+            Require(SupportedExecutableIdentityService.ClassifyRunEga(egaCanonical).Identity == SupportedExecutableIdentity.SupportedCanonical, "Proven canonical RUNEGA was not accepted.");
+            Require(SupportedExecutableIdentityService.ClassifyRunIt(runitCanonical).Identity == SupportedExecutableIdentity.SupportedCanonical, "Proven canonical RUNIT was not accepted.");
+
+            // 4: one mutated byte in a safe temp copy becomes Unsupported (size and MZ openability preserved).
+            string vgaMutated = MutatedCopy(vgaPacked, Path.Combine(root, "RUNVGA_MUTATED.EXE"));
+            string egaMutated = MutatedCopy(egaPacked, Path.Combine(root, "RUNEGA_MUTATED.EXE"));
+            string runitMutated = MutatedCopy(runitPacked, Path.Combine(root, "RUNIT_MUTATED.EXE"));
+            string vgaCanonicalMutated = MutatedCopy(vgaCanonical, Path.Combine(root, "RUNVGA_CANONICAL_MUTATED.EXE"));
+            foreach ((string name, SupportedExecutableClassification classification, string original) in new[]
+            {
+                ("RUNVGA packed", SupportedExecutableIdentityService.ClassifyRunVga(vgaMutated), vgaPacked),
+                ("RUNEGA packed", SupportedExecutableIdentityService.ClassifyRunEga(egaMutated), egaPacked),
+                ("RUNIT packed", SupportedExecutableIdentityService.ClassifyRunIt(runitMutated), runitPacked),
+                ("RUNVGA canonical", SupportedExecutableIdentityService.ClassifyRunVga(vgaCanonicalMutated), vgaCanonical)
+            })
+            {
+                Require(classification.Identity == SupportedExecutableIdentity.Unsupported, $"Mutated {name} was not Unsupported.");
+                Require(new FileInfo(original).Length == classification.Size, $"Mutated {name} changed size; the mutation proof is invalid.");
+            }
+            if (File.ReadAllBytes(vgaMutated)[0] != (byte)'M' || File.ReadAllBytes(vgaMutated)[1] != (byte)'Z')
+                throw new InvalidDataException("Mutation fixture lost its MZ header; the openability proof is invalid.");
+
+            // 8b: unpackable-structure-but-unknown-hash forms are rejected (never merely "unpackable").
+            RequireThrows<InvalidDataException>(() => RunVgaBootstrapService.UnpackVerifiedOriginal(File.ReadAllBytes(vgaMutated)), "Mutated packed RUNVGA unpack");
+            RequireThrows<InvalidDataException>(() => RunEgaBootstrapService.CanonicalizePacked(File.ReadAllBytes(egaMutated)), "Mutated packed RUNEGA canonicalization");
+            RequireThrows<InvalidDataException>(() => RunItBootstrapService.UnpackCanonicalOriginal(File.ReadAllBytes(runitMutated)), "Mutated packed RUNIT unpack");
+
+            // 7: Missing is a different result from Unsupported.
+            string missing = Path.Combine(root, "DOES_NOT_EXIST.EXE");
+            Require(SupportedExecutableIdentityService.ClassifyRunVga(missing).Identity == SupportedExecutableIdentity.Missing, "Missing RUNVGA was not Missing.");
+            Require(SupportedExecutableIdentityService.ClassifyRunEga(missing).Identity == SupportedExecutableIdentity.Missing, "Missing RUNEGA was not Missing.");
+            Require(SupportedExecutableIdentityService.ClassifyRunIt(missing).Identity == SupportedExecutableIdentity.Missing, "Missing RUNIT was not Missing.");
+            RequireThrows<FileNotFoundException>(() => RunVgaBootstrapService.CreateExtendedCp852(missing, Path.Combine(root, "MISSING_OUT.EXE"), GlyphRepository.CreateAllCp852Slots()), "Missing RUNVGA bootstrap");
+            RequireThrows<FileNotFoundException>(() => RunItBootstrapService.CreateExtendedCp852(missing, Path.Combine(root, "MISSING_OUT.EXE"), GlyphRepository.CreateAllCp852Slots()), "Missing RUNIT bootstrap");
+            RequireThrows<FileNotFoundException>(() => RunEgaBootstrapService.CreateFrozenCp852(missing, Path.Combine(root, "MISSING_OUT.EXE"), GlyphRepository.CreateAllCp852Slots()), "Missing RUNEGA bootstrap");
+
+            // 5: unsupported binaries produce no binary-patched build artifact.
+            string vgaBlocked = Path.Combine(root, "RUNVGA_BLOCKED.EXE");
+            string egaBlocked = Path.Combine(root, "RUNEGA_BLOCKED.EXE");
+            string runitBlocked = Path.Combine(root, "RUNIT_BLOCKED.EXE");
+            IReadOnlyList<GlyphModel> glyphs = GlyphRepository.CreateAllCp852Slots();
+            RequireThrows<InvalidDataException>(() => RunVgaBootstrapService.CreateExtendedCp852(vgaMutated, vgaBlocked, glyphs), "Mutated RUNVGA bootstrap");
+            RequireThrows<InvalidDataException>(() => RunEgaBootstrapService.CreateFrozenCp852(egaMutated, egaBlocked, glyphs), "Mutated RUNEGA bootstrap");
+            RequireThrows<InvalidDataException>(() => RunItBootstrapService.CreateExtendedCp852(runitMutated, runitBlocked, glyphs), "Mutated RUNIT bootstrap");
+            if (File.Exists(vgaBlocked) || File.Exists(egaBlocked) || File.Exists(runitBlocked))
+                throw new InvalidDataException("An unsupported binary produced a patched artifact.");
+
+            // 5b: font binary patching rejects the mutated canonical copy but still serves the proven one.
+            FontLoadResult proven = RunVgaFontService.LoadRunVga(vgaCanonical);
+            proven.Glyphs[0x41].ReplaceEdited(Convert.FromHexString("2050507050508800"));
+            string fontCopyOk = Path.Combine(root, "RUNVGA_FONT_OK.EXE");
+            RunVgaFontService.SaveCopy(proven, fontCopyOk);
+            if (!File.Exists(fontCopyOk)) throw new InvalidDataException("Supported font SaveCopy produced no output.");
+            FontLoadResult mutatedView = RunVgaFontService.LoadRunVga(vgaCanonicalMutated);
+            string fontCopyBlocked = Path.Combine(root, "RUNVGA_FONT_BLOCKED.EXE");
+            if (mutatedView.CanApply)
+            {
+                RequireThrows<InvalidDataException>(() => RunVgaFontService.SaveCopy(mutatedView, fontCopyBlocked), "Mutated font SaveCopy");
+                if (File.Exists(fontCopyBlocked)) throw new InvalidDataException("An unsupported binary produced a font-patched artifact.");
+            }
+
+            // 5b2 (review): generated FORMAT recognition must not authorize a mutation.
+            // A legitimate generated V5/V2 with edited fonts stays patchable, but a copy
+            // with one code byte modified outside the documented mutable font regions is
+            // rejected even though its structure still classifies as GeneratedExtended.
+            string vgaV5 = Path.Combine(root, "RUNVGA_TRUSTED_V5.EXE");
+            string runitV2 = Path.Combine(root, "RUNIT_TRUSTED_V2.EXE");
+            RunVgaBootstrapService.CreateExtendedCp852(vgaPacked, vgaV5, GlyphRepository.CreateAllCp852Slots());
+            RunItBootstrapService.CreateExtendedCp852(runitPacked, runitV2, GlyphRepository.CreateAllCp852Slots());
+            Require(SupportedExecutableIdentityService.ClassifyRunVga(vgaV5).Identity == SupportedExecutableIdentity.GeneratedExtended, "Legitimate V5 lost its generated FORMAT recognition.");
+            Require(SupportedExecutableIdentityService.ClassifyRunIt(runitV2).Identity == SupportedExecutableIdentity.GeneratedExtended, "Legitimate V2 lost its generated FORMAT recognition.");
+            FontLoadResult v5View = RunVgaFontService.LoadRunVga(vgaV5);
+            v5View.Glyphs[0x42].ReplaceEdited(Convert.FromHexString("2050507050508800"));
+            string v5CopyOk = Path.Combine(root, "RUNVGA_V5_FONT_OK.EXE");
+            RunVgaFontService.SaveCopy(v5View, v5CopyOk);
+            if (!File.Exists(v5CopyOk)) throw new InvalidDataException("Trusted generated V5 font SaveCopy produced no output.");
+            FontLoadResult v2View = RunVgaFontService.LoadRunVga(runitV2);
+            v2View.Glyphs[0x42].ReplaceEdited(Convert.FromHexString("2050507050508800"));
+            string v2CopyOk = Path.Combine(root, "RUNIT_V2_FONT_OK.EXE");
+            RunVgaFontService.SaveCopy(v2View, v2CopyOk);
+            if (!File.Exists(v2CopyOk)) throw new InvalidDataException("Trusted generated V2 font SaveCopy produced no output.");
+            string vgaV5Mutated = MutatedCodeCopy(vgaV5, Path.Combine(root, "RUNVGA_V5_MUTATED.EXE"), 0x8000);
+            string runitV2Mutated = MutatedCodeCopy(runitV2, Path.Combine(root, "RUNIT_V2_MUTATED.EXE"), 0x1000);
+            Require(SupportedExecutableIdentityService.ClassifyRunVga(vgaV5Mutated).Identity == SupportedExecutableIdentity.GeneratedExtended, "Mutated V5 lost its generated FORMAT recognition; the trust proof is invalid.");
+            Require(SupportedExecutableIdentityService.ClassifyRunIt(runitV2Mutated).Identity == SupportedExecutableIdentity.GeneratedExtended, "Mutated V2 lost its generated FORMAT recognition; the trust proof is invalid.");
+            FontLoadResult v5MutatedView = RunVgaFontService.LoadRunVga(vgaV5Mutated);
+            FontLoadResult v2MutatedView = RunVgaFontService.LoadRunVga(runitV2Mutated);
+            Require(v5MutatedView.CanApply && v2MutatedView.CanApply, "Mutated generated views lost font applicability; the trust proof is invalid.");
+            string v5FontBlocked = Path.Combine(root, "RUNVGA_V5_FONT_BLOCKED.EXE");
+            string v2FontBlocked = Path.Combine(root, "RUNIT_V2_FONT_BLOCKED.EXE");
+            RequireThrows<InvalidDataException>(() => RunVgaFontService.SaveCopy(v5MutatedView, v5FontBlocked), "Mutated V5 font SaveCopy");
+            RequireThrows<InvalidDataException>(() => RunVgaFontService.SaveCopy(v2MutatedView, v2FontBlocked), "Mutated V2 font SaveCopy");
+            if (File.Exists(v5FontBlocked) || File.Exists(v2FontBlocked))
+                throw new InvalidDataException("A code-modified generated executable produced a font-patched artifact.");
+
+            // 5c: composite executable materialization fails closed on unsupported/missing variant sources.
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            ProjectContext e2 = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
+            var directories = new VariantDirectoryService();
+            var disposable = new DisposableVariantBuildService(directories);
+            VerifyCompositeRejection(e1, BuiltInVariantId.Elvira1Vga, new RunVgaCompositeBuildStep(directories), "RUNVGA.EXE", "RUNVGASK.EXE", "Elvira I VGA", directories, disposable);
+            VerifyCompositeRejection(e1, BuiltInVariantId.Elvira1Ega, new RunEgaCompositeBuildStep(directories), "RUNEGA.EXE", "RUNEGASK.EXE", "Elvira I EGA", directories, disposable);
+            VerifyCompositeRejection(e2, BuiltInVariantId.Elvira2Vga, new RunItCompositeBuildStep(directories), "RUNIT.EXE", "RUNITSK.EXE", "Elvira II VGA", directories, disposable);
+
+            // Run/Debug readiness: supported full-build output stays LaunchReady; a mutated output does not.
+            VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            ICompositeBuildStep[] stages = CompleteFixtureStages(null, null).Take(4).Append(new RunVgaCompositeBuildStep(directories)).ToArray();
+            var builds = new CompositeBuildService(disposable, directories, stages);
+            if (builds.Build(e1, e1Vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("Supported RUNVGA full build failed; the acceptance path regressed.");
+            var launcher = new VariantLauncherService(directories, builds);
+            VariantLaunchTarget ready = launcher.Resolve(e1, e1Vga);
+            if (ready.Readiness != VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("Supported RUNVGA output was not launch-ready: " + ready.Detail);
+            string generated = Path.Combine(directories.GetVariantDirectoryPath(e1, e1Vga), e1Vga.GeneratedExecutableName);
+            byte[] generatedBytes = File.ReadAllBytes(generated);
+            byte[] corrupted = (byte[])generatedBytes.Clone();
+            corrupted[corrupted.Length / 2] ^= 0x01;
+            File.WriteAllBytes(generated, corrupted);
+            VariantLaunchTarget blocked = launcher.Resolve(e1, e1Vga);
+            if (blocked.Readiness == VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("A mutated generated executable resolved as launch-ready.");
+            if (!blocked.Detail.Contains("unsupported or modified", StringComparison.OrdinalIgnoreCase) || !blocked.Detail.Contains("blocked", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Blocked readiness did not explain the unsupported binary: " + blocked.Detail);
+            var execution = new VariantExecutionService(new RecordingVariantProcessRunner());
+            if (execution.Execute(blocked, VariantExecutionMode.Run).Started)
+                throw new InvalidDataException("A mutated generated executable started execution.");
+            File.WriteAllBytes(generated, generatedBytes);
+
+            // Review: a changed DATA artifact must name the data file, never the executable.
+            string variantData = Path.Combine(directories.GetVariantDirectoryPath(e1, e1Vga), e1Vga.LogicalDataFileName);
+            byte[] dataBytes = File.ReadAllBytes(variantData);
+            byte[] dataCorrupted = (byte[])dataBytes.Clone();
+            dataCorrupted[dataCorrupted.Length / 2] ^= 0x01;
+            File.WriteAllBytes(variantData, dataCorrupted);
+            VariantLaunchTarget dataBlocked = launcher.Resolve(e1, e1Vga);
+            if (dataBlocked.Readiness == VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("A mutated data artifact resolved as launch-ready.");
+            if (!dataBlocked.Detail.Contains(e1Vga.LogicalDataFileName, StringComparison.OrdinalIgnoreCase) ||
+                !dataBlocked.Detail.Contains("blocked", StringComparison.OrdinalIgnoreCase) ||
+                dataBlocked.Detail.Contains(e1Vga.GeneratedExecutableName, StringComparison.OrdinalIgnoreCase) ||
+                dataBlocked.Detail.Contains("unsupported or modified", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Data integrity failure misattributed the executable: " + dataBlocked.Detail);
+            if (execution.Execute(dataBlocked, VariantExecutionMode.Run).Started)
+                throw new InvalidDataException("A mutated data artifact started execution.");
+            File.WriteAllBytes(variantData, dataBytes);
+            if (launcher.Resolve(e1, e1Vga).Readiness != VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("Restored variant output did not return to launch-ready.");
+
+            // 9: supported builds remain reproducible and byte-identical to the frozen R9C results.
+            string vgaSecond = Path.Combine(root, "RUNVGA_V5_B.EXE");
+            string egaSecond = Path.Combine(root, "RUNEGA_OUT_B.EXE");
+            string runitSecond = Path.Combine(root, "RUNIT_V2_B.EXE");
+            RunVgaBootstrapService.CreateExtendedCp852(vgaPacked, Path.Combine(root, "RUNVGA_V5_A.EXE"), GlyphRepository.CreateAllCp852Slots());
+            RunVgaBootstrapService.CreateExtendedCp852(vgaPacked, vgaSecond, GlyphRepository.CreateAllCp852Slots());
+            string egaFirstHash = RunEgaBootstrapService.CreateFrozenCp852(egaPacked, Path.Combine(root, "RUNEGA_OUT_A.EXE"), GlyphRepository.CreateAllCp852Slots());
+            string egaSecondHash = RunEgaBootstrapService.CreateFrozenCp852(egaPacked, egaSecond, GlyphRepository.CreateAllCp852Slots());
+            RunItBootstrapService.CreateExtendedCp852(runitPacked, Path.Combine(root, "RUNIT_V2_A.EXE"), GlyphRepository.CreateAllCp852Slots());
+            RunItBootstrapResult runitRebuilt = RunItBootstrapService.CreateExtendedCp852(runitPacked, runitSecond, GlyphRepository.CreateAllCp852Slots());
+            if (HashFile(Path.Combine(root, "RUNVGA_V5_A.EXE")) != "256CF45DAD6C0108001E8BF9A4114CC79B340178554EAC87A24AAC0A1BC49B21" ||
+                HashFile(Path.Combine(root, "RUNVGA_V5_A.EXE")) != HashFile(vgaSecond))
+                throw new InvalidDataException("RUNVGA deterministic V5 result diverged.");
+            if (egaFirstHash != "C4028BAB9A35B247008197A5753C5C5185F2DEBFF54DCB099178E318830F90EE" || egaFirstHash != egaSecondHash)
+                throw new InvalidDataException("RUNEGA deterministic output diverged.");
+            if (runitRebuilt.Sha256 != Elvira2ProductionProfile.DeterministicFontEnabled.Sha256 ||
+                runitRebuilt.Sha256 != HashFile(Path.Combine(root, "RUNIT_V2_A.EXE")))
+                throw new InvalidDataException("RUNIT deterministic V2 result diverged.");
+
+            // 6: pristine GameRoots are byte-identical to the entry snapshot.
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("A pristine GameRoot was modified during rejection testing.");
+
+            static string CopyFixture(string sourceRoot, string targetRoot, string file, string targetName)
+            {
+                string destination = Path.Combine(targetRoot, targetName);
+                File.Copy(Path.Combine(sourceRoot, file), destination, false);
+                return destination;
+            }
+
+            static string MutatedCopy(string source, string destination)
+            {
+                byte[] bytes = File.ReadAllBytes(source);
+                bytes[bytes.Length / 2] ^= 0x01;
+                File.WriteAllBytes(destination, bytes);
+                return destination;
+            }
+
+            static string MutatedCodeCopy(string source, string destination, int offset)
+            {
+                byte[] bytes = File.ReadAllBytes(source);
+                if (offset < 2 || offset >= bytes.Length) throw new InvalidDataException("Mutation offset is outside the code body.");
+                bytes[offset] ^= 0x01;
+                File.WriteAllBytes(destination, bytes);
+                return destination;
+            }
+
+            static void RequireThrows<TException>(Action action, string description) where TException : Exception
+            {
+                try { action(); }
+                catch (TException) { return; }
+                catch (Exception ex) { throw new InvalidDataException($"{description} threw {ex.GetType().Name} instead of {typeof(TException).Name}."); }
+                throw new InvalidDataException($"{description} did not throw.");
+            }
+
+            void VerifyCompositeRejection(ProjectContext project, BuiltInVariantId variantId, ICompositeBuildStep executableStep, string sourceName, string outputName, string runtimeDisplay, VariantDirectoryService directories, DisposableVariantBuildService disposable)
+            {
+                VariantContext variant = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.VariantId == variantId);
+                RequireDirectoryStatus(directories.EnsureVariantDirectory(project, variant), VariantDirectoryOperationStatus.Created, runtimeDisplay + " fixture directory");
+                RequireBuildStatus(disposable.Build(project, variant), DisposableVariantBuildStatus.Success, runtimeDisplay + " pristine build");
+                string variantRoot = directories.GetVariantDirectoryPath(project, variant);
+                string source = Path.Combine(variantRoot, sourceName);
+                string output = Path.Combine(variantRoot, outputName);
+                byte[] pristine = File.ReadAllBytes(source);
+                byte[] mutated = (byte[])pristine.Clone();
+                mutated[mutated.Length / 2] ^= 0x01;
+                File.WriteAllBytes(source, mutated);
+                string? unsupportedError = executableStep.Execute(project, variant);
+                if (unsupportedError is null || !unsupportedError.Contains("unsupported or modified", StringComparison.OrdinalIgnoreCase) ||
+                    !unsupportedError.Contains(runtimeDisplay, StringComparison.Ordinal) || File.Exists(output))
+                    throw new InvalidDataException($"{runtimeDisplay} composite step did not fail closed on an unsupported binary.");
+                File.Delete(source);
+                string? missingError = executableStep.Execute(project, variant);
+                if (missingError is null || !missingError.Contains("missing", StringComparison.OrdinalIgnoreCase) || File.Exists(output))
+                    throw new InvalidDataException($"{runtimeDisplay} composite step did not report a missing binary distinctly.");
+                File.WriteAllBytes(source, pristine);
+            }
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static string[] SnapshotRootFiles(string gameRoot) => Directory.EnumerateFiles(gameRoot, "*", SearchOption.AllDirectories)
+        .Select(path => new FileInfo(path))
+        .Select(file => $"{Path.GetRelativePath(gameRoot, file.FullName).Replace('\\', '/')}|{file.Length}|{HashFile(file.FullName)}")
+        .OrderBy(value => value, StringComparer.Ordinal)
+        .ToArray();
 
     private static void VerifyVariantManifest(VariantManifest manifest, ProjectContext project, VariantContext variant, string buildState)
     {

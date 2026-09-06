@@ -41,6 +41,9 @@ internal static class RunVgaBootstrapService
 
     public static RunVgaBootstrapResult CreateExtendedCp852(string sourcePath, string destinationPath, IReadOnlyList<GlyphModel> glyphs)
     {
+        // R9D: a missing source is a different result from an unsupported one.
+        if (!File.Exists(sourcePath))
+            throw new FileNotFoundException("RUNVGA source is missing; bootstrap was blocked. No files were changed.", sourcePath);
         RunVgaBootstrapState state = DetectState(sourcePath);
         if (state == RunVgaBootstrapState.ExtendedCp852V5)
             throw new InvalidOperationException("This RUNVGA is already an Extended CP852 / V5 executable; bootstrap is intentionally disabled.");
@@ -85,6 +88,30 @@ internal static class RunVgaBootstrapService
         ValidateBaseline(verifiedBaseline);
         if (historicalTable.Length != V5FontSize || Hash(historicalTable) != HistoricalV5TableSha256) return false;
         return Hash(BuildV5(verifiedBaseline, historicalTable)) == HistoricalV5Sha256;
+    }
+
+    /// <summary>
+    /// R9D trusted-patch check for a V5 image. Structural V5 recognition alone never
+    /// authorizes a mutation: every byte outside the documented mutable font table
+    /// (V5FontOffset, V5FontSize) must reproduce the deterministic V5 derivation of
+    /// the proven unpacked baseline. The check reverses the fixed patches and requires
+    /// the exact frozen baseline hash, so a single modified code byte fails.
+    /// </summary>
+    internal static bool IsTrustedV5PatchTarget(byte[] image)
+    {
+        if (!IsV5(image)) return false;
+        try { ValidateV5(image); }
+        catch (InvalidDataException) { return false; }
+        byte[] prefix = image[0..BaselineSize].ToArray();
+        if (ReadU16(prefix, 0x02) != 0x0060 || ReadU16(prefix, 0x04) != 0x01DC || ReadU16(prefix, 0x0A) != 0x0000) return false;
+        if (!At(prefix, 0xF34C, V5Renderer) || !At(prefix, 0x11638, V5ResizeCave) || !At(prefix, 0x116A8, V5ResizeRedirect)) return false;
+        Array.Copy(OriginalRenderer, 0, prefix, 0xF34C, OriginalRenderer.Length);
+        Array.Copy(OriginalResizeCave, 0, prefix, 0x11638, OriginalResizeCave.Length);
+        Array.Copy(OriginalResizeRedirect, 0, prefix, 0x116A8, OriginalResizeRedirect.Length);
+        WriteU16(prefix, 0x02, 0x0030);
+        WriteU16(prefix, 0x04, 0x0168);
+        WriteU16(prefix, 0x0A, 0x01B5);
+        return Hash(prefix) == BaselineSha256;
     }
 
     internal static byte[] BuildV5(byte[] baseline, byte[] fontTable)

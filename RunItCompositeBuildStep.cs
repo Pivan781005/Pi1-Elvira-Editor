@@ -19,7 +19,11 @@ internal sealed class RunItCompositeBuildStep : ICompositeBuildStep
     }
     public string? Execute(ProjectContext project,VariantContext variant)
     {
-        try{string root=_directories.GetVariantDirectoryPath(project,variant),source=Path.Combine(root,Elvira2ProductionProfile.ActiveExecutable),output=Path.Combine(root,Elvira2ProductionProfile.GeneratedSlovakExecutable);if(RunItBootstrapService.DetectState(source)!=RunItBootstrapState.OriginalPacked)return "Fresh variant RUNIT.EXE is not the frozen packed original.";if(File.Exists(output))return "Fresh variant already contains generated RUNITSK.EXE.";RunItBootstrapResult built=RunItBootstrapService.CreateExtendedCp852(source,output,GlyphRepository.CreateAllCp852Slots());byte[] image=File.ReadAllBytes(built.OutputPath);RunItBootstrapService.ValidateExtended(image);if(image.Length!=RunItBootstrapService.ExtendedSize||built.Sha256!=Elvira2ProductionProfile.DeterministicFontEnabled.Sha256)return "Generated RUNITSK.EXE diverged from the frozen V2 image.";return null;}
+        try{string root=_directories.GetVariantDirectoryPath(project,variant),source=Path.Combine(root,Elvira2ProductionProfile.ActiveExecutable),output=Path.Combine(root,Elvira2ProductionProfile.GeneratedSlovakExecutable);
+        // R9D: fail closed with a Missing vs Unsupported distinction; never patch an unknown binary.
+        SupportedExecutableClassification identity=SupportedExecutableIdentityService.ClassifyRunIt(source);
+        if(identity.Identity!=SupportedExecutableIdentity.SupportedPacked)return SupportedExecutableIdentityService.DescribeBlocked(identity,"RUNIT bootstrap");
+        if(File.Exists(output))return "Fresh variant already contains generated RUNITSK.EXE.";RunItBootstrapResult built=RunItBootstrapService.CreateExtendedCp852(source,output,GlyphRepository.CreateAllCp852Slots());byte[] image=File.ReadAllBytes(built.OutputPath);RunItBootstrapService.ValidateExtended(image);if(image.Length!=RunItBootstrapService.ExtendedSize||built.Sha256!=Elvira2ProductionProfile.DeterministicFontEnabled.Sha256)return "Generated RUNITSK.EXE diverged from the frozen V2 image.";return null;}
         catch(Exception ex)when(ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException){return "RUNIT bootstrap failed: "+ex.Message;}
     }
 }

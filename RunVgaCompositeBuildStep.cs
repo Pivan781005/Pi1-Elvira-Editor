@@ -39,8 +39,10 @@ internal sealed class RunVgaCompositeBuildStep : ICompositeBuildStep
             string root = _directories.GetVariantDirectoryPath(project, variant);
             string source = Path.Combine(root, Elvira1ProductionProfile.ActiveVgaExecutable);
             string output = Path.Combine(root, Elvira1ProductionProfile.GeneratedSlovakVgaExecutable);
-            if (RunVgaBootstrapService.DetectState(source) != RunVgaBootstrapState.OriginalPacked)
-                return "Fresh variant RUNVGA.EXE is not the exact frozen packed original.";
+            // R9D: fail closed with a Missing vs Unsupported distinction; never patch an unknown binary.
+            SupportedExecutableClassification identity = SupportedExecutableIdentityService.ClassifyRunVga(source);
+            if (identity.Identity != SupportedExecutableIdentity.SupportedPacked)
+                return SupportedExecutableIdentityService.DescribeBlocked(identity, "RUNVGA bootstrap");
             if (File.Exists(output)) return "Fresh variant already contains generated RUNVGASK.EXE.";
 
             byte[] hud = Elvira1ProductionProfile.RunVga.Font.HudBytes ?? throw new InvalidDataException("Frozen RUNVGA HUD glyph is absent.");

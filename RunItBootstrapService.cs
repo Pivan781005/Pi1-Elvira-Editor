@@ -32,6 +32,14 @@ internal static class RunItBootstrapService
     internal const string CanonicalSha256 = "7FDE00D641D3BDE82B1732DAD59D21CE19F48573CBEFAD6C64C11754660EB415";
     internal const string CanonicalModuleSha256 = "65413F0A3D99FB20AF1C1B4F2E6A5BDD99768EAA6C6A833C215E3F432F9F4FF4";
     internal const string OriginalFontSha256 = "68C1F23840028438CD9975C5CD79F1861AAF7A009B6F5C65D95CE0B243DDB893";
+    /// <summary>
+    /// R9D trust anchor for a V2 image. This is a derived value, not a new supported
+    /// identity: the frozen canonical image with the documented V2 fixed patches applied
+    /// (header words, extended renderer) and the documented mutable LOW font region
+    /// (OriginalFontOffset, 98x8 bytes) zeroed, SHA-256 hashed. Any byte outside the
+    /// documented mutable font regions therefore fails <see cref="IsTrustedV2PatchTarget"/>.
+    /// </summary>
+    internal const string TrustedMaskedSha256 = "D82200F218F0B181356E602AB8AA8253DBC17B72D0A2B6865B6423B3034CF4DB";
     // Original renderer lookup / loop prefix at physical 0x7B89.
     internal static readonly byte[] OriginalRenderer = Convert.FromHexString("B60080EA20D1E2D1E2D1E2BECA2A03F28E061206");
     // Exact V2 thunk. It transfers HIGH codes to SS:03F0 and falls through to the old loop for LOW codes.
@@ -53,6 +61,9 @@ internal static class RunItBootstrapService
 
     public static RunItBootstrapResult CreateExtendedCp852(string sourcePath, string destinationPath, IReadOnlyList<GlyphModel> glyphs)
     {
+        // R9D: a missing source is a different result from an unsupported one.
+        if (!File.Exists(sourcePath))
+            throw new FileNotFoundException("RUNIT source is missing; bootstrap was blocked. No files were changed.", sourcePath);
         RunItBootstrapState state = DetectState(sourcePath);
         if (state == RunItBootstrapState.ExtendedCp852)
             throw new InvalidOperationException("This RUNIT.EXE is already Extended CP852; regenerate from RUNITO.EXE instead.");
@@ -192,6 +203,29 @@ internal static class RunItBootstrapService
         if (!IsExtended(data)) throw new InvalidDataException("Generated V2 split-font RUNIT.EXE failed structural validation.");
         if (!At(data, OriginalFontOffset + (FontSlotMetadata.HudEraseGlyph - 0x20) * 8, FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes))
             throw new InvalidDataException("Generated V2 split-font RUNIT.EXE does not preserve the reserved Elvira II HUD erase glyph 0x81.");
+    }
+
+    /// <summary>
+    /// R9D trusted-patch check for a V2 image. Structural V2 recognition alone never
+    /// authorizes a mutation: every byte outside the documented mutable font regions
+    /// (LOW table at OriginalFontOffset, HIGH table plus fixed helper in the appended
+    /// tail) must reproduce the frozen canonical image with the documented fixed
+    /// patches, proven by <see cref="TrustedMaskedSha256"/>. A single modified code
+    /// byte fails while legitimate edited fonts keep passing.
+    /// </summary>
+    internal static bool IsTrustedV2PatchTarget(byte[] image)
+    {
+        if (!IsExtended(image)) return false;
+        try { ValidateExtended(image); }
+        catch (InvalidDataException) { return false; }
+        // Mirror the TrustedMaskedSha256 derivation exactly: the fixed V2 header words
+        // and extended renderer must already be present (never restored here), and only
+        // the documented mutable LOW font region is excluded before hashing.
+        byte[] prefix = image[0..CanonicalSize].ToArray();
+        if (ReadU16(prefix, 0x02) != 0x00C1 || ReadU16(prefix, 0x04) != 0x0145) return false;
+        if (!At(prefix, RendererOffset, ExtendedRenderer)) return false;
+        Array.Clear(prefix, OriginalFontOffset, OriginalFontGlyphCount * RunVgaFontService.GlyphBytes);
+        return Hash(prefix) == TrustedMaskedSha256;
     }
 
     internal static bool IsExtended(byte[] data) =>

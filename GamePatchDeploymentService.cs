@@ -73,6 +73,9 @@ internal static class GamePatchDeploymentService
 
     private static void ValidateBootstrapSource(ElviraGame game, string path)
     {
+        // R9D: a missing source is a different result from an unsupported one.
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"Cannot update font: bootstrap source is missing: {path}. No files were changed.", path);
         bool valid = game == ElviraGame.Elvira1
             ? RunVgaBootstrapService.DetectState(path) is RunVgaBootstrapState.OriginalPacked or RunVgaBootstrapState.UnpackedBaseline
             : RunItBootstrapService.DetectState(path) is RunItBootstrapState.OriginalPacked or RunItBootstrapState.CanonicalUnpackedAscii98;

@@ -85,6 +85,18 @@ internal sealed class VariantLauncherService
                 if (!manifest.ProjectCode.Equals(_composite.GetProjectVariantCode(project, variant), StringComparison.OrdinalIgnoreCase))
                     return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
                         "The generated output belongs to a different selected project variant.");
+                // R9D: the launch artifacts must still be byte-identical to the authorized
+                // build recorded in the manifest, and the executable must retain a supported
+                // structural identity. A post-build modification blocks readiness. An
+                // executable problem blames the executable; a data-file problem names the
+                // data artifact instead and never claims the executable is unsupported.
+                SupportedExecutableClassification launched = SupportedExecutableIdentityService.Classify(variant.RuntimeKind, output);
+                if (!launched.IsSupportedForBinaryUse || !MatchesRecordedRuntimeHash(manifest, root, executableName))
+                    return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                        SupportedExecutableIdentityService.DescribeBlocked(launched, "run/debug"));
+                if (!MatchesRecordedRuntimeHash(manifest, root, dataName))
+                    return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                        SupportedExecutableIdentityService.DescribeArtifactMismatch(variant.RuntimeKind, dataName, "run/debug"));
             }
             catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
             {
@@ -117,6 +129,30 @@ internal sealed class VariantLauncherService
 
     private static VariantLaunchTarget Invalid(ProjectContext project, VariantContext variant, string detail) =>
         Make(project, variant, string.Empty, VariantDirectoryOperationStatus.InvalidContext, false, VariantLaunchReadiness.ForeignOrInvalidVariant, detail);
+
+    /// <summary>
+    /// R9D provenance check: the file must still be byte-identical to the authorized
+    /// build recorded in the variant manifest. Any post-build modification fails closed.
+    /// </summary>
+    private static bool MatchesRecordedRuntimeHash(VariantManifest manifest, string root, string fileName)
+    {
+        VariantManifestRuntimeArtifact? recorded = manifest.RuntimeArtifacts
+            .SingleOrDefault(artifact => artifact.RelativePath.Equals(fileName, StringComparison.OrdinalIgnoreCase));
+        if (recorded is not { Present: true } || recorded.Size <= 0 || string.IsNullOrWhiteSpace(recorded.Sha256))
+            return false;
+        string path = Path.Combine(root, fileName);
+        try
+        {
+            if (new FileInfo(path).Length != recorded.Size)
+                return false;
+            using FileStream stream = File.OpenRead(path);
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).Equals(recorded.Sha256, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     private static VariantLaunchTarget Make(ProjectContext project, VariantContext variant, string root, VariantDirectoryOperationStatus ownership,
         bool configured, VariantLaunchReadiness readiness, string detail, string? executableName = null, string? dataName = null) => new(
