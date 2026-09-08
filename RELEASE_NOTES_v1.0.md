@@ -29,7 +29,7 @@ A Windows editor for working with graphics and text resources from **Elvira: Mis
 - Run/Debug readiness with artifact integrity/provenance validation
 - EN/SK/CS interface localization (dynamic, with English fallback)
 - Localized Help (EN/SK/CS)
-- Recovery/Safety: explicit scoped restoration, immutable O-files, mutable backups
+- Recovery/Safety: explicit scoped restoration, mutable backups
 - Unsupported binary rejection (R9D): filename/size/unpack insufficient; fail-closed
 - PRE-R9D UI stabilization: deterministic layout, no clipping, consistent selectors
 - R10 legacy cleanup: removed TranslationVariantService, GAMEPCO migration, direct Graphics deploy, SafeDeployer VGA path, manual game selector, obsolete text-risk controls
@@ -62,7 +62,7 @@ For normal project workflows:
 - Elvira I VGA (V5) and Elvira II VGA (V2) font edits materialize into owned variant executables; EGA font edits fail the build closed (no proven writer)
 - `Run` / `Debug` launches the authorized variant (readiness validated)
 
-Original (EN) game assets in GameRoot are immutable: no normal editor action replaces them. Legacy O-files remain recovery-only.
+Original (EN) game assets in GameRoot are immutable: no normal editor action replaces them. There is no O-file architecture and no migration from pre-release builds.
 
 ### v1.0 CompositeBuild Materialization Matrix
 

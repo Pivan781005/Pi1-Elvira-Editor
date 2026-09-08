@@ -49,7 +49,7 @@ internal static class TranslationExchangeService
             "# FormatVersion=" + TranslationExchangeMetadata.FormatVersion,
             "# Game=" + document.Metadata.Game,
             "# StringCount=" + document.Metadata.StringCount,
-            "# OriginalSource=GAMEPCO",
+            "# OriginalSource=GAMEPC",
             "# OriginalSHA256=" + document.Metadata.OriginalSha256,
             "# VariantName=" + document.Metadata.VariantName,
             "# VariantCode=" + document.Metadata.VariantCode,
@@ -67,7 +67,7 @@ internal static class TranslationExchangeService
         string[,] values =
         {
             { "Format", TranslationExchangeMetadata.Format }, { "FormatVersion", "1" }, { "Game", document.Metadata.Game }, { "StringCount", document.Metadata.StringCount.ToString() },
-            { "OriginalSource", "GAMEPCO" }, { "OriginalSHA256", document.Metadata.OriginalSha256 }, { "VariantName", document.Metadata.VariantName }, { "VariantCode", document.Metadata.VariantCode }, { "TranslationFile", document.Metadata.TranslationFile }
+            { "OriginalSource", "GAMEPC" }, { "OriginalSHA256", document.Metadata.OriginalSha256 }, { "VariantName", document.Metadata.VariantName }, { "VariantCode", document.Metadata.VariantCode }, { "TranslationFile", document.Metadata.TranslationFile }
         };
         for (int row = 0; row < values.GetLength(0); row++) { metadata.Cell(row + 1, 1).Value = values[row, 0]; metadata.Cell(row + 1, 2).Value = values[row, 1]; }
         metadata.Column(1).Width = 22; metadata.Column(2).Width = 72; metadata.Column(1).Style.Font.Bold = true;
@@ -102,7 +102,7 @@ internal static class TranslationExchangeService
         string expectedGame = game == ElviraGameProfile.Elvira1 ? "Elvira1" : game == ElviraGameProfile.Elvira2 ? "Elvira2" : throw new InvalidDataException("A supported Elvira game is required.");
         if (!document.Metadata.Game.Equals(expectedGame, StringComparison.Ordinal) || document.Metadata.StringCount != originals.Count ||
             !document.Metadata.OriginalSha256.Equals(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(originalPath))), StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("Translation import does not match this game or GAMEPCO original source.");
+            throw new InvalidDataException("Translation import does not match this game or GAMEPC original source.");
         if (document.Rows.Count != originals.Count || document.Rows.Select(row => row.Index).Distinct().Count() != originals.Count || document.Rows.Any(row => row.Index < 0 || row.Index >= originals.Count))
             throw new InvalidDataException("Translation import indices must be complete, unique, and in range.");
         foreach (TranslationExchangeRow row in document.Rows)
@@ -136,7 +136,7 @@ internal static class TranslationExchangeService
     private static TranslationExchangeDocument ReadDocument(IReadOnlyDictionary<string, string> metadata, IEnumerable<string[]> rows)
     {
         if (!metadata.TryGetValue("Format", out string? format) || format != TranslationExchangeMetadata.Format || !metadata.TryGetValue("FormatVersion", out string? version) || version != "1" ||
-            !metadata.TryGetValue("OriginalSource", out string? source) || source != "GAMEPCO" || !metadata.TryGetValue("Game", out string? game) || !metadata.TryGetValue("StringCount", out string? count) || !int.TryParse(count, out int stringCount) || !metadata.TryGetValue("OriginalSHA256", out string? hash))
+            !metadata.TryGetValue("OriginalSource", out string? source) || !source.Equals("GAMEPC", StringComparison.Ordinal) || !metadata.TryGetValue("Game", out string? game) || !metadata.TryGetValue("StringCount", out string? count) || !int.TryParse(count, out int stringCount) || !metadata.TryGetValue("OriginalSHA256", out string? hash))
             throw new InvalidDataException("Translation import metadata is invalid or unsupported.");
         var values = new List<TranslationExchangeRow>();
         foreach (string[] row in rows)

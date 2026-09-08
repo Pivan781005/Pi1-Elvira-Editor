@@ -37,7 +37,7 @@ internal sealed record LauncherRedirectionPlan(
 
 /// <summary>Semantic, non-mutating launcher target resolver. It relies only
 /// on immutable ProjectContext, VariantContext and ownership validation; it
-/// deliberately neither reads GAMEPCO nor discovers root *SK artifacts.
+    /// deliberately never reads backup-named files nor discovers root *SK artifacts.
 ///
 /// R9F V7 authoritative runnable identity is Installation + Game/Profile +
 /// Runtime + Edition. Every Mods &amp; Launcher consumer (top summary,
@@ -186,15 +186,17 @@ internal sealed class VariantLauncherService
         string editionRoot = Path.Combine(root, projectCode);
         if (!Directory.Exists(root))
             return Make(project, variant, editionRoot, VariantDirectoryOperationStatus.NotFound, false, VariantLaunchReadiness.VariantMissing, "Owned variant directory is missing.");
-        // A present runtime root without this edition: legacy flat outputs
-        // are reported (never launched, never deleted); anything else simply
-        // means this edition was never built.
-        VariantDirectoryService.VariantLegacyFlatInfo legacy = _directories.DetectLegacyFlatVariant(project, variant);
-        if (legacy.HasLegacyFiles)
+        // A present runtime root without this edition simply means this
+        // edition was never built. Loose files directly in the runtime root
+        // are not valid v1.0 owned variants: never launched, never deleted.
+        if (Directory.EnumerateFiles(root, "*", SearchOption.TopDirectoryOnly).Any(path =>
+            {
+                string name = Path.GetFileName(path);
+                return !name.Equals(VariantDirectoryService.OwnershipMarkerFileName, StringComparison.OrdinalIgnoreCase) &&
+                    !name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase);
+            }))
             return Make(project, variant, editionRoot, VariantDirectoryOperationStatus.ForeignDirectoryConflict, false, VariantLaunchReadiness.ForeignOrInvalidVariant,
-                legacy.HasMatchingMarker
-                    ? "VARIANTS\\" + variant.DirectoryKey + " holds legacy flat owned output (edition " + (legacy.ManifestProjectCode ?? "?") + "). It was left untouched: remove it explicitly via Recovery, then build again."
-                    : "VARIANTS\\" + variant.DirectoryKey + " holds files that are not editor-owned. They were left untouched.");
+                "VARIANTS\\" + variant.DirectoryKey + " holds files that are not editor-owned outputs. They were left untouched.");
         return Make(project, variant, editionRoot, VariantDirectoryOperationStatus.NotFound, false, VariantLaunchReadiness.BuildIncomplete,
             "No built output for edition " + projectCode + "; build required.");
     }

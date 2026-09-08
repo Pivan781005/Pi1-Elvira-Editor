@@ -8,25 +8,19 @@ namespace Pi1ElviraEditor;
 /// plus explicit external exports remain writable.</summary>
 internal static class GameRootWriteGuard
 {
-    /// <summary>Basenames that must never be written through guarded
-    /// game-format APIs, in any directory: replacing them anywhere risks
-    /// shadowing pristine assets or reintroducing GameRoot mutation through
-    /// a future caller.</summary>
+    /// <summary>Basenames of current original game assets that must never be
+    /// written through guarded game-format APIs, in any directory. GameRoot
+    /// location policy (below) rejects any other modified game content inside
+    /// an installation, so no historical backup-name list is needed.</summary>
     public static bool IsProtectedFileName(string path)
     {
         string name = Path.GetFileName(path);
         if (name.Equals("GAMEPC", StringComparison.OrdinalIgnoreCase) ||
-            name.Equals("GAMEPCO", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("RUNVGA.EXE", StringComparison.OrdinalIgnoreCase) ||
-            name.Equals("RUNVGAO.EXE", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("RUNEGA.EXE", StringComparison.OrdinalIgnoreCase) ||
-            name.Equals("RUNEGAO.EXE", StringComparison.OrdinalIgnoreCase) ||
-            name.Equals("RUNIT.EXE", StringComparison.OrdinalIgnoreCase) ||
-            name.Equals("RUNITO.EXE", StringComparison.OrdinalIgnoreCase))
+            name.Equals("RUNIT.EXE", StringComparison.OrdinalIgnoreCase))
             return true;
         if (name.EndsWith(".VGA", StringComparison.OrdinalIgnoreCase))
-            return true;
-        if (name.EndsWith(".O", StringComparison.OrdinalIgnoreCase))
             return true;
         return false;
     }

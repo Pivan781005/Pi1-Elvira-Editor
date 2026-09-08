@@ -8,14 +8,12 @@ namespace Pi1ElviraEditor;
 internal static class Elvira2ProductionProfile
 {
     internal const string ActiveGamePc = "GAMEPC";
-    internal const string ImmutableGamePc = "GAMEPCO";
     internal const string GeneratedSlovakGamePc = "GAMEPCSK";
     internal const int OriginalGamePcSize = 125702;
     internal const string OriginalGamePcSha256 = "484C6C25E4E883E31FC129491D7681BB2330C29C63F10CCBA15EA9F7A4E3BA78";
 
     // Elvira II has one supported VGA executable model: RUNIT only.
     internal const string ActiveExecutable = "RUNIT.EXE";
-    internal const string ImmutableExecutable = "RUNITO.EXE";
     internal const string GeneratedSlovakExecutable = "RUNITSK.EXE";
 
     internal static readonly ExecutableFingerprint PackedOriginal = new(RunItBootstrapService.PackedSize, RunItBootstrapService.PackedSha256);
@@ -24,10 +22,10 @@ internal static class Elvira2ProductionProfile
         "BAB9D7DDE86ABD42C3A728952E736A4C7541CF86F34C3301D2FFCECC905B46BD");
 
     internal static readonly FrozenGamePcDescriptor GamePc = new(
-        ActiveGamePc, ImmutableGamePc, GeneratedSlovakGamePc, OriginalGamePcSha256);
+        ActiveGamePc, GeneratedSlovakGamePc, OriginalGamePcSha256);
 
     internal const string DeploymentContract =
-        "Font edits materialize only into owned VARIANTS executables through CompositeBuild; the pristine GameRoot RUNIT.EXE is never replaced. Legacy RUNITO.EXE files remain recovery-only and are never overwritten. GAMEPC is never written by font materialization.";
+        "Font edits materialize only into owned VARIANTS executables through CompositeBuild; the pristine GameRoot RUNIT.EXE is never replaced, and GAMEPC is never written by font materialization.";
     internal const string DiscoveryContract =
         "Installation discovery requires GAMEPC, a VGA zone, and RUNIT in OriginalPacked, CanonicalUnpackedAscii98, or ExtendedCp852 state; no Elvira II EGA executable is modeled.";
     internal const string VariantContract =
@@ -69,7 +67,7 @@ internal static class Elvira2ProductionProfile
 
     internal static void VerifyFrozenInvariants()
     {
-        foreach (string name in new[] { ActiveGamePc, ImmutableGamePc, GeneratedSlovakGamePc, ActiveExecutable, ImmutableExecutable, GeneratedSlovakExecutable })
+        foreach (string name in new[] { ActiveGamePc, GeneratedSlovakGamePc, ActiveExecutable, GeneratedSlovakExecutable })
             if (!GameDataFileService.IsDos83FileName(name))
                 throw new InvalidDataException($"Frozen Elvira II name is not DOS 8.3: {name}");
 
@@ -78,7 +76,7 @@ internal static class Elvira2ProductionProfile
             DeterministicFontEnabled.Size != RunItBootstrapService.ExtendedSize)
             throw new InvalidDataException("RUNIT frozen fingerprints diverge from the verified bootstrap contract.");
         if (OriginalGamePcSize != 125702 || GamePc.OriginalSha256 != OriginalGamePcSha256 ||
-            GamePc.ActiveFileName != ActiveGamePc || GamePc.ImmutableOriginalFileName != ImmutableGamePc || GamePc.GeneratedSlovakFileName != GeneratedSlovakGamePc)
+            GamePc.ActiveFileName != ActiveGamePc || GamePc.GeneratedSlovakFileName != GeneratedSlovakGamePc)
             throw new InvalidDataException("GAMEPC frozen production metadata is invalid.");
 
         if (LowFont.PhysicalFileOffset != 0x168CA || LowFont.ByteLength != 0x310 ||
@@ -114,7 +112,7 @@ internal static class Elvira2ProductionProfile
         if (RuntimeUi.Notes.Contains("Save/Restore frozen", StringComparison.OrdinalIgnoreCase) ||
             RuntimeUi.Notes.Contains("MP resolved", StringComparison.OrdinalIgnoreCase) || DeferredR6Items.Count == 0)
             throw new InvalidDataException("Elvira II deferred-production boundaries are invalid.");
-        if (!DeploymentContract.Contains("RUNITO.EXE", StringComparison.Ordinal) ||
+        if (!DeploymentContract.Contains("VARIANTS", StringComparison.Ordinal) ||
             !DiscoveryContract.Contains("RUNIT", StringComparison.Ordinal) || DiscoveryContract.Contains("RUNEGA", StringComparison.Ordinal) ||
             !VariantContract.Contains("GAMEPCSK", StringComparison.Ordinal) || !VariantContract.Contains("RUNITSK.EXE", StringComparison.Ordinal))
             throw new InvalidDataException("Elvira II deployment/discovery/variant metadata is invalid.");

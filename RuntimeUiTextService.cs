@@ -43,24 +43,15 @@ internal sealed record RuntimeUiRuntimeProjection(
 /// (Runtime, LogicalRecordId) is the storage identity.</summary>
 internal sealed record RuntimeUiTextOverride(VariantRuntimeKind Runtime, RuntimeUiLogicalRecordId LogicalRecordId, string Text);
 
-/// <summary>Legacy v1 residue that could not be attributed to exactly one
-/// runtime. It is surfaced, never projected, and never built.</summary>
-internal sealed record RuntimeUiUnassignedLegacyRecord(
-    RuntimeUiLogicalRecordId LogicalRecordId,
-    string Text,
-    IReadOnlyList<VariantRuntimeKind> CandidateRuntimes,
-    string ReasonCode);
-
 /// <summary>Immutable project-owned state, scoped per editable project
 /// variant (SK/S1/...). Overrides are keyed by (Runtime, LogicalRecordId);
 /// switching runtime projects only that runtime's state.</summary>
 internal sealed record RuntimeUiTextState(
     string GameId,
-    IReadOnlyList<RuntimeUiTextOverride> Overrides,
-    IReadOnlyList<RuntimeUiUnassignedLegacyRecord> UnassignedLegacy)
+    IReadOnlyList<RuntimeUiTextOverride> Overrides)
 {
     internal static RuntimeUiTextState Empty(ElviraGameProfile game) =>
-        new(PristineManifestService.GameIdFor(game), [], []);
+        new(PristineManifestService.GameIdFor(game), []);
 }
 
 internal sealed record RuntimeUiTextLoadResult(RuntimeUiTextLoadStatus Status, RuntimeUiTextState? State = null, string? Detail = null)
@@ -74,21 +65,14 @@ internal sealed record RuntimeUiTextSaveResult(bool Succeeded, string Path, stri
 /// Project-only runtime UI text storage. It intentionally knows no executable
 /// writer, byte encoding, layout allocator, or route repair. Frozen profile
 /// descriptors remain the authority for those later stages.
-/// Schema v2 is runtime-aware: every override carries its VariantRuntimeKind.
-/// Schema v1 files (shared overrides without runtime) are migrated
-/// deterministically on load: unambiguous records are assigned to their only
-/// qualifying runtime, ambiguous residue is preserved unassigned (surfaced,
-/// never built, never silently duplicated), and the v1 bytes are backed up
-/// before the first validated v2 write replaces them.
+/// States carry runtime-scoped overrides only; there is no migration from
+/// pre-release storage models: schema v1 files and v2 residue payloads fail
+/// closed on load instead of being converted or silently dropped.
 /// </summary>
 internal sealed class RuntimeUiTextService
 {
     internal const int SchemaVersion = 2;
-    internal const int LegacySchemaVersion = 1;
     internal const string FileName = "runtime-ui.json";
-    internal const string LegacyBackupFileName = "runtime-ui.v1.backup.json";
-    internal const string ReasonAmbiguous = "AmbiguousRuntimes";
-    internal const string ReasonInvalidForAll = "InvalidForAllRuntimes";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -96,25 +80,14 @@ internal sealed class RuntimeUiTextService
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    private sealed record PersistedDocument(int SchemaVersion, string GameId, IReadOnlyList<PersistedRecord> Records, IReadOnlyList<PersistedUnassigned>? UnassignedLegacy);
+    private sealed record PersistedDocument(int SchemaVersion, string GameId, IReadOnlyList<PersistedRecord> Records);
     private sealed record PersistedRecord(string Runtime, string LogicalRecordId, string Text);
-    private sealed record PersistedUnassigned(string LogicalRecordId, string Text, IReadOnlyList<string> CandidateRuntimes, string ReasonCode);
-    private sealed record LegacyDocument(int SchemaVersion, string GameId, IReadOnlyList<LegacyRecord> Records);
-    private sealed record LegacyRecord(string LogicalRecordId, string Text);
 
-    public string GetPath(ProjectContext project) => Path.Combine(RequireProject(project).ProjectRoot, FileName);
     public string GetPath(ProjectContext project, string projectVariantCode) =>
         ProjectVariantOwnership.GetOwnedStatePath(RequireProject(project), projectVariantCode, FileName);
 
     public IReadOnlyList<RuntimeUiTextDefinition> GetDefinitions(ProjectContext project) => DefinitionsFor(RequireProject(project).GameProfile);
 
-    public RuntimeUiTextLoadResult Load(ProjectContext project)
-    {
-        project = RequireProject(project);
-        string path = GetPath(project);
-        if (!File.Exists(path)) return new(RuntimeUiTextLoadStatus.Success, RuntimeUiTextState.Empty(project.GameProfile));
-        return LoadFile(project, path);
-    }
     public RuntimeUiTextLoadResult Load(ProjectContext project, string projectVariantCode)
     {
         project = RequireProject(project);
@@ -138,27 +111,6 @@ internal sealed class RuntimeUiTextService
         return state with { Overrides = state.Overrides.Where(value => value.Runtime != runtime || value.LogicalRecordId != logicalRecordId).OrderBy(value => value.Runtime).ThenBy(value => value.LogicalRecordId).ToArray() };
     }
 
-    /// <summary>Explicit user assignment of migrated legacy residue to one
-    /// runtime. Replaces any existing override for that (runtime, record).</summary>
-    public RuntimeUiTextState AssignUnassigned(ProjectContext project, RuntimeUiTextState state, RuntimeUiLogicalRecordId logicalRecordId, VariantRuntimeKind runtime)
-    {
-        project = RequireProject(project); ValidateState(project, state); RequireDefinition(project.GameProfile, logicalRecordId);
-        RequireSupportedRuntime(project.GameProfile, runtime, logicalRecordId);
-        RuntimeUiUnassignedLegacyRecord? legacy = state.UnassignedLegacy.SingleOrDefault(value => value.LogicalRecordId == logicalRecordId)
-            ?? throw new ArgumentException("No unassigned legacy record exists for this logical ID.", nameof(logicalRecordId));
-        var remaining = state.UnassignedLegacy.Where(value => value.LogicalRecordId != logicalRecordId).OrderBy(value => value.LogicalRecordId).ToArray();
-        RuntimeUiTextState moved = state with { UnassignedLegacy = remaining };
-        return SetOverride(project, moved, runtime, logicalRecordId, legacy.Text);
-    }
-
-    public RuntimeUiTextState DiscardUnassigned(ProjectContext project, RuntimeUiTextState state, RuntimeUiLogicalRecordId logicalRecordId)
-    {
-        project = RequireProject(project); ValidateState(project, state);
-        if (!state.UnassignedLegacy.Any(value => value.LogicalRecordId == logicalRecordId))
-            throw new ArgumentException("No unassigned legacy record exists for this logical ID.", nameof(logicalRecordId));
-        return state with { UnassignedLegacy = state.UnassignedLegacy.Where(value => value.LogicalRecordId != logicalRecordId).OrderBy(value => value.LogicalRecordId).ToArray() };
-    }
-
     public IReadOnlyList<RuntimeUiRuntimeProjection> GetEffectiveRecords(ProjectContext project, RuntimeUiTextState state) =>
         ProjectRecords(RequireProject(project), null, state);
 
@@ -176,19 +128,6 @@ internal sealed class RuntimeUiTextService
         return state.Overrides.Where(value => value.Runtime == runtime).OrderBy(value => value.LogicalRecordId).ToArray();
     }
 
-    public RuntimeUiTextSaveResult Save(ProjectContext project, RuntimeUiTextState state)
-    {
-        project = RequireProject(project); ValidateState(project, state);
-        string path = GetPath(project);
-        try
-        {
-            // Saving a user override is the explicit operation that may create
-            // editor-owned project storage. Load remains read-only.
-            Directory.CreateDirectory(project.ProjectRoot);
-            return WriteValidated(project, state, path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return new(false, path, ex.Message); }
-    }
     public RuntimeUiTextSaveResult Save(ProjectContext project, string projectVariantCode, RuntimeUiTextState state)
     {
         project = RequireProject(project);
@@ -210,13 +149,14 @@ internal sealed class RuntimeUiTextService
         int? schema = PeekSchemaVersion(json);
         if (schema is null)
             return new(RuntimeUiTextLoadStatus.InvalidJson, Detail: UiText.Get("RuntimeUi.Detail.DocumentIncomplete"));
-        if (schema == LegacySchemaVersion) return MigrateLegacy(project, json);
         if (schema != SchemaVersion)
         {
             if (schema <= 0)
                 return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: UiText.Get("RuntimeUi.Detail.DocumentIncomplete"));
             return new(RuntimeUiTextLoadStatus.UnsupportedSchema, Detail: string.Format(UiText.Get("RuntimeUi.Detail.UnsupportedSchema"), schema));
         }
+        if (HasUnassignedResiduePayload(json))
+            return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: UiText.Get("RuntimeUi.Detail.LegacyResidueUnsupported"));
         try
         {
             PersistedDocument? document = JsonSerializer.Deserialize<PersistedDocument>(json, JsonOptions);
@@ -245,6 +185,20 @@ internal sealed class RuntimeUiTextService
         catch (JsonException) { return null; }
     }
 
+    /// <summary>Fail-closed guard for pre-release v2 residue payloads: files
+    /// carrying an unassignedLegacy array are rejected instead of being
+    /// silently dropped or migrated.</summary>
+    private static bool HasUnassignedResiduePayload(string json)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            return document.RootElement.TryGetProperty("unassignedLegacy", out JsonElement residue) &&
+                residue.ValueKind == JsonValueKind.Array && residue.GetArrayLength() > 0;
+        }
+        catch (JsonException) { return false; }
+    }
+
     private RuntimeUiTextSaveResult SavePath(ProjectContext project, RuntimeUiTextState state, string path)
     {
         ValidateState(project, state);
@@ -256,24 +210,18 @@ internal sealed class RuntimeUiTextService
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return new(false, path, ex.Message); }
     }
 
-    /// <summary>Writes schema v2 only after full validation. A legacy v1 file
-    /// is preserved to *.v1.backup.json (first migration wins; the backup is
-    /// never overwritten) before the validated v2 document replaces it.</summary>
+    /// <summary>Writes validated state only. There is no migration from
+    /// pre-release storage models and no backup file.</summary>
     private static RuntimeUiTextSaveResult WriteValidated(ProjectContext project, RuntimeUiTextState state, string path)
     {
         try
         {
             var document = new PersistedDocument(SchemaVersion, state.GameId,
                 state.Overrides.OrderBy(value => value.Runtime).ThenBy(value => value.LogicalRecordId)
-                    .Select(value => new PersistedRecord(value.Runtime.ToString(), value.LogicalRecordId.ToString(), value.Text)).ToArray(),
-                state.UnassignedLegacy.Count == 0 ? null :
-                    state.UnassignedLegacy.OrderBy(value => value.LogicalRecordId).Select(value => new PersistedUnassigned(
-                        value.LogicalRecordId.ToString(), value.Text,
-                        value.CandidateRuntimes.Select(runtime => runtime.ToString()).ToArray(), value.ReasonCode)).ToArray());
+                    .Select(value => new PersistedRecord(value.Runtime.ToString(), value.LogicalRecordId.ToString(), value.Text)).ToArray());
             // Validate the exact serializable output before touching storage.
             string payload = JsonSerializer.Serialize(document, JsonOptions);
             using (JsonDocument.Parse(payload)) { }
-            PreserveLegacyBackup(path);
             string temporary = path + ".tmp";
             try
             {
@@ -284,73 +232,6 @@ internal sealed class RuntimeUiTextService
             return new(true, path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return new(false, path, ex.Message); }
-    }
-
-    private static void PreserveLegacyBackup(string path)
-    {
-        if (!File.Exists(path)) return;
-        string existing;
-        try { existing = File.ReadAllText(path); }
-        catch (IOException) { return; }
-        if (PeekSchemaVersion(existing) != LegacySchemaVersion) return;
-        string? directory = Path.GetDirectoryName(path);
-        if (directory is null) return;
-        string backup = Path.Combine(directory, LegacyBackupFileName);
-        if (File.Exists(backup)) return;
-        File.Copy(path, backup, overwrite: false);
-    }
-
-    /// <summary>Deterministic v1 migration (in-memory; Load never writes).
-    /// Each legacy record is attributed to its only qualifying runtime:
-    /// supported by a definition, editable there, and structurally valid
-    /// there. Zero or ambiguous attribution is preserved unassigned,
-    /// surfaced, and never built or silently duplicated.</summary>
-    private static RuntimeUiTextLoadResult MigrateLegacy(ProjectContext project, string json)
-    {
-        LegacyDocument? document;
-        try { document = JsonSerializer.Deserialize<LegacyDocument>(json, JsonOptions); }
-        catch (JsonException ex) { return new(RuntimeUiTextLoadStatus.InvalidJson, Detail: ex.Message); }
-        if (document is null || string.IsNullOrWhiteSpace(document.GameId) || document.Records is null)
-            return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: UiText.Get("RuntimeUi.Detail.DocumentIncomplete"));
-        if (document.SchemaVersion != LegacySchemaVersion)
-            return new(RuntimeUiTextLoadStatus.UnsupportedSchema, Detail: string.Format(UiText.Get("RuntimeUi.Detail.UnsupportedSchema"), document.SchemaVersion));
-        string expectedGameId = PristineManifestService.GameIdFor(project.GameProfile);
-        if (!document.GameId.Equals(expectedGameId, StringComparison.Ordinal))
-            return new(RuntimeUiTextLoadStatus.GameMismatch, Detail: UiText.Get("RuntimeUi.Detail.GameMismatch"));
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var overrides = new List<RuntimeUiTextOverride>();
-        var unassigned = new List<RuntimeUiUnassignedLegacyRecord>();
-        foreach (LegacyRecord record in document.Records)
-        {
-            if (record is null || string.IsNullOrWhiteSpace(record.LogicalRecordId) || record.Text is null)
-                return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: UiText.Get("RuntimeUi.Detail.RecordIncomplete"));
-            if (!seen.Add(record.LogicalRecordId))
-                return new(RuntimeUiTextLoadStatus.DuplicateLogicalId, Detail: string.Format(UiText.Get("RuntimeUi.Detail.DuplicateLogicalId"), record.LogicalRecordId));
-            if (!Enum.TryParse(record.LogicalRecordId, true, out RuntimeUiLogicalRecordId id) || !DefinitionsFor(project.GameProfile).Any(definition => definition.LogicalRecordId == id))
-                return new(RuntimeUiTextLoadStatus.UnknownLogicalId, Detail: string.Format(UiText.Get("RuntimeUi.Detail.UnknownLogicalId"), record.LogicalRecordId));
-            VariantRuntimeKind[] qualifying = QualifyingRuntimes(project.GameProfile, id, record.Text);
-            if (qualifying.Length == 1)
-                overrides.Add(new(qualifying[0], id, record.Text));
-            else
-                unassigned.Add(new(id, record.Text, qualifying,
-                    qualifying.Length == 0 ? ReasonInvalidForAll : ReasonAmbiguous));
-        }
-        var state = new RuntimeUiTextState(PristineManifestService.GameIdFor(project.GameProfile),
-            overrides.OrderBy(value => value.Runtime).ThenBy(value => value.LogicalRecordId).ToArray(),
-            unassigned.OrderBy(value => value.LogicalRecordId).ToArray());
-        string detail = string.Format(UiText.Get("RuntimeUi.Detail.SchemaMigratedV1ToV2"), overrides.Count, unassigned.Count);
-        if (unassigned.Count > 0)
-            detail += " " + string.Format(UiText.Get("RuntimeUi.Detail.LegacyUnassigned"), string.Join(", ", unassigned.Select(value => value.LogicalRecordId.ToString())));
-        return new(RuntimeUiTextLoadStatus.Success, state, Detail: detail);
-    }
-
-    private static VariantRuntimeKind[] QualifyingRuntimes(ElviraGameProfile game, RuntimeUiLogicalRecordId id, string text)
-    {
-        RuntimeUiTextDefinition? definition = DefinitionsFor(game).SingleOrDefault(item => item.LogicalRecordId == id);
-        if (definition is null) return [];
-        return definition.SupportedRuntimes
-            .Where(runtime => IsEditableForRuntime(game, runtime, id) && TryValidateForRuntime(game, runtime, id, text))
-            .OrderBy(runtime => runtime).ToArray();
     }
 
     internal static bool IsEditableForRuntime(ElviraGameProfile game, VariantRuntimeKind runtime, RuntimeUiLogicalRecordId id) =>
@@ -399,32 +280,8 @@ internal sealed class RuntimeUiTextService
             if (!seen.Add(runtime + "|" + id)) return new(RuntimeUiTextLoadStatus.DuplicateLogicalId, Detail: string.Format(UiText.Get("RuntimeUi.Detail.DuplicateLogicalId"), record.Runtime + "/" + record.LogicalRecordId));
             values.Add(new(runtime, id, record.Text));
         }
-        var unassigned = new List<RuntimeUiUnassignedLegacyRecord>();
-        if (document.UnassignedLegacy is not null)
-        {
-            var unseen = new HashSet<RuntimeUiLogicalRecordId>();
-            foreach (PersistedUnassigned legacy in document.UnassignedLegacy)
-            {
-                if (legacy is null || string.IsNullOrWhiteSpace(legacy.LogicalRecordId) || legacy.Text is null || string.IsNullOrWhiteSpace(legacy.ReasonCode))
-                    return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: UiText.Get("RuntimeUi.Detail.RecordIncomplete"));
-                if (!Enum.TryParse(legacy.LogicalRecordId, true, out RuntimeUiLogicalRecordId id) || !DefinitionsFor(game).Any(definition => definition.LogicalRecordId == id))
-                    return new(RuntimeUiTextLoadStatus.UnknownLogicalId, Detail: string.Format(UiText.Get("RuntimeUi.Detail.UnknownLogicalId"), legacy.LogicalRecordId));
-                if (!unseen.Add(id)) return new(RuntimeUiTextLoadStatus.DuplicateLogicalId, Detail: string.Format(UiText.Get("RuntimeUi.Detail.DuplicateLogicalId"), legacy.LogicalRecordId));
-                if (legacy.ReasonCode != ReasonAmbiguous && legacy.ReasonCode != ReasonInvalidForAll)
-                    return new(RuntimeUiTextLoadStatus.InvalidDocument, Detail: UiText.Get("RuntimeUi.Detail.RecordIncomplete"));
-                var candidates = new List<VariantRuntimeKind>();
-                foreach (string name in legacy.CandidateRuntimes ?? [])
-                {
-                    if (!Enum.TryParse(name, true, out VariantRuntimeKind runtime))
-                        return new(RuntimeUiTextLoadStatus.UnknownRuntime, Detail: string.Format(UiText.Get("RuntimeUi.Detail.UnknownRuntime"), name));
-                    candidates.Add(runtime);
-                }
-                unassigned.Add(new(id, legacy.Text, candidates.OrderBy(runtime => runtime).ToArray(), legacy.ReasonCode));
-            }
-        }
         return new(RuntimeUiTextLoadStatus.Success, new(PristineManifestService.GameIdFor(game),
-            values.OrderBy(value => value.Runtime).ThenBy(value => value.LogicalRecordId).ToArray(),
-            unassigned.OrderBy(value => value.LogicalRecordId).ToArray()));
+            values.OrderBy(value => value.Runtime).ThenBy(value => value.LogicalRecordId).ToArray()));
     }
 
     private static IReadOnlyList<RuntimeUiRuntimeProjection> ProjectRecords(ProjectContext project, VariantRuntimeKind? runtime, RuntimeUiTextState state)
@@ -528,12 +385,5 @@ internal sealed class RuntimeUiTextService
         if (!state.GameId.Equals(PristineManifestService.GameIdFor(project.GameProfile), StringComparison.Ordinal)) throw new ArgumentException("Runtime UI text state belongs to another game.", nameof(state));
         if (state.Overrides.GroupBy(value => (value.Runtime, value.LogicalRecordId)).Any(group => group.Count() != 1)) throw new ArgumentException("Runtime UI text state contains duplicate runtime records.", nameof(state));
         foreach (RuntimeUiTextOverride value in state.Overrides) { RequireDefinition(project.GameProfile, value.LogicalRecordId); if (value.Text is null) throw new ArgumentException("Runtime UI override text must be non-null.", nameof(state)); }
-        if (state.UnassignedLegacy.GroupBy(value => value.LogicalRecordId).Any(group => group.Count() != 1)) throw new ArgumentException("Runtime UI text state contains duplicate legacy records.", nameof(state));
-        foreach (RuntimeUiUnassignedLegacyRecord value in state.UnassignedLegacy)
-        {
-            RequireDefinition(project.GameProfile, value.LogicalRecordId);
-            if (value.Text is null) throw new ArgumentException("Runtime UI legacy text must be non-null.", nameof(state));
-            if (value.ReasonCode != ReasonAmbiguous && value.ReasonCode != ReasonInvalidForAll) throw new ArgumentException("Runtime UI legacy reason is unknown.", nameof(state));
-        }
     }
 }

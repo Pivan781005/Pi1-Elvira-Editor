@@ -22,8 +22,7 @@ internal enum VariantDirectoryClassification
     ForeignDirectory,
     OwnershipConflict,
     InvalidDirectoryName,
-    ReparsePointConflict,
-    LegacyFlatOwned
+    ReparsePointConflict
 }
 
 internal sealed record VariantDirectoryOperationResult(VariantDirectoryOperationStatus Status, string Path);
@@ -51,9 +50,9 @@ internal sealed record VariantDirectoryOwnershipMarker(
 /// each (runtime, edition) pair owns VARIANTS\&lt;RuntimeKey&gt;\&lt;EditionCode&gt;
 /// (for example VARIANTS\E1VGA\SK). SK and S1 builds for the same runtime
 /// coexist; building one edition never deletes another. The runtime root
-/// itself stays a plain container. Pre-R9F flat outputs (files directly in
-/// VARIANTS\E1VGA) are detected as legacy, never reinterpreted, and never
-/// silently deleted: they require explicit removal.
+/// itself stays a plain container. Loose files directly in a runtime root
+/// are not valid v1.0 owned variants: they are reported as foreign and never
+/// launched, reinterpreted, or deleted implicitly.
 /// </summary>
 internal sealed class VariantDirectoryService
 {
@@ -118,7 +117,7 @@ internal sealed class VariantDirectoryService
             Directory.CreateDirectory(runtimeRoot);
             if (IsReparsePoint(runtimeRoot)) return new(VariantDirectoryOperationStatus.ReparsePointConflict, path);
             string code = ProjectVariantOwnership.NormalizeCode(project, projectCode);
-            if (runtimeExisted && !IsAdoptableRuntimeRoot(project, variant, runtimeRoot))
+            if (runtimeExisted && !IsUsableEditionRoot(project, variant, runtimeRoot))
                 return new(VariantDirectoryOperationStatus.ForeignDirectoryConflict, path);
             if (!runtimeExisted || ClassifyOwnership(runtimeRoot, project, variant) != OwnershipState.Matching)
             {
@@ -142,10 +141,10 @@ internal sealed class VariantDirectoryService
     }
 
     /// <summary>An existing runtime root may host a new edition only when it
-    /// is already owned (valid container marker, legacy files may coexist),
-    /// empty (safe to adopt), or holds nothing but valid edition outputs of
-    /// the same variant/baseline. Foreign payload is never adopted.</summary>
-    private static bool IsAdoptableRuntimeRoot(ProjectContext project, VariantContext variant, string runtimeRoot)
+    /// is already owned (valid container marker; foreign files may coexist),
+    /// empty, or holds nothing but valid edition outputs of
+    /// the same variant/baseline. Foreign payload is never absorbed.</summary>
+    private static bool IsUsableEditionRoot(ProjectContext project, VariantContext variant, string runtimeRoot)
     {
         if (ClassifyOwnership(runtimeRoot, project, variant) == OwnershipState.Matching) return true;
         List<string> entries;
@@ -306,7 +305,7 @@ internal sealed class VariantDirectoryService
     }
 
     /// <summary>Lists owned edition outputs inside one runtime root plus any
-    /// legacy flat residue (files directly in the root). The runtime root
+    /// loose residue files directly in the root. The runtime root
     /// itself is a container and yields no entry.</summary>
     private static void EnumerateRuntimeRoot(ProjectContext project, VariantContext variant, string runtimePath, List<VariantDirectoryInfo> output)
     {
@@ -327,15 +326,26 @@ internal sealed class VariantDirectoryService
                 _ => VariantDirectoryClassification.OwnershipConflict
             }, variant.VariantId, normalized));
         }
-        VariantLegacyFlatInfo legacy = InspectLegacyFlat(project, variant, runtimePath);
-        if (legacy.HasLegacyFiles)
+        bool hasResidueFiles = false;
+        try
         {
-            // Residue files directly in the root: owned legacy when the
-            // container marker matches (reported, never deleted implicitly),
-            // otherwise foreign. Edition outputs alongside are listed above.
-            output.Add(new(runtimePath, variant.DirectoryKey, legacy.HasMatchingMarker
-                ? VariantDirectoryClassification.LegacyFlatOwned : VariantDirectoryClassification.ForeignDirectory,
-                legacy.HasMatchingMarker ? variant.VariantId : null, legacy.ManifestProjectCode));
+            foreach (string file in Directory.EnumerateFiles(runtimePath, "*", SearchOption.TopDirectoryOnly))
+            {
+                string name = Path.GetFileName(file);
+                if (name.Equals(OwnershipMarkerFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) continue;
+                hasResidueFiles = true;
+                break;
+            }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        if (hasResidueFiles)
+        {
+            // Residue files directly in the root are not valid v1.0 owned
+            // variants: reported as foreign, never launched, never reinterpreted,
+            // never deleted implicitly. Edition outputs alongside are listed above.
+            output.Add(new(runtimePath, variant.DirectoryKey, VariantDirectoryClassification.ForeignDirectory, null, null));
         }
         else if (!hasEditions)
         {
@@ -373,110 +383,6 @@ internal sealed class VariantDirectoryService
         variant.VariantId.ToString(),
         variant.DirectoryKey,
         project.BaselineFingerprint);
-
-    /// <summary>Pre-R9F flat-output evidence. Legacy files are payload files
-    /// directly in the runtime root (ownership marker and temp files
-    /// excluded). They are reported, never reinterpreted or deleted implicitly.
-    /// HasOwnedEditions is true only for child directories carrying a valid
-    /// edition marker for this project/runtime/baseline; plain game-content
-    /// subdirectories (DOSBOX, cloud_saves, …) do NOT count.</summary>
-    internal sealed record VariantLegacyFlatInfo(
-        bool HasLegacyFiles,
-        bool HasMatchingMarker,
-        bool HasOwnedEditions,
-        string? ManifestProjectCode,
-        IReadOnlyList<string> FileNames);
-
-    /// <summary>Detects legacy flat outputs without touching anything.</summary>
-    public VariantLegacyFlatInfo DetectLegacyFlatVariant(ProjectContext project, VariantContext variant)
-    {
-        ValidateAssociation(project, variant);
-        string runtimePath;
-        try { runtimePath = GetVariantDirectoryPath(project, variant); }
-        catch (ArgumentException) { return new(false, false, false, null, []); }
-        if (!Directory.Exists(runtimePath) || IsReparsePoint(runtimePath)) return new(false, false, false, null, []);
-        return InspectLegacyFlat(project, variant, runtimePath);
-    }
-
-    /// <summary>Explicit, user-authorized removal of legacy flat outputs.
-    /// Refuses when owned edition outputs coexist so siblings are protected;
-    /// unknown/foreign contents are never touched.</summary>
-    public VariantDirectoryOperationResult DeleteLegacyFlatVariantDirectory(ProjectContext project, VariantContext variant)
-    {
-        ValidateAssociation(project, variant);
-        string runtimePath;
-        try { runtimePath = GetVariantDirectoryPath(project, variant); }
-        catch (ArgumentException) { return new(VariantDirectoryOperationStatus.InvalidContext, string.Empty); }
-        if (!Directory.Exists(runtimePath)) return new(VariantDirectoryOperationStatus.NotFound, runtimePath);
-        if (IsReparsePoint(runtimePath)) return new(VariantDirectoryOperationStatus.ReparsePointConflict, runtimePath);
-        VariantLegacyFlatInfo legacy = InspectLegacyFlat(project, variant, runtimePath);
-        if (!legacy.HasMatchingMarker) return new(VariantDirectoryOperationStatus.ForeignDirectoryConflict, runtimePath);
-        if (legacy.HasOwnedEditions) return new(VariantDirectoryOperationStatus.OwnershipConflict, runtimePath);
-        if (ContainsReparsePoint(runtimePath)) return new(VariantDirectoryOperationStatus.ReparsePointConflict, runtimePath);
-        DeleteContentsExceptRootMarker(runtimePath, isRoot: true);
-        File.Delete(Path.Combine(runtimePath, OwnershipMarkerFileName));
-        Directory.Delete(runtimePath, false);
-        return new(VariantDirectoryOperationStatus.Deleted, runtimePath);
-    }
-
-    private static VariantLegacyFlatInfo InspectLegacyFlat(ProjectContext project, VariantContext variant, string runtimePath)
-    {
-        bool matching = ClassifyOwnership(runtimePath, project, variant) == OwnershipState.Matching;
-        bool ownedEditions = HasOwnedEditionSubdirectory(project, variant, runtimePath);
-        var files = new List<string>();
-        try
-        {
-            foreach (string file in Directory.EnumerateFiles(runtimePath, "*", SearchOption.TopDirectoryOnly))
-            {
-                string name = Path.GetFileName(file);
-                if (name.Equals(OwnershipMarkerFileName, StringComparison.OrdinalIgnoreCase)) continue;
-                if (name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) continue;
-                files.Add(name);
-            }
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-        files.Sort(StringComparer.OrdinalIgnoreCase);
-        return new(files.Count > 0, matching, ownedEditions, ReadLegacyManifestProjectCode(runtimePath), files);
-    }
-
-    /// <summary>True only when a child directory parses as an edition code
-    /// AND carries a valid edition ownership marker for this exact
-    /// project/runtime/baseline. Plain game-content subdirectories
-    /// (DOSBOX, cloud_saves, set_config, …) never count: they are payload,
-    /// not sibling editions.</summary>
-    private static bool HasOwnedEditionSubdirectory(ProjectContext project, VariantContext variant, string runtimePath)
-    {
-        string[] children;
-        try { children = Directory.EnumerateDirectories(runtimePath, "*", SearchOption.TopDirectoryOnly).ToArray(); }
-        catch (IOException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
-        foreach (string child in children)
-        {
-            if (IsReparsePoint(child)) continue;
-            string code;
-            try { code = ProjectVariantOwnership.NormalizeCode(project, Path.GetFileName(child)); }
-            catch (ArgumentException) { continue; }
-            catch (InvalidOperationException) { continue; }
-            if (ClassifyEditionOwnership(child, project, variant, code) == OwnershipState.Matching) return true;
-        }
-        return false;
-    }
-
-    private static string? ReadLegacyManifestProjectCode(string runtimePath)
-    {
-        try
-        {
-            string manifest = Path.Combine(runtimePath, VariantManifestService.FileName);
-            if (!File.Exists(manifest)) return null;
-            VariantManifest parsed = VariantManifestService.Read(runtimePath);
-            return string.IsNullOrWhiteSpace(parsed.ProjectCode) ? null : parsed.ProjectCode;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
-        {
-            return null;
-        }
-    }
 
     private static VariantDirectoryOwnershipMarker CreateEditionMarker(ProjectContext project, VariantContext variant, string projectCode) => new(
         EditionOwnershipMarkerSchema,

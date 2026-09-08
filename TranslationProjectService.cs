@@ -69,7 +69,7 @@ internal sealed class TranslationProjectService
         if (state.Variants.Any(item => item.Code.Equals(candidate.Code, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException($"Translation code {candidate.Code} already exists in {FileName}.");
 
-        // A pre-existing legacy root artifact is never adopted or overwritten.
+        // A pre-existing root file is never adopted or overwritten.
         string rootData = Path.Combine(project.GameRoot, candidate.DataFile);
         string rootExe = Path.Combine(project.GameRoot, candidate.ExeFile);
         if (File.Exists(rootData) || File.Exists(rootExe))

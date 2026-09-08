@@ -358,4 +358,4 @@ Projekt neobsahuje originálne herné EXE/VGA/GAMEPC/TABLES ani iné komerčné 
 
 ### Nemenný GameRoot a varianty (v1.0)
 
-Originálne herné súbory v GameRoot (`RUNVGA.EXE`, `RUNEGA.EXE`, `RUNIT.EXE`, `GAMEPC`, VGA zdroje) sú nemenné: žiadna bežná akcia editora ich nenahrádza. Úpravy písma sa ukladajú cez Uložiť do projektu a materializujú sa zostavením variantu do vlastnených výstupov `VARIANTS\<runtime>\<edition>\`. Priame zapisovanie do GameRoot bolo odstránené; staré O-súbory (`RUNVGAO.EXE`, `RUNITO.EXE`, `GAMEPCO`) zostávajú iba ako recovery-kompatibilita. Výnimkou je generovanie/obnova launcher BAT s existujúcou zálohou.
+Originálne herné súbory v GameRoot (`RUNVGA.EXE`, `RUNEGA.EXE`, `RUNIT.EXE`, `GAMEPC`, VGA zdroje) sú nemenné: žiadna bežná akcia editora ich nenahrádza. Úpravy písma sa ukladajú cez Uložiť do projektu a materializujú sa zostavením variantu do vlastnených výstupov `VARIANTS\<runtime>\<edition>\`. Priame zapisovanie do GameRoot bolo odstránené; vo v1.0 neexistuje O-file architektúra ani migrácia z predbežných zostavení. Výnimkou je generovanie/obnova launcher BAT s existujúcou zálohou.

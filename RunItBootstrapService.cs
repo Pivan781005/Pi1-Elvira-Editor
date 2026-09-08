@@ -67,7 +67,7 @@ internal static class RunItBootstrapService
         GameRootWriteGuard.RejectGameFormatOutputInGameRoot(gameRoot, destinationPath);
         RunItBootstrapState state = DetectState(sourcePath);
         if (state == RunItBootstrapState.ExtendedCp852)
-            throw new InvalidOperationException("This RUNIT.EXE is already Extended CP852; regenerate from RUNITO.EXE instead.");
+            throw new InvalidOperationException("This RUNIT.EXE is already Extended CP852; rebuild the variant from the pristine original using Build Variant.");
         if (state is not (RunItBootstrapState.OriginalPacked or RunItBootstrapState.CanonicalUnpackedAscii98))
             throw new InvalidDataException("Unsupported or modified RUNIT.EXE.");
         if (Path.GetFullPath(sourcePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))

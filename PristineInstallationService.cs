@@ -39,13 +39,6 @@ internal sealed class PristineInstallationService
         {
             var info = new FileInfo(path.Absolute);
             (PristineFileClassification classification, PristineFileRole role) = Classify(path.Relative);
-            // GAMEPCO was produced by a previous editor storage model at the
-            // game root.  It is ignored only when its complete content matches
-            // a frozen original GAMEPC fingerprint; a forged/corrupt sibling
-            // remains an UnexpectedFile.
-            if (path.Relative.Equals(GamePcOriginalService.OriginalFileName, StringComparison.OrdinalIgnoreCase) &&
-                GamePcOriginalService.IsVerifiedLegacyRootOriginal(path.Absolute))
-                (classification, role) = (PristineFileClassification.GeneratedIgnored, PristineFileRole.EditorGenerated);
             entries.Add(new PristineInstallationFile(path.Relative, path.Absolute, info.Length, HashFile(path.Absolute), classification, role));
         }
         return entries;

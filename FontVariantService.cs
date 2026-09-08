@@ -75,37 +75,8 @@ internal sealed class FontVariantService
     private sealed record Document(int SchemaVersion, string GameId, IReadOnlyList<Record> Edits);
     private sealed record Record(int ByteValue, string BitmapBase64, FontEditScope Scope, VariantRuntimeKind? RuntimeKind);
 
-    public string GetPath(ProjectContext project) => Path.Combine(Require(project).ProjectRoot, FileName);
     public string GetPath(ProjectContext project, string projectVariantCode) =>
         ProjectVariantOwnership.GetOwnedStatePath(Require(project), projectVariantCode, FileName);
-    public FontProjectLoadResult Load(ProjectContext project)
-    {
-        project = Require(project); string path = GetPath(project);
-        if (!File.Exists(path)) return new(FontProjectLoadStatus.Success, FontProjectState.Empty(project.GameProfile));
-        try
-        {
-            Document? document = JsonSerializer.Deserialize<Document>(File.ReadAllText(path), JsonOptions);
-            if (document is null || document.Edits is null || string.IsNullOrWhiteSpace(document.GameId)) return new(FontProjectLoadStatus.InvalidRecord, Detail: "Font project document is incomplete.");
-            if (document.SchemaVersion != SchemaVersion) return new(FontProjectLoadStatus.UnsupportedSchema);
-            if (!document.GameId.Equals(PristineManifestService.GameIdFor(project.GameProfile), StringComparison.Ordinal)) return new(FontProjectLoadStatus.GameMismatch);
-            var edits = new List<FontProjectEdit>(); var identities = new HashSet<FontProjectGlyphIdentity>();
-            foreach (Record record in document.Edits)
-            {
-                try
-                {
-                    var edit = new FontProjectEdit(new(record.ByteValue), record.BitmapBase64, record.Scope, record.RuntimeKind);
-                    ValidateEdit(project.GameProfile, edit);
-                    if (!identities.Add(edit.Identity)) return new(FontProjectLoadStatus.DuplicateGlyph, Detail: $"0x{edit.Identity.ByteValue:X2}");
-                    edits.Add(edit);
-                }
-                catch (InvalidOperationException ex) { return new(FontProjectLoadStatus.ProtectedGlyph, Detail: ex.Message); }
-                catch (ArgumentException ex) { return new(FontProjectLoadStatus.InvalidRecord, Detail: ex.Message); }
-            }
-            return new(FontProjectLoadStatus.Success, new(document.GameId, Sort(edits)));
-        }
-        catch (JsonException ex) { return new(FontProjectLoadStatus.InvalidJson, Detail: ex.Message); }
-        catch (IOException ex) { return new(FontProjectLoadStatus.InvalidRecord, Detail: ex.Message); }
-    }
     public FontProjectLoadResult Load(ProjectContext project, string projectVariantCode)
     {
         project = Require(project);
@@ -172,20 +143,6 @@ internal sealed class FontVariantService
             VariantRuntimeKind.Elvira2Vga => new(byteValue, FontRuntimeBank.High, FontApplicabilityStatus.Shared),
             _ => new(byteValue, FontRuntimeBank.Unsupported, FontApplicabilityStatus.Unsupported)
         };
-    }
-    public FontProjectSaveResult Save(ProjectContext project, FontProjectState state)
-    {
-        project = Require(project); ValidateState(project, state); string path = GetPath(project);
-        try
-        {
-            Directory.CreateDirectory(project.ProjectRoot);
-            var document = new Document(SchemaVersion, state.GameId, state.Edits.Select(edit => new Record(edit.Identity.ByteValue, edit.BitmapBase64, edit.Scope, edit.RuntimeKind)).ToArray());
-            string temp = path + ".tmp";
-            try { File.WriteAllText(temp, JsonSerializer.Serialize(document, JsonOptions)); File.Move(temp, path, true); }
-            finally { if (File.Exists(temp)) File.Delete(temp); }
-            return new(true, path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return new(false, path, ex.Message); }
     }
     public FontProjectSaveResult Save(ProjectContext project, string projectVariantCode, FontProjectState state)
     {

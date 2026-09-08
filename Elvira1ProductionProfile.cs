@@ -8,16 +8,13 @@ namespace Pi1ElviraEditor;
 internal static class Elvira1ProductionProfile
 {
     internal const string ActiveGamePc = "GAMEPC";
-    internal const string ImmutableGamePc = "GAMEPCO";
     internal const string GeneratedSlovakGamePc = "GAMEPCSK";
     internal const int OriginalGamePcSize = 135332;
 
     internal const string ActiveVgaExecutable = "RUNVGA.EXE";
-    internal const string ImmutableVgaExecutable = "RUNVGAO.EXE";
     internal const string GeneratedSlovakVgaExecutable = "RUNVGASK.EXE";
 
     internal const string ActiveEgaExecutable = "RUNEGA.EXE";
-    internal const string ImmutableEgaExecutable = "RUNEGAO.EXE";
     internal const string GeneratedSlovakEgaExecutable = "RUNEGASK.EXE";
 
     internal const string LauncherFile = "ELVIRA.BAT";
@@ -31,7 +28,6 @@ internal static class Elvira1ProductionProfile
     internal static readonly FrozenExecutableDescriptor RunVga = new(
         Renderer: "VGA",
         ActiveFileName: ActiveVgaExecutable,
-        ImmutableOriginalFileName: ImmutableVgaExecutable,
         GeneratedSlovakFileName: GeneratedSlovakVgaExecutable,
         PackedOriginal: new ExecutableFingerprint(0x18C39, RunVgaBootstrapService.PackedSha256),
         CanonicalUnpacked: new ExecutableFingerprint(0x2CE30, RunVgaBootstrapService.BaselineSha256),
@@ -43,7 +39,6 @@ internal static class Elvira1ProductionProfile
     internal static readonly FrozenExecutableDescriptor RunEga = new(
         Renderer: "EGA",
         ActiveFileName: ActiveEgaExecutable,
-        ImmutableOriginalFileName: ImmutableEgaExecutable,
         GeneratedSlovakFileName: GeneratedSlovakEgaExecutable,
         PackedOriginal: new ExecutableFingerprint(0x198EF, "FE596D7DB1CEFB643F2C2BEC1EC5342CC1F7DBA2F47AFE3512B6C6FF8DE05EA1"),
         CanonicalUnpacked: new ExecutableFingerprint(0x25CD0, "A15243583A1774BAF8F77DF599063675ED9EF36A573A35CF6F2504705B3BAB56"),
@@ -53,7 +48,7 @@ internal static class Elvira1ProductionProfile
         InitialStack: new FrozenStackDescriptor(0x2502, 0x0A00));
 
     internal static readonly FrozenGamePcDescriptor GamePc = new(
-        ActiveGamePc, ImmutableGamePc, GeneratedSlovakGamePc,
+        ActiveGamePc, GeneratedSlovakGamePc,
         "C0A1B2690499F51402605E5966593895CA9937C59F95C1A35BE026E57E30A663");
 
     internal static readonly FrozenLauncherCompanionDescriptor Launcher = new(
@@ -118,9 +113,9 @@ internal static class Elvira1ProductionProfile
     {
         foreach (string name in new[]
         {
-            ActiveGamePc, ImmutableGamePc, GeneratedSlovakGamePc,
-            ActiveVgaExecutable, ImmutableVgaExecutable, GeneratedSlovakVgaExecutable,
-            ActiveEgaExecutable, ImmutableEgaExecutable, GeneratedSlovakEgaExecutable,
+            ActiveGamePc, GeneratedSlovakGamePc,
+            ActiveVgaExecutable, GeneratedSlovakVgaExecutable,
+            ActiveEgaExecutable, GeneratedSlovakEgaExecutable,
             LauncherFile, LauncherBackupFile, SoundStateFile, MenuHelperFile
         })
         {
@@ -312,7 +307,6 @@ internal sealed record FrozenRuntimeUiDescriptor(
 internal sealed record FrozenExecutableDescriptor(
     string Renderer,
     string ActiveFileName,
-    string ImmutableOriginalFileName,
     string GeneratedSlovakFileName,
     ExecutableFingerprint PackedOriginal,
     ExecutableFingerprint CanonicalUnpacked,
@@ -320,7 +314,7 @@ internal sealed record FrozenExecutableDescriptor(
     FrozenRuntimeUiDescriptor RuntimeUi,
     FrozenStackDescriptor? InitialStack);
 
-internal sealed record FrozenGamePcDescriptor(string ActiveFileName, string ImmutableOriginalFileName, string GeneratedSlovakFileName, string OriginalSha256);
+internal sealed record FrozenGamePcDescriptor(string ActiveFileName, string GeneratedSlovakFileName, string OriginalSha256);
 
 internal sealed record FrozenLauncherCompanionDescriptor(
     string ActiveLauncherFile, string ImmutableBackupFile, string SoundStateFile, string MenuHelperFile, string VariantCatalogFile,

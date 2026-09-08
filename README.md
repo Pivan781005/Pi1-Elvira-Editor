@@ -69,7 +69,7 @@ Interface localization: English, Slovak, Czech.
 - Global Edition is authoritative
 - Obsolete independent Text edition selector removed
 - Generated `GAMEPCxx` files materialized into owned build output (VARIANTS)
-- Normal Text workflow does NOT create `GAMEPCO`/`GAMEPCxx` in pristine GameRoot
+- Normal Text workflow does NOT create sidecar or `GAMEPCxx` files in pristine GameRoot
 - Text save = save project state
 - Save As/Export = editor-owned/user-selected export behavior
 - Runtime UI text is separate from GAMEPC translation text
@@ -225,7 +225,7 @@ Run/Debug does NOT automatically rebuild unless explicitly invoked.
 | **Runtime UI** | YES (isolated, evidence-validated) | VGA Pause.menu/Confirm.generic/Save.overwrite + audited EGA records (see below); all other overrides fail preflight |
 | **Executable** | N/A (derived) | YES — `TranslationAwareExecutableBuildStep` (RUNVGA/RUNEGA/RUNIT) |
 
-**Immutable GameRoot rule:** no normal editor action replaces pristine GameRoot assets (`RUNVGA.EXE`, `RUNEGA.EXE`, `RUNIT.EXE`, `GAMEPC`, VGA resources). Font edits persist via Save to project and materialize only into owned `VARIANTS` executables through Build Variant. Legacy O-files (`RUNVGAO.EXE`, `RUNITO.EXE`, `GAMEPCO`) remain recovery-only and are never overwritten.
+**Immutable GameRoot rule:** no normal editor action replaces pristine GameRoot assets (`RUNVGA.EXE`, `RUNEGA.EXE`, `RUNIT.EXE`, `GAMEPC`, VGA resources). Font edits persist via Save to project and materialize only into owned `VARIANTS` executables through Build Variant. There is no O-file architecture in v1.0 and no migration from pre-release builds.
 
 ### Key Concepts
 
@@ -281,7 +281,7 @@ Evidence terminology used by the project:
 
 ### Variant Status and Runnable Identity
 - Runnable identity is Installation + Project + Edition + Runtime. Owned outputs live in `VARIANTS\<RuntimeKey>\<EditionCode>` (e.g. `VARIANTS\E1VGA\SK`): SK and S1 builds for the same runtime coexist independently — building one edition never deletes or replaces another, and building EGA never touches VGA outputs. The variant manifest records both runtime and edition codes.
-- Legacy flat outputs (pre-R9F files directly in `VARIANTS\E1VGA`) are detected, reported, and left untouched: they are never launched, never rebuilt in place, and never silently deleted. Recovery offers an explicit, hash-verified **Adopt legacy output** action (moves only fully manifest-proven payloads into `VARIANTS\<KEY>\<EDITION>`; anything unproven aborts untouched) as well as explicit removal. A disabled Rebuild button is explained in the recovery status line.
+- Loose files directly in a runtime root (e.g. `VARIANTS\E1VGA`) are not valid v1.0 owned variants: they are never launched, never rebuilt in place, and never silently deleted. There is no migration into edition outputs; only `VARIANTS\<KEY>\<EDITION>` outputs are runnable. A disabled Rebuild button is explained in the recovery status line.
 - Variant Manager readiness is selection-independent: each row evaluates its own runtime+edition artifacts plus the manifest, so selecting another runtime never flips a built row. Translated Mods entries resolve per edition inside the active runtime (pristine `GAMEPC` still resolves to GameRoot); never-built editions report Missing/Not-built, never corrupt; corrupt/foreign outputs report Invalid distinctly.
 
 ### Elvira II RUNIT
@@ -312,11 +312,11 @@ Evidence terminology used by the project:
 - **Immutable baseline** — GAMEPC, EXE, VGA files classified `Immutable`
 - **MutableBackedUp semantics** — ELVIRA.BAT/CERBERUS.BAT backed up once to `.BAK` (immutable)
 - **Owned generated files** — in `VARIANTS\<KEY>\<EDITION>` with ownership marker
-- **Variant ownership marker** — `.pi1-variant-owner.json` (Schema=2 for runtime+edition outputs: Product, GameId, VariantId, DirectoryKey, ProjectCode, BaselineFingerprint; Schema=1 legacy runtime roots)
+- **Variant ownership marker** — `.pi1-variant-owner.json` (Schema=2 for runtime+edition outputs: Product, GameId, VariantId, DirectoryKey, ProjectCode, BaselineFingerprint; Schema=1 runtime roots)
 - **Unexpected external files** — reported, not silently deleted
 - **Recovery** — explicit, scoped (`RecoverySafetyService`)
 - **Restoration** — scoped to mutable backed-up files
-- **Unknown binaries** — not silently adopted
+- **Unknown binaries** — fail closed, never launched, never modified
 - **No full duplicate-original vault** — architecture uses immutable baseline + mutable backups + owned VARIANTS
 
 ## PRE-R9D UI Stabilization (Final Outcomes)

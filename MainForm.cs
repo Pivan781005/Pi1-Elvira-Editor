@@ -87,11 +87,8 @@ internal sealed class MainForm : Form
     private readonly CenteredCaptionButton btnReloadRuntimeUi = new();
     private readonly CenteredCaptionButton btnSaveRuntimeUi = new();
     private readonly CenteredCaptionButton btnResetRuntimeUi = new();
-    private readonly CenteredCaptionButton btnDiscardLegacyRuntimeUi = new();
     private readonly Label lblRuntimeUiStatus = new();
     private readonly Label lblRuntimeUiRuntime = new();
-    private readonly Label lblRuntimeUiLegacyNotice = new();
-    private readonly ComboBox cmbRuntimeUiLegacy = new();
     private readonly RuntimeUiTextService _runtimeUiTexts = new();
     private readonly RuntimeUiLayoutValidationService _runtimeUiLayouts;
     private ProjectContext? _runtimeUiProject;
@@ -110,7 +107,7 @@ internal sealed class MainForm : Form
     private bool _refreshingTextGrid;
     private bool _textGridRefreshQueued;
     private string? _currentDataFilePath;
-    private GamePcOriginalReference? _gamePcOriginal;
+    private GamePcBaselineReference? _gamePcOriginal;
     private VariantContext? _textVariant;
     private readonly TranslationProjectService _translationProjects = new();
     private TranslationProjectState? _translationProjectState;
@@ -149,7 +146,6 @@ internal sealed class MainForm : Form
     private readonly CenteredCaptionButton btnRestoreBaselineLauncher = new();
     private readonly CenteredCaptionButton btnRebuildOwnedVariant = new();
     private readonly CenteredCaptionButton btnRemoveOwnedVariant = new();
-    private readonly CenteredCaptionButton btnAdoptLegacyVariant = new();
     private readonly CenteredCaptionButton btnReverseAllPreview = new();
     private readonly ComboBox cmbDefaultVariant = new();
     private VariantCatalog? _variantCatalog;
@@ -297,8 +293,7 @@ internal sealed class MainForm : Form
         lblDetectedGame.Text == UiText.Get(UiLocalizationKeys.NoGameSelected) &&
         lblStatus.Text == NeutralInstallationPrompt &&
         lblStatus.ForeColor == SystemColors.ControlText &&
-        HasNeutralGraphicsPresentationForTest &&
-        !lblTextOverview.Text.Contains(GamePcOriginalService.OriginalFileName, StringComparison.OrdinalIgnoreCase);
+        HasNeutralGraphicsPresentationForTest;
     internal string NeutralStartupDiagnosticForTest =>
         $"project={_activeProject is not null};variant={_activeVariant is not null};detected='{lblDetectedGame.Text}';status='{lblStatus.Text}';graphics='{lblGraphicsVariant.Text}';palette='{lblPaletteMode.Text}';actions={btnReload.Enabled}/{btnReplace.Enabled}/{btnExport.Enabled}/{btnReloadPreview.Enabled};text='{lblTextOverview.Text}'";
     internal string UiStateDiagnosticForTest =>
@@ -392,7 +387,6 @@ internal sealed class MainForm : Form
     }
     internal bool RuntimeUiResetEnabledForTest => btnResetRuntimeUi.Enabled;
     internal void ResetRuntimeUiOverrideForTest() => ResetSelectedRuntimeUiOverride();
-    internal bool AdoptLegacyEnabledForTest => btnAdoptLegacyVariant.Enabled;
     internal string RecoveryStatusForTest => lblRecoveryStatus.Text ?? string.Empty;
     internal IReadOnlyList<string> DefaultVariantLabelsForTest => cmbDefaultVariant.Items.Cast<object?>().Select(item => cmbDefaultVariant.GetItemText(item) ?? string.Empty).ToArray();
     internal int DefaultVariantComboWidthForTest => cmbDefaultVariant.Width;
@@ -507,27 +501,6 @@ internal sealed class MainForm : Form
         }
         throw new InvalidOperationException("Runtime UI record is not present in the grid.");
     }
-    internal int RuntimeUiUnassignedCountForTest => _runtimeUiState?.UnassignedLegacy.Count ?? 0;
-    internal int RuntimeUiLegacyRowCountForTest => 0;
-    // An unshown WinForms parent reports child Visible=false even when the
-    // notice is configured for display; expose presentation state instead.
-    internal bool RuntimeUiLegacyNoticeVisibleForTest => !string.IsNullOrWhiteSpace(lblRuntimeUiLegacyNotice.Text);
-    internal string RuntimeUiLegacyNoticeForTest => lblRuntimeUiLegacyNotice.Text ?? string.Empty;
-    internal bool RuntimeUiLegacyDiscardEnabledForTest => btnDiscardLegacyRuntimeUi.Enabled;
-    internal bool SelectRuntimeUiLegacyOverrideForTest(RuntimeUiLogicalRecordId id)
-    {
-        foreach (object? item in cmbRuntimeUiLegacy.Items)
-        {
-            if (item is RuntimeUiLegacyChoice choice && choice.Id == id)
-            {
-                cmbRuntimeUiLegacy.SelectedItem = choice;
-                UpdateRuntimeUiActions();
-                return true;
-            }
-        }
-        return false;
-    }
-    internal void DiscardSelectedRuntimeUiLegacyOverrideForTest() => DiscardSelectedRuntimeUiLegacyOverride(confirm: false);
     /// <summary>Headless semantic-field edit: composes one edited field and
     /// stores it for the VIEWED runtime, preserving already-translated
     /// hotspot button labels. Mirrors the modal editor OK path.</summary>
@@ -1034,18 +1007,8 @@ internal sealed class MainForm : Form
         btnResetRuntimeUi.Size = new Size(140, 30);
         btnResetRuntimeUi.Margin = new Padding(0, 4, 0, 0);
         btnResetRuntimeUi.Click += (_, _) => ResetSelectedRuntimeUiOverride();
-        btnDiscardLegacyRuntimeUi.Text = UiText.Get("RuntimeUi.DiscardLegacyOverride");
-        btnDiscardLegacyRuntimeUi.Size = new Size(190, 30);
-        btnDiscardLegacyRuntimeUi.Margin = new Padding(0, 4, 6, 0);
-        btnDiscardLegacyRuntimeUi.Click += (_, _) => DiscardSelectedRuntimeUiLegacyOverride(confirm: true);
-        cmbRuntimeUiLegacy.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbRuntimeUiLegacy.Width = 190;
-        cmbRuntimeUiLegacy.Margin = new Padding(0, 4, 6, 0);
-        lblRuntimeUiLegacyNotice.AutoSize = true;
-        lblRuntimeUiLegacyNotice.MaximumSize = new Size(850, 0);
-        lblRuntimeUiLegacyNotice.Margin = new Padding(0, 8, 6, 0);
-        foreach (Button button in new[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi, btnDiscardLegacyRuntimeUi }) ConfigureCenteredButton(button, allowWidthGrowth: true);
-        runtimeButtonFlow.Controls.AddRange(new Control[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi, lblRuntimeUiLegacyNotice, cmbRuntimeUiLegacy, btnDiscardLegacyRuntimeUi });
+        foreach (Button button in new[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi }) ConfigureCenteredButton(button, allowWidthGrowth: true);
+        runtimeButtonFlow.Controls.AddRange(new Control[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi });
         toolbar.Controls.Add(runtimeButtonFlow);
         toolbar.Controls.Add(lblRuntimeUiRuntime);
 
@@ -1209,19 +1172,16 @@ internal sealed class MainForm : Form
         btnRebuildOwnedVariant.Margin = new Padding(0, 4, 6, 0);
         btnRemoveOwnedVariant.Size = new Size(165, 30);
         btnRemoveOwnedVariant.Margin = new Padding(0, 4, 6, 0);
-        btnAdoptLegacyVariant.Size = new Size(165, 30);
-        btnAdoptLegacyVariant.Margin = new Padding(0, 4, 6, 0);
         btnReverseAllPreview.Size = new Size(155, 30);
         btnReverseAllPreview.Margin = new Padding(0, 4, 0, 0);
-        recoveryFlow.Controls.AddRange(new Control[] { btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnAdoptLegacyVariant, btnReverseAllPreview });
+        recoveryFlow.Controls.AddRange(new Control[] { btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview });
         btnVerifyPristine.Text = UiText.Get("Recovery.VerifyPristine"); btnRestoreBaselineLauncher.Text = UiText.Get("Recovery.RestoreLauncher");
-        btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnAdoptLegacyVariant.Text = UiText.Get("Recovery.AdoptLegacy"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
+        btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
         btnSaveGraphicsProject.Text = UiText.Get("SaveToProject");
         btnVerifyPristine.Click += (_, _) => VerifyPristineInstallation();
         btnRestoreBaselineLauncher.Click += (_, _) => RestoreBaselineLauncher();
         btnRebuildOwnedVariant.Click += (_, _) => RebuildOwnedVariant();
         btnRemoveOwnedVariant.Click += (_, _) => RemoveOwnedVariantDirectory();
-        btnAdoptLegacyVariant.Click += (_, _) => AdoptLegacyFlatVariant();
         btnReverseAllPreview.Click += (_, _) => PreviewReverseAllChanges();
         lblRecoveryStatus.AutoSize = true;
         lblRecoveryStatus.Dock = DockStyle.Top;
@@ -1269,7 +1229,7 @@ internal sealed class MainForm : Form
         variantManagerGrid.SelectionChanged += (_, _) => SelectVariantManagerRow();
         // One shared configuration: EN widths stay minima, longer SK/CZ
         // captions grow in width only; wrapping flows reflow the extra width.
-        foreach (Button button in new[] { btnSelectLauncherFile, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher, btnRunVariant, btnDebugVariant, btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnAdoptLegacyVariant, btnReverseAllPreview })
+        foreach (Button button in new[] { btnSelectLauncherFile, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher, btnRunVariant, btnDebugVariant, btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview })
             ConfigureCenteredButton(button, allowWidthGrowth: true);
         btnSelectLauncherFile.Click += (_, _) => SelectLauncherFile();
         btnPreviewLauncher.Click += (_, _) => PreviewLauncher();
@@ -1394,7 +1354,7 @@ internal sealed class MainForm : Form
     /// hash-verified) — never from a bare filename in the runtime parent,
     /// never from GameRoot, and never from metadata alone. The runtime
     /// parent (VARIANTS\E1VGA) is a container, never the selected edition
-    /// output. Legacy entries without project state keep the GameRoot check.
+    /// output. Catalog entries without project state keep the GameRoot check.
     /// </summary>
     private bool TryResolveVariantEntryPath(VariantEntry entry, out string fullPath)
     {
@@ -1648,7 +1608,6 @@ internal sealed class MainForm : Form
         btnRestoreBaselineLauncher.Enabled = false;
         btnRebuildOwnedVariant.Enabled = false;
         btnRemoveOwnedVariant.Enabled = false;
-        btnAdoptLegacyVariant.Enabled = false;
         btnReverseAllPreview.Enabled = active;
         lblRecoveryStatus.Text = active ? string.Empty : UiText.Get(UiLocalizationKeys.NoGameSelected) + " " + UiText.Get(UiLocalizationKeys.RecoveryActionsUnavailable);
     }
@@ -1665,32 +1624,7 @@ internal sealed class MainForm : Form
         btnRestoreBaselineLauncher.Enabled = inspection.ReversePreview.LauncherBackupAvailable;
         btnRebuildOwnedVariant.Enabled = owned && inspection.Baseline.Status == BaselineValidationStatus.MatchesBaseline;
         btnRemoveOwnedVariant.Enabled = owned;
-        // Adoptable legacy flat output (proven previous-era owned build for
-        // the SELECTED edition) gets an explicit action plus an explanation:
-        // without it, a disabled Rebuild looks like an ownership defect.
-        // Game-content subdirectories never count as sibling editions here.
-        VariantDirectoryService.VariantLegacyFlatInfo legacy = _variantDirectories.DetectLegacyFlatVariant(_activeProject, _activeVariant);
-        bool adoptable = IsAdoptableLegacy(_activeProject, legacy, _activeTranslationCode);
-        btnAdoptLegacyVariant.Enabled = adoptable;
-        if (adoptable)
-            lblRecoveryStatus.Text += " " + string.Format(UiText.Get("Recovery.LegacyDetected"), legacy.ManifestProjectCode ?? "?", _activeVariant.DirectoryKey);
         btnReverseAllPreview.Enabled = true;
-    }
-
-    /// <summary>Adoption-candidate rule (§4): legacy files + matching
-    /// schema-1 marker + no owned sibling editions + manifest code equal to
-    /// the explicitly selected edition. The normal edition path may report
-    /// ForeignDirectoryConflict at the same time; that never blocks this
-    /// independent, fully verified path.</summary>
-    private static bool IsAdoptableLegacy(ProjectContext project, VariantDirectoryService.VariantLegacyFlatInfo legacy, string projectCode)
-    {
-        if (!legacy.HasLegacyFiles || !legacy.HasMatchingMarker || legacy.HasOwnedEditions) return false;
-        if (string.IsNullOrWhiteSpace(legacy.ManifestProjectCode)) return false;
-        string expected;
-        try { expected = ProjectVariantOwnership.NormalizeCode(project, projectCode); }
-        catch (ArgumentException) { return false; }
-        catch (InvalidOperationException) { return false; }
-        return legacy.ManifestProjectCode.Equals(expected, StringComparison.OrdinalIgnoreCase);
     }
 
     private void VerifyPristineInstallation()
@@ -1717,28 +1651,6 @@ internal sealed class MainForm : Form
             SetStatus(result.Detail, error: true);
         // R9F V7: the resolver is already correct; still refresh every
         // consumer so no SK -> EN -> SK dance is needed to see the result.
-        OpenModsLauncher();
-        RefreshWorkflowStatus();
-    }
-
-    /// <summary>Explicit, user-confirmed adoption of a proven legacy flat
-    /// owned output into its runtime+edition directory. The service verifies
-    /// marker provenance, manifest identity and every payload byte before
-    /// moving anything; anything unproven aborts untouched with its reason.</summary>
-    private void AdoptLegacyFlatVariant()
-    {
-        if (_activeProject is null || _activeVariant is null) return;
-        VariantDirectoryService.VariantLegacyFlatInfo legacy = _variantDirectories.DetectLegacyFlatVariant(_activeProject, _activeVariant);
-        if (!IsAdoptableLegacy(_activeProject, legacy, _activeTranslationCode)) return;
-        string editionDisplay = ActiveEditionDisplayName();
-        string confirm = string.Format(UiText.Get("Recovery.ConfirmAdoptLegacy"), _activeVariant.DirectoryKey, legacy.ManifestProjectCode, editionDisplay);
-        if (MessageBox.Show(this, confirm, UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-        RecoverySafetyOperationResult result = _recoverySafety.AdoptLegacyFlatVariant(_activeProject, _activeVariant, _activeTranslationCode);
-        SetStatus(result.Detail, !result.Succeeded);
-        // R9F V7: adoption changes the authoritative runtime+edition target,
-        // so refresh ownership, build status, launch readiness, manager,
-        // edition availability, default-variant list, Run/Debug and text.
-        // The underlying resolver is fixed first; this refresh only reveals it.
         OpenModsLauncher();
         RefreshWorkflowStatus();
     }
@@ -2174,7 +2086,7 @@ internal sealed class MainForm : Form
         string exe = translationVariant?.ExeFile ?? _activeVariant?.SourceExecutableName ?? "—";
         string name = _activeVariant!.DisplayName;
         string original = _gamePcOriginal is null ? "GAMEPC" : Path.GetFileName(_gamePcOriginal.Path);
-        string originalStatus = _gamePcOriginal?.Status == GamePcOriginalStatus.VerifiedOriginal ? UiText.Get("VerifiedOriginal") : UiText.Get("BaselineCopy");
+        string originalStatus = _gamePcOriginal?.Status == GamePcBaselineStatus.VerifiedOriginal ? UiText.Get("VerifiedOriginal") : UiText.Get("BaselineCopy");
         // Two explicit rows retain the original lifecycle context without
         // clipping logical output names at the end of a long single line.
         lblTextOverview.Text = $"{UiText.Get("ActiveVariant")} {name}   |   {UiText.Get("Original")}: {original} ({originalStatus})\r\n" +
@@ -2227,7 +2139,7 @@ internal sealed class MainForm : Form
             ElviraGameProfile parserProfile = parserInstallation?.Game ?? ActiveGameProfile;
             if (_activeProject is null || !_activeProject.GameRoot.Equals(directory, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Text project is unavailable until a supported installation is activated.");
-            _gamePcOriginal = GamePcOriginalService.LoadProjectBaseline(_activeProject);
+            _gamePcOriginal = GamePcBaselineService.LoadProjectBaseline(_activeProject);
             TranslationProjectLoadResult projectText = _translationProjects.Load(_activeProject);
             if (!projectText.IsSuccess) throw new InvalidDataException(projectText.Detail ?? "Translation project data is invalid.");
             TranslationProjectState projectState = projectText.State!;
@@ -2309,8 +2221,9 @@ internal sealed class MainForm : Form
             return;
         }
         _runtimeUiState = loaded.State;
-        // Schema v1 migration notices (assigned/unassigned counts) surface here;
-        // the grid additionally lists unassigned residue as assignable rows.
+        // Load problems (including unsupported legacy formats) surface here
+        // as a one-shot notice; the grid additionally lists nothing beyond
+        // the frozen record set.
         _runtimeUiNotice = string.IsNullOrWhiteSpace(loaded.Detail) ? null : loaded.Detail;
         QueueRuntimeUiGridRefresh();
     }
@@ -2381,7 +2294,6 @@ internal sealed class MainForm : Form
         if (_runtimeUiProject is null || _runtimeUiVariant is null || _runtimeUiState is null)
         {
             runtimeUiGrid.Rows.Clear();
-            UpdateRuntimeUiLegacyPresentation();
             _runtimeUiGridRefreshCount++;
             UpdateRuntimeUiActions();
             return;
@@ -2473,10 +2385,6 @@ internal sealed class MainForm : Form
                     _runtimeUiVariant.RuntimeKind is VariantRuntimeKind.Elvira1Vga or VariantRuntimeKind.Elvira1Ega)
                     row.Cells["Override"].ToolTipText = UiText.Get("RuntimeUi.PauseTitleHint");
             }
-            // V8.1: unassigned v1 residue is migration metadata, not a row of
-            // the selected runtime. It remains separately visible and can only
-            // be explicitly discarded from project state.
-            UpdateRuntimeUiLegacyPresentation();
             // Restore the pre-rebuild record selection. This runs outside any
             // cell transition (the rebuild itself was deferred), and the
             // _runtimeUiRefreshing guard above suppresses any commit handling
@@ -2552,51 +2460,6 @@ internal sealed class MainForm : Form
         if (_runtimeUiProject is null || _runtimeUiState is null || _runtimeUiVariant is null) return;
         if (runtimeUiGrid.CurrentRow?.Tag is not RuntimeUiLogicalRecordId id) return;
         _runtimeUiState = _runtimeUiTexts.RemoveOverride(_runtimeUiProject, _runtimeUiState, _runtimeUiVariant.RuntimeKind, id);
-        _runtimeUiDirty = true;
-        _runtimeUiNotice = null;
-        QueueRuntimeUiGridRefresh();
-        RefreshWorkflowStatus();
-    }
-
-    private void UpdateRuntimeUiLegacyPresentation()
-    {
-        RuntimeUiUnassignedLegacyRecord[] legacy = _runtimeUiState?.UnassignedLegacy.ToArray() ?? [];
-        bool visible = legacy.Length > 0;
-        lblRuntimeUiLegacyNotice.Visible = visible;
-        cmbRuntimeUiLegacy.Visible = visible;
-        btnDiscardLegacyRuntimeUi.Visible = visible;
-        if (!visible)
-        {
-            lblRuntimeUiLegacyNotice.Text = string.Empty;
-            cmbRuntimeUiLegacy.Items.Clear();
-            return;
-        }
-        RuntimeUiLogicalRecordId? selected = (cmbRuntimeUiLegacy.SelectedItem as RuntimeUiLegacyChoice)?.Id;
-        cmbRuntimeUiLegacy.Items.Clear();
-        foreach (RuntimeUiUnassignedLegacyRecord value in legacy)
-        {
-            string displayName = _runtimeUiProject is null
-                ? value.LogicalRecordId.ToString()
-                : _runtimeUiTexts.GetDefinitions(_runtimeUiProject).SingleOrDefault(definition => definition.LogicalRecordId == value.LogicalRecordId)?.DisplayName
-                    ?? value.LogicalRecordId.ToString();
-            cmbRuntimeUiLegacy.Items.Add(new RuntimeUiLegacyChoice(value.LogicalRecordId, displayName));
-        }
-        cmbRuntimeUiLegacy.SelectedItem = cmbRuntimeUiLegacy.Items.Cast<RuntimeUiLegacyChoice>()
-            .FirstOrDefault(choice => choice.Id == selected) ?? cmbRuntimeUiLegacy.Items[0];
-        lblRuntimeUiLegacyNotice.Text = string.Format(UiText.Get(legacy.Length == 1
-            ? "RuntimeUi.LegacyNotice.Single"
-            : "RuntimeUi.LegacyNotice.Plural"), legacy.Length);
-        btnDiscardLegacyRuntimeUi.Text = UiText.Get("RuntimeUi.DiscardLegacyOverride");
-    }
-
-    private void DiscardSelectedRuntimeUiLegacyOverride(bool confirm)
-    {
-        if (_runtimeUiProject is null || _runtimeUiState is null || ProjectVariantOwnership.IsOriginal(_activeTranslationCode)) return;
-        if (cmbRuntimeUiLegacy.SelectedItem is not RuntimeUiLegacyChoice choice) return;
-        if (confirm && MessageBox.Show(this, UiText.Get("RuntimeUi.DiscardLegacyConfirm"), UiText.Get("RuntimeUi.Title"),
-            MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-            return;
-        _runtimeUiState = _runtimeUiTexts.DiscardUnassigned(_runtimeUiProject, _runtimeUiState, choice.Id);
         _runtimeUiDirty = true;
         _runtimeUiNotice = null;
         QueueRuntimeUiGridRefresh();
@@ -2719,14 +2582,13 @@ internal sealed class MainForm : Form
         btnReloadRuntimeUi.Enabled = !string.IsNullOrWhiteSpace(txtGameDir.Text);
         btnSaveRuntimeUi.Enabled = ready && _runtimeUiDirty;
         btnResetRuntimeUi.Enabled = ready && RuntimeUiSelectedRowSupportsReset();
-        btnDiscardLegacyRuntimeUi.Enabled = ready && cmbRuntimeUiLegacy.SelectedItem is RuntimeUiLegacyChoice;
     }
 
     /// <summary>
     /// R9F: Reset is row-specific. It is enabled only where an override can
     /// exist and be cleared meaningfully: VGA Pause.menu and
-    /// audited EGA records with a stored override (RUNIT preserves its legacy
-    /// cell behavior). All other rows stay disabled instead of silently doing
+    /// audited EGA records with a stored override (RUNIT rows stay read-only).
+    /// All other rows stay disabled instead of silently doing
     /// nothing.
     /// </summary>
     private bool RuntimeUiSelectedRowSupportsReset()
@@ -2976,11 +2838,6 @@ internal sealed class MainForm : Form
 
     private void OpenTextDataFile(string path)
     {
-        if (Path.GetFileName(path).Equals(GamePcOriginalService.OriginalFileName, StringComparison.OrdinalIgnoreCase))
-        {
-            ShowVariantError("GAMEPCO is the protected Original source and cannot be opened as the editable Translation file.");
-            return;
-        }
         SetCurrentDataFile(path);
         LoadGamePcTexts();
         SwitchMode(tabText);
@@ -3188,7 +3045,6 @@ internal sealed class MainForm : Form
         btnReloadRuntimeUi.Text = UiText.Get("RuntimeUi.Reload");
         btnSaveRuntimeUi.Text = UiText.Get("SaveToProject");
         btnResetRuntimeUi.Text = UiText.Get("RuntimeUi.ResetOverride");
-        UpdateRuntimeUiLegacyPresentation();
         // V8.2: live locale switch must regenerate localized Status/Detail
         // cells from existing in-memory state. Presentation-only: no dirty,
         // no save, no source reload; column widths are untouched because the
@@ -3197,7 +3053,7 @@ internal sealed class MainForm : Form
         btnRunVariant.Text = UiText.Get("Execution.Run"); btnDebugVariant.Text = UiText.Get("Execution.Debug");
         lblRecoveryTitle.Text = UiText.Get("Recovery.Title");
         btnVerifyPristine.Text = UiText.Get("Recovery.VerifyPristine"); btnRestoreBaselineLauncher.Text = UiText.Get("Recovery.RestoreLauncher");
-        btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnAdoptLegacyVariant.Text = UiText.Get("Recovery.AdoptLegacy"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
+        btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
         btnBrowseGame.Text = UiText.Get("Browse");
         btnFindGames.Text = UiText.Get("FindGames");
         lblActiveProjectCaption.Text = UiText.Get("Edition") + ":";
@@ -4049,7 +3905,7 @@ internal sealed class MainForm : Form
         tabFont.Invalidate(true);
     }
 
-    // Legacy VariantEntry metadata describes editable GAMEPC* translation files.
+    // VariantEntry metadata describes editable GAMEPC* translation files.
     // It is deliberately not the global runtime selection.
     private VariantEntry? ActiveDataFileVariant =>
         _variantCatalog?.FindByDataFile(Path.GetFileName(_currentDataFilePath ?? string.Empty));
@@ -5647,7 +5503,6 @@ internal sealed class MainForm : Form
             (btnRestoreBaselineLauncher, nameof(btnRestoreBaselineLauncher)),
             (btnRebuildOwnedVariant, nameof(btnRebuildOwnedVariant)),
             (btnRemoveOwnedVariant, nameof(btnRemoveOwnedVariant)),
-            (btnAdoptLegacyVariant, nameof(btnAdoptLegacyVariant)),
             (btnReverseAllPreview, nameof(btnReverseAllPreview)),
             (btnRunVariant, nameof(btnRunVariant)), (btnDebugVariant, nameof(btnDebugVariant)),
             (btnOpenDataFile, nameof(btnOpenDataFile)), (btnReloadTexts, nameof(btnReloadTexts)),
@@ -5936,13 +5791,6 @@ internal sealed record VariantManagerRow(
     VariantBuildStatus BuildStatus,
     int ConfiguredCapabilities,
     int CapabilityCount);
-
-/// <summary>Explicit selection of unassigned migration residue. It carries
-/// no runtime identity and can only be discarded from project metadata.</summary>
-internal sealed record RuntimeUiLegacyChoice(RuntimeUiLogicalRecordId Id, string Display)
-{
-    public override string ToString() => Display;
-}
 
 internal sealed record PalettePreviewChoice(int? BankIndex, string Display)
 {

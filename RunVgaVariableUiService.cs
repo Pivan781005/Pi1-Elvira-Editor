@@ -482,23 +482,6 @@ internal static class RunVgaVariableUiService
         return true;
     }
 
-    /// <summary>Migration for old VGA Pause title-only overrides: the saved
-    /// title carries over; Continue/Quit reset to the English originals per
-    /// the frozen contract. Returns false for non-title-only shapes.</summary>
-    internal static bool TryMigratePauseTitle(string? fullRecord, out string title, out string migrated)
-    {
-        title = string.Empty; migrated = string.Empty;
-        if (!RunVgaPauseMenuService.TryExtractTitle(fullRecord, out string? extracted) || extracted is null) return false;
-        title = extracted;
-        var edits = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["title"] = title,
-            ["continue"] = "Continue",
-            ["quit"] = "Quit"
-        };
-        return TryCompose(RuntimeUiLogicalRecordId.PauseMenu, edits, out migrated, out _, out _);
-    }
-
     /// <summary>In-place decision: payload+NUL fits the historical envelope.</summary>
     internal static RunVgaMaterializationKind Decide(RuntimeUiLogicalRecordId id, string fullRecord)
     {

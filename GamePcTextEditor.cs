@@ -19,12 +19,9 @@ internal static class GamePcTextEditor
     private const int TextBlockLengthOffset = 0x10;
     private const int MaximumStringCount = 100_000;
 
-    // Unknown files retain the historical compatibility parser. Recognized
-    // Elvira I and Elvira II installations always use the verified header
-    // contract above.
-    private const int LegacyStringTableStart = 0x12;
-    private const int LegacyStringTableLastStart = 0x3C00;
-
+    // v1.0 supports exactly the two verified contracts below. There is no
+    // generic fallback: unrecognized game profiles fail closed instead of
+    // being guessed by a historical compatibility parser.
     internal static byte? GetTerminalDelimiter(GamePcStringEntry baseEntry)
     {
         if (baseEntry.OriginalBytes.Length == 0) return null;
@@ -33,7 +30,7 @@ internal static class GamePcTextEditor
     }
 
     /// <summary>
-    /// Immutable GAMEPCO metadata for the legacy two-choice mouse menu resource.
+    /// Immutable baseline metadata for the legacy two-choice mouse menu resource.
     /// This deliberately recognizes the original semantic resource (ASCII YES/NO),
     /// not a physical string index: its two token start columns are the engine's
     /// fixed hitbox columns and must survive localization.
@@ -114,7 +111,7 @@ internal static class GamePcTextEditor
         {
             ElviraGameProfile.Elvira1 => LoadHeaderDefinedEntries(data, "Elvira I"),
             ElviraGameProfile.Elvira2 => LoadHeaderDefinedEntries(data, "Elvira II"),
-            _ => LoadLegacyEntries(data)
+            _ => throw new InvalidDataException("A supported Elvira game profile (Elvira I or Elvira II) is required to parse GAMEPC data.")
         };
     }
 
@@ -174,45 +171,6 @@ internal static class GamePcTextEditor
         return (int)value;
     }
 
-    private static List<GamePcStringEntry> LoadLegacyEntries(byte[] data)
-    {
-        var list = new List<GamePcStringEntry>();
-
-        int pos = LegacyStringTableStart;
-        int index = 0;
-
-        while (pos < data.Length && pos < LegacyStringTableLastStart)
-        {
-            int start = pos;
-
-            if (index == 0 && pos == LegacyStringTableStart)
-            {
-                int prefixBytes = Math.Min(2, data.Length - pos);
-                pos += prefixBytes;
-                start = pos;
-            }
-
-            while (pos < data.Length && data[pos] != 0)
-                pos++;
-
-            int len = pos - start;
-            byte[] bytes = data.AsSpan(start, len).ToArray();
-            list.Add(new GamePcStringEntry(index, start, len, bytes));
-
-            index++;
-
-            int terminatorOffset = pos;
-            if (terminatorOffset >= LegacyStringTableLastStart)
-                break;
-
-            // Skip the terminating NUL.
-            if (pos < data.Length)
-                pos++;
-        }
-
-        return list;
-    }
-
     public static void ValidateText(string text, Encoding enc)
     {
         if (text.IndexOf('\0') >= 0)
@@ -233,9 +191,9 @@ internal static class GamePcTextEditor
     }
 
     /// <summary>
-    /// Produces a complete, validated GAMEPC image. Recognized Elvira profiles
-    /// use the header-counted text-pool repacker; unknown legacy files retain
-    /// the historical fixed-slot compatibility behavior.
+    /// Produces a complete, validated GAMEPC image for a supported Elvira
+    /// profile using the header-counted text-pool repacker. Unrecognized
+    /// profiles fail closed.
     /// </summary>
     internal static byte[] BuildEditedData(
         string dataFilePath,
@@ -250,7 +208,7 @@ internal static class GamePcTextEditor
         {
             ElviraGameProfile.Elvira1 => RepackHeaderDefined(data, edited, entries, enc, "Elvira I", baseEntries),
             ElviraGameProfile.Elvira2 => RepackHeaderDefined(data, edited, entries, enc, "Elvira II"),
-            _ => BuildLegacyFixedSlotData(data, edited, entries, enc)
+            _ => throw new InvalidDataException("A supported Elvira game profile (Elvira I or Elvira II) is required to repack GAMEPC data.")
         };
     }
 
@@ -331,53 +289,19 @@ internal static class GamePcTextEditor
         return output;
     }
 
-    private static byte[] BuildLegacyFixedSlotData(
-        byte[] data,
-        IReadOnlyDictionary<int, string> edited,
-        IReadOnlyList<GamePcStringEntry> entries,
-        Encoding enc)
-    {
-
-        foreach (var kvp in edited)
-        {
-            var entry = entries.FirstOrDefault(e => e.Index == kvp.Key)
-                ?? throw new InvalidOperationException($"Unknown string index {kvp.Key}.");
-
-            ValidateText(kvp.Value, enc);
-            byte[] newBytes = enc.GetBytes(kvp.Value);
-            if (entry.Offset < 0 || entry.ByteLength < 0 || entry.Offset > data.Length - entry.ByteLength - 1)
-                throw new InvalidDataException($"String index {entry.Index} does not fit inside the source GAMEPC file.");
-            if (newBytes.Length > entry.ByteLength)
-            {
-                throw new InvalidOperationException(
-                    $"{UiText.Get("TooLong")} Index {entry.Index}: {newBytes.Length}>{entry.ByteLength}");
-            }
-
-            Array.Copy(newBytes, 0, data, entry.Offset, newBytes.Length);
-
-            // Clear unused bytes inside the original slot.
-            for (int i = newBytes.Length; i < entry.ByteLength; i++)
-                data[entry.Offset + i] = 0;
-
-            // Keep the original NUL terminator position intact.
-            int terminator = entry.Offset + entry.ByteLength;
-            if (terminator < data.Length)
-                data[terminator] = 0;
-        }
-
-        return data;
-    }
-
-    public static void SaveInPlace(
-        string dataFilePath,
+    /// <summary>Repacks a disposable working copy (variant-named file, never a
+    /// pristine game asset). Protected original names are refused by the
+    /// firewall below.</summary>
+    public static void RepackWorkingCopy(
+        string workingCopyPath,
         IReadOnlyDictionary<int, string> edited,
         IReadOnlyList<GamePcStringEntry> entries,
         Encoding enc,
         ElviraGameProfile profile = ElviraGameProfile.Unknown,
         IReadOnlyList<GamePcStringEntry>? baseEntries = null)
     {
-        byte[] data = BuildEditedData(dataFilePath, edited, entries, enc, profile, baseEntries);
-        GameDataFileService.WriteCurrent(dataFilePath, data, entries.Count, profile);
+        byte[] data = BuildEditedData(workingCopyPath, edited, entries, enc, profile, baseEntries);
+        GameDataFileService.WriteWorkingCopy(workingCopyPath, data, entries.Count, profile);
     }
 
     internal static void ValidateSerializedData(string temporaryPath, int expectedEntryCount, ElviraGameProfile profile)
@@ -402,9 +326,9 @@ internal static class GamePcTextEditor
 }
 
 /// <summary>
-/// Target-aware persistence for compatible Elvira data files. Only the literal original
-/// GAMEPC participates in the legacy GAMEPCO immutable-original rule; named variants are
-/// working files and use transactional replacement without inventing a second backup format.
+/// Target-aware persistence for compatible Elvira data files. Named variant
+/// and working copies are written transactionally; protected original game
+/// asset names are refused before any I/O.
 /// </summary>
 internal static class GameDataFileService
 {
@@ -418,8 +342,6 @@ internal static class GameDataFileService
 
     public static string SaveAsNew(string sourcePath, string destinationPath, IReadOnlyDictionary<int, string> edits, IReadOnlyList<GamePcStringEntry> entries, Encoding enc, ElviraGameProfile profile = ElviraGameProfile.Unknown, IReadOnlyList<GamePcStringEntry>? baseEntries = null)
     {
-        GamePcOriginalService.RejectProtectedPath(sourcePath);
-        GamePcOriginalService.RejectProtectedPath(destinationPath);
         GameRootWriteGuard.RejectProtectedFileName(destinationPath);
         ValidateNewVariantDestination(sourcePath, destinationPath);
         byte[] data = GamePcTextEditor.BuildEditedData(sourcePath, edits, entries, enc, profile, baseEntries);
@@ -427,21 +349,20 @@ internal static class GameDataFileService
         return Path.GetFullPath(destinationPath);
     }
 
-    public static void WriteCurrent(string dataFilePath, byte[] data, int expectedEntryCount, ElviraGameProfile profile)
+    /// <summary>Transactional replace of a disposable working copy. Protected
+    /// original game asset names are refused before any I/O.</summary>
+    internal static void WriteWorkingCopy(string workingCopyPath, byte[] data, int expectedEntryCount, ElviraGameProfile profile)
     {
         // Dormant in normal production UI, but a future caller must never reach
-        // a protected GameRoot asset through this writer. In-place GAMEPC
-        // replacement is obsolete: the SafeDeployer primitive was deleted, so
-        // any residual GAMEPC targeting fails here instead of deploying.
-        GameRootWriteGuard.RejectProtectedFileName(dataFilePath);
-        GamePcOriginalService.RejectProtectedPath(dataFilePath);
-        if (!File.Exists(dataFilePath)) throw new FileNotFoundException("Current data file is missing.", dataFilePath);
-        string temp = TemporaryPath(dataFilePath, "save");
+        // a protected GameRoot asset through this writer.
+        GameRootWriteGuard.RejectProtectedFileName(workingCopyPath);
+        if (!File.Exists(workingCopyPath)) throw new FileNotFoundException("Working copy is missing.", workingCopyPath);
+        string temp = TemporaryPath(workingCopyPath, "save");
         try
         {
             File.WriteAllBytes(temp, data);
             GamePcTextEditor.ValidateSerializedData(temp, expectedEntryCount, profile);
-            ReplaceWorkingVariant(dataFilePath, temp);
+            ReplaceWorkingVariant(workingCopyPath, temp);
         }
         finally
         {
@@ -451,8 +372,6 @@ internal static class GameDataFileService
 
     private static void ValidateNewVariantDestination(string sourcePath, string destinationPath)
     {
-        GamePcOriginalService.RejectProtectedPath(sourcePath);
-        GamePcOriginalService.RejectProtectedPath(destinationPath);
         string sourceDirectory = Path.GetDirectoryName(Path.GetFullPath(sourcePath)) ?? throw new IOException("Source directory is unavailable.");
         string destinationDirectory = Path.GetDirectoryName(Path.GetFullPath(destinationPath)) ?? throw new IOException("Destination directory is unavailable.");
         if (!sourceDirectory.Equals(destinationDirectory, StringComparison.OrdinalIgnoreCase))

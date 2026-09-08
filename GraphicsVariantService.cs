@@ -64,39 +64,8 @@ internal sealed class GraphicsVariantService
     private sealed record Document(int SchemaVersion, string GameId, IReadOnlyList<Record> Edits);
     private sealed record Record(string ResourceFileName, int ImageId, string ReplacementPngPath, GraphicsEditScope Scope, VariantRuntimeKind? RuntimeKind);
 
-    // Legacy runtime-wide path. It is retained only for read-only migration
-    // detection and old isolated-service callers; MainForm never projects it.
-    public string GetPath(ProjectContext project) => Path.Combine(Require(project).ProjectRoot, FileName);
     public string GetPath(ProjectContext project, string projectVariantCode) =>
         ProjectVariantOwnership.GetOwnedStatePath(Require(project), projectVariantCode, FileName);
-    public GraphicsProjectLoadResult Load(ProjectContext project)
-    {
-        project = Require(project); string path = GetPath(project);
-        if (!File.Exists(path)) return new(GraphicsProjectLoadStatus.Success, GraphicsProjectState.Empty(project.GameProfile));
-        try
-        {
-            Document? document = JsonSerializer.Deserialize<Document>(File.ReadAllText(path), JsonOptions);
-            if (document is null || document.Edits is null || string.IsNullOrWhiteSpace(document.GameId)) return new(GraphicsProjectLoadStatus.InvalidRecord, Detail: "Graphics project document is incomplete.");
-            if (document.SchemaVersion != SchemaVersion) return new(GraphicsProjectLoadStatus.UnsupportedSchema);
-            if (!document.GameId.Equals(PristineManifestService.GameIdFor(project.GameProfile), StringComparison.Ordinal)) return new(GraphicsProjectLoadStatus.GameMismatch);
-            var edits = new List<GraphicsProjectEdit>(); var identities = new HashSet<GraphicsProjectIdentity>();
-            foreach (Record record in document.Edits)
-            {
-                try
-                {
-                    var edit = new GraphicsProjectEdit(new(record.ResourceFileName, record.ImageId), record.ReplacementPngPath, record.Scope, record.RuntimeKind);
-                    ValidateRuntime(project.GameProfile, edit);
-                    if (!identities.Add(edit.Identity)) return new(GraphicsProjectLoadStatus.DuplicateIdentity, Detail: edit.Identity.ToString());
-                    edits.Add(edit);
-                }
-                catch (ArgumentException ex) { return new(GraphicsProjectLoadStatus.InvalidRecord, Detail: ex.Message); }
-            }
-            return new(GraphicsProjectLoadStatus.Success, new(document.GameId, Sort(edits)));
-        }
-        catch (JsonException ex) { return new(GraphicsProjectLoadStatus.InvalidJson, Detail: ex.Message); }
-        catch (IOException ex) { return new(GraphicsProjectLoadStatus.InvalidRecord, Detail: ex.Message); }
-    }
-
     public GraphicsProjectLoadResult Load(ProjectContext project, string projectVariantCode)
     {
         project = Require(project);
@@ -127,23 +96,6 @@ internal sealed class GraphicsVariantService
         ValidateRuntime(game, edit);
         return edit.Scope == GraphicsEditScope.Shared ? GraphicsApplicabilityStatus.Shared : edit.RuntimeKind == runtime ? GraphicsApplicabilityStatus.RuntimeSpecific : GraphicsApplicabilityStatus.Unsupported;
     }
-    public GraphicsProjectSaveResult Save(ProjectContext project, GraphicsProjectState state)
-    {
-        project = Require(project); ValidateState(project, state); string path = GetPath(project);
-        try
-        {
-            // Creation is intentionally limited to this explicit Save operation.
-            // Load/projection remains completely read-only for unopened projects.
-            Directory.CreateDirectory(project.ProjectRoot);
-            var document = new Document(SchemaVersion, state.GameId, state.Edits.Select(edit => new Record(edit.Identity.ResourceFileName, edit.Identity.ImageId, edit.ReplacementPngPath, edit.Scope, edit.RuntimeKind)).ToArray());
-            string temp = path + ".tmp";
-            try { File.WriteAllText(temp, JsonSerializer.Serialize(document, JsonOptions)); File.Move(temp, path, true); }
-            finally { if (File.Exists(temp)) File.Delete(temp); }
-            return new(true, path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return new(false, path, ex.Message); }
-    }
-
     public GraphicsProjectSaveResult Save(ProjectContext project, string projectVariantCode, GraphicsProjectState state)
     {
         project = Require(project);
