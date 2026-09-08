@@ -1,4 +1,4 @@
-# Elvira VGA Editor — GUI + automatický deploy
+# π1 Elvira Editor — GUI + automatický deploy
 
 ## Bezpečnosť CP852 fontu pre Elvira I a II
 
@@ -37,7 +37,7 @@ Tlačidlo `Obnoviť originál` vráti `.bak_original` späť na pôvodný názov
 
 ## Ako použiť
 
-1. Otvor `ElviraVgaEditor.sln` vo Visual Studio 2022.
+1. Otvor `Pi1ElviraEditor.sln` vo Visual Studio 2022.
 2. F5.
 3. Herný adresár je predvyplnený:
    `C:\Games\GOG\Elvira`

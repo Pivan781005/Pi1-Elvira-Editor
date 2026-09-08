@@ -466,6 +466,7 @@ internal sealed class VectorFontImportDialog : Form
     {
         _sourcePath = sourcePath;
         Text = UiText.Get("VectorTitle");
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
         Width = 650;
         Height = 500;
         MinimumSize = new Size(620, 460);

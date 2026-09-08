@@ -12,6 +12,7 @@ internal sealed class AboutViewerForm : Form
         MinimumSize = new Size(560, 390);
         Size = new Size(720, 540);
         AutoScaleMode = AutoScaleMode.Dpi;
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
         _content.Dock = DockStyle.Fill;
         _content.ReadOnly = true;
         _content.BorderStyle = BorderStyle.None;

@@ -15,6 +15,7 @@ internal sealed class VariantEntryDialog : Form
     internal VariantEntryDialog(VariantEntry? entry = null, string? displayName = null, string? dataFile = null, bool enabled = true)
     {
         Text = UiText.Get(entry is null ? "VariantDialogAddTitle" : "VariantDialogEditTitle");
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;

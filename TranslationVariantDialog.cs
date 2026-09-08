@@ -13,6 +13,7 @@ internal sealed class TranslationVariantDialog : Form
     {
         _game = game;
         Text = UiText.Get("CreateVariant");
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;

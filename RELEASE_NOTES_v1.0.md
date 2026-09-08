@@ -1,6 +1,6 @@
-﻿# π1 Elvira I & II Editor v1.0
+﻿# π1 Elvira Editor v1.0
 
-Initial public release of **π1 Elvira I & II Editor**.
+Initial public release of **π1 Elvira Editor**.
 
 A Windows editor for working with graphics and text resources from **Elvira: Mistress of the Dark** and **Elvira II: The Jaws of Cerberus**.
 
@@ -38,7 +38,7 @@ A Windows editor for working with graphics and text resources from **Elvira: Mis
 
 1. Download the R11 release package (final package identity is populated during R11 release packaging).
 2. Extract the archive.
-3. Run `Pi1ElviraVgaEditor.exe`.
+3. Run `Pi1ElviraEditor.exe`.
 4. Select your Elvira I or Elvira II game directory via **Find games...** or **Browse folder...**.
 
 No separate .NET installation required (self-contained x64 build).

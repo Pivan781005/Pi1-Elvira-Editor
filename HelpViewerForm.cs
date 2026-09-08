@@ -16,6 +16,7 @@ internal sealed class HelpViewerForm : Form
         MinimumSize = new Size(760, 520);
         Size = new Size(1040, 720);
         AutoScaleMode = AutoScaleMode.Dpi;
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
         // Do not set splitter constraints before the modeless form has a real client size.
         // WinForms validates those setters immediately and can reject the initial zero-width layout.

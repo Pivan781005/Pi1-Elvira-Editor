@@ -25,6 +25,7 @@ internal sealed class CharacterSetViewerForm : Form
         _selectionChanged = selectionChanged;
         AutoScaleMode = AutoScaleMode.Dpi;
         Text = UiText.Get("FullSetTitle");
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
         Width = 1500;
         Height = 720;
         MinimumSize = new Size(900, 520);

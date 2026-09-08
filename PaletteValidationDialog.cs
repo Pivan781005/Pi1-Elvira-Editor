@@ -14,6 +14,7 @@ internal sealed class PaletteValidationDialog : Form
 
         AutoScaleMode = AutoScaleMode.Dpi;
         Text = UiText.Get("Graphics.ReplaceValidationTitle");
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         MaximizeBox = false;

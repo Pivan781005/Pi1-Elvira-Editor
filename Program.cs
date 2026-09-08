@@ -1137,6 +1137,18 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("Production runtime diagnostic audit: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 1 && args[0].Equals("--branding-assets-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { RunBrandingAssetsSmoke(); Console.WriteLine("Branding assets: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Branding assets: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 1 && args[0].Equals("--startup-splash-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { RunStartupSplashSmoke(); Console.WriteLine("Startup splash: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Startup splash: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 1 && args[0].Equals("--version-smoke", StringComparison.OrdinalIgnoreCase))
         {
             try { RunVersionSmoke(); Console.WriteLine("Product version: PASS"); Environment.ExitCode = 0; }
@@ -1144,7 +1156,54 @@ internal static class Program
             return;
         }
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        using var splash = new StartupSplashCoordinator();
+        splash.Start();
+        MainForm mainForm;
+        try
+        {
+            // MainForm stays on the normal STA UI thread; construction runs
+            // concurrently with the dedicated splash STA thread. No sleep
+            // occurs before initialization begins.
+            mainForm = new MainForm();
+        }
+        catch
+        {
+            // The using disposal closes the splash thread promptly; the
+            // original exception is preserved for existing error reporting.
+            throw;
+        }
+        using (mainForm)
+        {
+            bool splashClosed = false;
+            mainForm.Shown += (_, _) =>
+            {
+                if (splashClosed)
+                    return;
+                splashClosed = true;
+                // Minimum-visibility sleep runs off the UI thread so the main
+                // window never freezes; the splash thread stays responsive.
+                _ = Task.Run(() =>
+                {
+                    try { splash.SignalMainReady(); }
+                    catch { }
+                });
+            };
+            try
+            {
+                Application.Run(mainForm);
+            }
+            finally
+            {
+                // If Shown never fired (startup failure), close promptly.
+                // Never swallows the original exception.
+                if (!splashClosed)
+                {
+                    splashClosed = true;
+                    try { splash.SignalMainReady(); }
+                    catch { }
+                }
+            }
+        }
     }
 
     private static void RunElvira1PaletteResolverSmoke(string elvira1Directory, string elvira2Directory)
@@ -1626,6 +1685,139 @@ internal static class Program
     }
 
     private static int ReadTextBlockLength(byte[] data) => checked((int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(0x10, 4)));
+
+    private static void RunBrandingAssetsSmoke()
+    {
+        var assembly = typeof(Program).Assembly;
+        Require(string.Equals(assembly.GetName().Name, "Pi1ElviraEditor", StringComparison.Ordinal), "Assembly name is not Pi1ElviraEditor.");
+        Require(AppInfo.ProductName == "π1 Elvira Editor", "Product name does not resolve to π1 Elvira Editor.");
+        Require(AppInfo.ProductTitle == "π1 Elvira Editor v" + AppInfo.ProductVersion, "Product title does not resolve to π1 Elvira Editor.");
+        Require(BrandingAssets.SplashResourceExists(), "Splash embedded resource is missing.");
+        Require(assembly.GetManifestResourceNames().Contains(BrandingAssets.SplashResourceName, StringComparer.Ordinal), "Splash manifest resource name mismatch.");
+
+        using (Image image = BrandingAssets.LoadSplashImage())
+        {
+            Require(image.Width > 0 && image.Height > 0, "Splash image has invalid dimensions.");
+            double aspect = (double)image.Width / image.Height;
+            Require(aspect > 1.0 && aspect < 3.0, $"Splash aspect ratio is insane: {aspect}.");
+            foreach (Size working in new[] { new Size(1920, 1080), new Size(3840, 2160), new Size(1366, 768) })
+            {
+                Size fitted = StartupSplashForm.ComputeSplashSize(image.Size, working);
+                Require(fitted.Width <= working.Width && fitted.Height <= working.Height, "Splash fit exceeds the working area.");
+                Require(fitted.Width <= image.Width && fitted.Height <= image.Height, "Splash fit upscaled beyond the original artwork.");
+                double fittedAspect = (double)fitted.Width / fitted.Height;
+                Require(Math.Abs(fittedAspect - aspect) < 0.02, "Splash fit did not preserve the aspect ratio.");
+            }
+            Size fourK = StartupSplashForm.ComputeSplashSize(image.Size, new Size(3840, 2160));
+            Require(fourK.Width <= image.Width && fourK.Height <= image.Height, "4K splash upscaled beyond the original artwork.");
+        }
+
+        // Embedded load already proved Downloads and EXE-sidecar PNGs are not
+        // runtime dependencies: the image comes purely from the manifest.
+        using (Image embedded = BrandingAssets.LoadSplashImage())
+        {
+            Require(embedded.Width > 0 && embedded.Height > 0, "Embedded splash reload failed.");
+        }
+
+        string icoPath = LocateBrandingIco();
+        Require(File.Exists(icoPath), $"Application ICO was not found: {icoPath}.");
+        IReadOnlyList<Size> frames = BrandingAssets.GetIcoFrameSizes(icoPath);
+        foreach (int required in new[] { 16, 32, 48, 256 })
+            Require(frames.Any(size => size.Width == required && size.Height == required), $"ICO is missing {required}x{required}.");
+
+        try
+        {
+            string? exePath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(exePath))
+                exePath = assembly.Location;
+            using Icon? exeIcon = Icon.ExtractAssociatedIcon(exePath);
+            Require(exeIcon is not null && exeIcon.Width > 0 && exeIcon.Height > 0, "EXE has no extractable icon.");
+        }
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidDataException("EXE icon extraction failed: " + ex.Message);
+        }
+
+        string exeDirectory = AppContext.BaseDirectory;
+        DateTime currentWrite = File.GetLastWriteTimeUtc(assembly.Location);
+        foreach (string oldName in new[] { "Pi1ElviraVgaEditor.exe", "Pi1ElviraVgaEditor.dll", "ElviraVgaEditor.exe", "ElviraVgaEditor.dll" })
+        {
+            string candidate = Path.Combine(exeDirectory, oldName);
+            if (!File.Exists(candidate))
+                continue;
+            // Do not confuse stale ignored files from an old build with newly
+            // produced files: only a freshly produced old-identity file fails.
+            DateTime oldWrite = File.GetLastWriteTimeUtc(candidate);
+            if (oldWrite >= currentWrite - TimeSpan.FromMinutes(2))
+                throw new InvalidDataException($"Fresh old-identity output was produced beside the EXE: {oldName}.");
+        }
+    }
+
+    private static string LocateBrandingIco()
+    {
+        string? directory = AppContext.BaseDirectory;
+        for (int level = 0; level < 9 && directory is not null; level++)
+        {
+            string candidate = Path.Combine(directory, "Assets", "Branding", "Pi1ElviraEditor.ico");
+            if (File.Exists(candidate))
+                return candidate;
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+        string fromCwd = Path.Combine(Directory.GetCurrentDirectory(), "Assets", "Branding", "Pi1ElviraEditor.ico");
+        if (File.Exists(fromCwd))
+            return fromCwd;
+        return Path.Combine(AppContext.BaseDirectory, "Pi1ElviraEditor.ico");
+    }
+
+    private static void RunStartupSplashSmoke()
+    {
+        using (Image image = BrandingAssets.LoadSplashImage())
+        {
+            Require(image.Width > 0 && image.Height > 0, "Splash bitmap has invalid dimensions.");
+            var sampleArea = new Rectangle(0, 0, 1920, 1040);
+            using var form = new StartupSplashForm(image, sampleArea);
+            Require(form.FormBorderStyle == FormBorderStyle.None, "Splash is not borderless.");
+            Require(form.ShowInTaskbar == false, "Splash shows in the taskbar.");
+            Require(form.ControlBox == false, "Splash exposes title-bar controls.");
+            Require(form.MaximizeBox == false && form.MinimizeBox == false, "Splash exposes resize chrome.");
+            Require(form.TopMost, "Splash is not topmost.");
+            Require(form.SplashImageSizeForTest.Width == image.Width && form.SplashImageSizeForTest.Height == image.Height, "Splash does not use the expected embedded bitmap.");
+            Rectangle bounds = form.ComputedBoundsForTest;
+            Require(bounds.Width <= sampleArea.Width && bounds.Height <= sampleArea.Height, "Splash exceeds the working area.");
+            Require(bounds.Width <= image.Width && bounds.Height <= image.Height, "Splash upscaled beyond the original artwork.");
+            double originalAspect = (double)image.Width / image.Height;
+            double boundsAspect = (double)bounds.Width / bounds.Height;
+            Require(Math.Abs(originalAspect - boundsAspect) < 0.02, "Splash did not preserve the aspect ratio.");
+            Require(bounds.X >= sampleArea.X && bounds.Y >= sampleArea.Y && bounds.Right <= sampleArea.Right && bounds.Bottom <= sampleArea.Bottom, "Splash is not contained in the working area.");
+            foreach (Rectangle area in new[] { new Rectangle(0, 0, 1920, 1040), new Rectangle(0, 0, 3840, 2000), new Rectangle(100, 100, 1366, 700) })
+            {
+                Rectangle computed = StartupSplashForm.ComputeSplashBounds(image.Size, area);
+                Require(computed.Width <= area.Width && computed.Height <= area.Height, "Splash policy exceeds the working area.");
+                Require(computed.Width <= image.Width && computed.Height <= image.Height, "Splash policy upscaled beyond the original.");
+                double computedAspect = (double)computed.Width / computed.Height;
+                Require(Math.Abs(computedAspect - originalAspect) < 0.02, "Splash policy did not preserve the aspect ratio.");
+                Require(computed.X >= area.X && computed.Y >= area.Y && computed.Right <= area.Right && computed.Bottom <= area.Bottom, "Splash policy is not contained in the working area.");
+            }
+        }
+
+        var coordinator = new StartupSplashCoordinator(headlessTestMode: true);
+        coordinator.Start();
+        Require(coordinator.WaitForExit(TimeSpan.FromMilliseconds(100)) == false, "Headless splash exited before the main-ready signal.");
+        coordinator.SignalMainReady();
+        Require(coordinator.WaitForExit(TimeSpan.FromSeconds(6)), "Splash thread did not exit after the main-ready signal.");
+        Require(!coordinator.IsThreadAliveForTest, "Background splash thread survived completion.");
+        coordinator.Dispose();
+        Require(!coordinator.IsThreadAliveForTest, "Splash thread survived Dispose.");
+
+        var failure = new StartupSplashCoordinator(headlessTestMode: true);
+        failure.Start();
+        failure.Dispose();
+        Require(!failure.IsThreadAliveForTest, "Failure-path splash thread survived Dispose.");
+    }
 
     private static void RunVersionSmoke()
     {

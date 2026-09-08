@@ -42,6 +42,7 @@ internal sealed class RuntimeUiSemanticEditorForm : Form
         _mainKey = EditableKeyFor(recordId, runtime);
         Text = string.Format(UiText.Get("RuntimeUi.SemanticEditor.Title"), recordDisplayName);
         StartPosition = FormStartPosition.CenterParent;
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
         Size = new Size(640, 200 + Math.Max(originalFields.Count, 1) * 64);
         MinimumSize = new Size(560, 320);
         FormBorderStyle = FormBorderStyle.Sizable;
