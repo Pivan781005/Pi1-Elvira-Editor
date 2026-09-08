@@ -1,4 +1,4 @@
-# Nápověda π1 Elvira I & II Editor
+# Nápověda π1 Elvira Editor
 
 ## [getting-started] Začínáme
 V selektoru **Instalace** vyberte podporovanou VGA hru. Editor si platné instalace pamatuje v uživatelském nastavení aplikace, nikdy ve složce hry. **Najít hry...** provede rychlou omezenou kontrolu běžných umístění GOG a zapamatovaných cest; při spuštění automaticky neprohledává celé disky. Pomocí **Vybrat adresář...** můžete složku hry vždy ručně ověřit a přidat. Více instalací Elvira I/II zůstává samostatnými položkami a vybraná instalace automaticky identifikuje a aktivuje podporovanou hru. Jazyk vyberte v **Jazyk rozhraní**. Používejte Grafiku, Text, Font a Mody a spouštěč; Nápověda je jen pro čtení a O programu je stručné shrnutí.
@@ -38,7 +38,7 @@ Runtime Sound Setup vytváří/aktualizuje `SET PI1SND=/s` v PI1SND.BAT, ne v EL
 ## [font] Editor fontu
 Prohlížejte originální font, pracujte v editovatelné kopii a používejte **Import font...**, Export font..., Apply Font, Save Patched Copy, filtry, editor glyphů, Original/Edited, posuny a náhledy 1x/2x/4x/8x. „Import font...” záměrně podporuje více formátů než TTF.
 
-Všechny obnovené renderery používají 8 řádků a zobrazují 6 sloupců z bitů 7..2; dva pravé bitmapové sloupce jsou neaktivní. Originální glyph 0x81 je `00 FC FC FC FC FC FC 00`, chráněný HUD erase/blanking glyph. Patched font používá `FC FC FC FC FC FC FC FC` jako záměrný plný 6x8 HUD erase. Úpravy, kopírování/reset, import i každý výstup V5/V2 tuto hodnotu vynutí; otevření staršího chybného patched EXE zůstává jen pro čtení, dokud výslovně nevytvoříte výstup.
+Všechny obnovené renderery používají 8 řádků a zobrazují 6 sloupců z bitů 7..2; dva pravé bitmapové sloupce jsou neaktivní. Originální glyph 0x81 je `00 FC FC FC FC FC FC 00`, chráněný HUD erase/blanking glyph. Patched font V5/V2 používá `FC FC FC FC FC FC FC FC` jako záměrný plný 6x8 HUD erase. Úpravy, kopírování/reset, import i každý výstup V5/V2 tuto hodnotu vynutí; generované RUNEGA záměrně zachovává původní masku `00 FC FC FC FC FC FC 00`; otevření staršího chybného patched EXE zůstává jen pro čtení, dokud výslovně nevytvoříte výstup.
 
 ### Elvira I / Elvira II
 Originál RUNVGA: 0x1A216..0x1A525, 784 bajtů, 98 glyphů, 0x20..0x81. V5: 0x3AE60..0x3B65F, 2048 bajtů, 256x8 CP852-compatible. Originál RUNIT: 0x168CA..0x16BD9, stejný rozsah. RUNIT V2 je split: LOW 0x20..0x81 originál; HIGH 0x82..0xFF na 0x28480..0x2886F (126x8=1008), helper 0x28870. Jde o ověřené podporované layouty, ne univerzální offsety.
@@ -62,7 +62,7 @@ Pokud hra není rozpoznána, vyberte správnou VGA instalaci; nepodporované EXE
 `RUNEGA` font/CP852 mutace je mimo podporovaný rozsah. EGA/RUNEGA je podporovaný runtime cíl pro CompositeBuild; pouze RUNEGA patchování EXE/fontů je nepodporované.
 
 ## [about] O programu / Credits
-**π1 Elvira I & II Editor v1.0** podporuje VGA/EGA grafiku, textové/datové varianty kompatibilní s GAMEPC, rozšířené fonty kompatibilní s CP852, Mody a spouštěč a přenosný DOS helper. Glyph `0x81` je chráněný glyph pro mazání HUD. RUNEGA font/CP852 mutace není podporována; EGA/RUNEGA zůstává podporovaný runtime cíl.
+**π1 Elvira Editor v1.0** podporuje VGA/EGA grafiku, textové/datové varianty kompatibilní s GAMEPC, rozšířené fonty kompatibilní s CP852, Mody a spouštěč a přenosný DOS helper. Glyph `0x81` je chráněný glyph pro mazání HUD. RUNEGA font/CP852 mutace není podporována; EGA/RUNEGA zůstává podporovaný runtime cíl.
 
 Projekt: `https://github.com/Pivan781005/Pi1-Elvira-I-II-Editor`
 

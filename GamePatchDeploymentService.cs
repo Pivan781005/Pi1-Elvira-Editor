@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed record ProductionDeploymentResult(
     ElviraGame Game,

@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum RuntimeUiLayoutValidationStatus
 {
@@ -13,7 +13,11 @@ internal enum RuntimeUiLayoutValidationStatus
     TextTooLong,
     RecordCapacityExceeded,
     BankCapacityExceeded,
-    InvalidFrozenDescriptor
+    InvalidFrozenDescriptor,
+    FixedColumnViolation,
+    HotspotViolation,
+    VisualCollision,
+    RowOverflow
 }
 
 internal sealed record RuntimeUiLayoutValidationResult(
@@ -39,8 +43,12 @@ internal sealed record RuntimeUiLayoutValidationBatchResult(
 
 /// <summary>
 /// Read-only production-layout validation for logical RuntimeUiTextService data.
-/// This class never scans executable text, creates a build, writes project state,
-/// or turns unknown RUNIT routes into known mappings.
+/// R9F V5: the three proven-live variable-width records for Elvira I VGA
+/// (Pause.menu, Confirm.generic, Save.overwrite) decode their frozen
+/// originals from the game source (packed/unpacked/V5) and validate semantic
+/// overrides against frozen anchors with variable label lengths. All other
+/// records never scan executable text, create a build, write project state,
+/// or turn unknown RUNIT routes into known mappings.
 /// </summary>
 internal sealed class RuntimeUiLayoutValidationService
 {
@@ -54,6 +62,18 @@ internal sealed class RuntimeUiLayoutValidationService
         RuntimeUiRuntimeProjection? projection = _texts.GetEffectiveRecords(variant, state).SingleOrDefault(value => value.LogicalRecordId == logicalRecordId);
         if (projection is null)
             return Result(logicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedRecord, UiText.Get("RuntimeUi.Detail.UnsupportedRecord"), [], 0, null, null, RuntimeUiMappingReadiness.Unsupported, RuntimeUiEvidenceStatus.Unknown);
+        // R9F V5: the three human-proven-live RUNVGA structured records
+        // (Pause.menu, Confirm.generic, Save.overwrite) validate full
+        // semantic records with frozen anchors and variable label lengths;
+        // storage over the English envelope routes to appended records.
+        if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Vga && RunVgaVariableUiService.IsVariableRecord(logicalRecordId))
+            return ValidateRunVgaVariable(variant, projection);
+        // R9F RUNEGA: frozen per-record spans with audited edit contracts.
+        // Capacity fit alone never implies editability: stored values must
+        // satisfy the frozen structure (prefix/separators/buttons), otherwise
+        // they fail with a clear hotspot error instead of a misleading Valid.
+        if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Ega)
+            return ValidateRunEga(variant, projection);
         if (projection.MappingReadiness == RuntimeUiMappingReadiness.KnownButMappingIncomplete)
         {
             // Route evidence and layout safety are separate: proven routes report
@@ -89,6 +109,78 @@ internal sealed class RuntimeUiLayoutValidationService
 
     public RuntimeUiLayoutValidationBatchResult ValidateAll(VariantContext variant, RuntimeUiTextState state) =>
         new(variant.RuntimeKind, _texts.GetEffectiveRecords(variant, state).Select(record => Validate(variant, state, record.LogicalRecordId)).ToArray());
+
+    private static RuntimeUiLayoutValidationResult ValidateRunEga(VariantContext variant, RuntimeUiRuntimeProjection projection)
+    {
+        RunEgaUiFieldContract contract = RunEgaUiService.Contract(projection.LogicalRecordId);
+        int? bank = BankCapacity(variant);
+        string? text = projection.EffectiveText;
+        if (text is null)
+        {
+            if (!RunEgaUiService.TryDecodeOriginalFromGameRoot(variant.Project.GameRoot, projection.LogicalRecordId, out string? decoded, out _))
+                return Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.DefaultTextUnavailable, UiText.Get("RuntimeUi.Detail.DefaultTextUnavailable"), [], 0, contract.Length, bank, projection.MappingReadiness, projection.EvidenceStatus);
+            text = decoded!;
+        }
+        if (!TryEncodeStrict(text, out byte[] payload, out string? encodingError))
+            return Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.EncodingFailure, encodingError!, [], 0, contract.Length, bank, projection.MappingReadiness, projection.EvidenceStatus);
+        int control = Array.FindIndex(payload, value => value != 0x0D && (value < 0x20 || value == 0x7F));
+        if (control >= 0)
+            return Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedGlyph, string.Format(UiText.Get("RuntimeUi.Detail.ControlByte"), payload[control]), payload, payload.Length + 1, contract.Length, bank, projection.MappingReadiness, projection.EvidenceStatus);
+        if (Array.IndexOf(payload, (byte)FontSlotMetadata.HudEraseGlyph) >= 0)
+            return Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedGlyph, UiText.Get("RuntimeUi.Detail.ReservedHudGlyph"), payload, payload.Length + 1, contract.Length, bank, projection.MappingReadiness, projection.EvidenceStatus);
+        if (!RunEgaUiService.TryValidateStored(text, projection.LogicalRecordId, out RunEgaUiFailureKind failure, out string detail))
+        {
+            return failure switch
+            {
+                RunEgaUiFailureKind.TooLong => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.RecordCapacityExceeded, detail, payload, payload.Length + 1, contract.Length, bank, projection.MappingReadiness, projection.EvidenceStatus),
+                RunEgaUiFailureKind.FixedColumn => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.FixedColumnViolation, detail, payload, payload.Length + 1, contract.Length, bank, projection.MappingReadiness, projection.EvidenceStatus),
+                RunEgaUiFailureKind.Hotspot => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.HotspotViolation, detail, payload, payload.Length + 1, contract.Length, bank, projection.MappingReadiness, projection.EvidenceStatus),
+                RunEgaUiFailureKind.Newline => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedGlyph, detail, payload, payload.Length + 1, contract.Length, bank, projection.MappingReadiness, projection.EvidenceStatus),
+                _ => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.EncodingFailure, detail, [], 0, contract.Length, bank, projection.MappingReadiness, projection.EvidenceStatus),
+            };
+        }
+        int required = checked(payload.Length + 1);
+        return Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.Valid, UiText.Get("RuntimeUi.Detail.Valid"), payload, required, contract.Length, bank, projection.MappingReadiness, projection.EvidenceStatus);
+    }
+
+    /// <summary>Validation for the three proven-live variable-width VGA
+    /// records: full semantic structure with frozen anchors, variable
+    /// label lengths, one-line rows. Storage beyond the English envelope is
+    /// a materialization concern (appended record), never a validation
+    /// failure here: Valid describes geometry + encoding only.</summary>
+    private static RuntimeUiLayoutValidationResult ValidateRunVgaVariable(VariantContext variant, RuntimeUiRuntimeProjection projection)
+    {
+        int capacity = RunVgaVariableUiService.SpanLength(projection.LogicalRecordId);
+        string? text = projection.EffectiveText;
+        if (text is null)
+        {
+            if (!RunVgaVariableUiService.TryDecodeOriginalFromGameRoot(variant.Project.GameRoot, projection.LogicalRecordId, out string? decoded, out _))
+                return Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.DefaultTextUnavailable, UiText.Get("RuntimeUi.Detail.DefaultTextUnavailable"), [], 0, capacity, null, projection.MappingReadiness, projection.EvidenceStatus);
+            text = decoded!;
+        }
+        if (!TryEncodeStrict(text, out byte[] payload, out string? encodingError))
+            return Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.EncodingFailure, encodingError!, [], 0, capacity, null, projection.MappingReadiness, projection.EvidenceStatus);
+        int control = Array.FindIndex(payload, value => value != 0x0D && (value < 0x20 || value == 0x7F));
+        if (control >= 0)
+            return Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedGlyph, string.Format(UiText.Get("RuntimeUi.Detail.ControlByte"), payload[control]), payload, payload.Length + 1, capacity, null, projection.MappingReadiness, projection.EvidenceStatus);
+        if (Array.IndexOf(payload, (byte)FontSlotMetadata.HudEraseGlyph) >= 0)
+            return Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedGlyph, UiText.Get("RuntimeUi.Detail.ReservedHudGlyph"), payload, payload.Length + 1, capacity, null, projection.MappingReadiness, projection.EvidenceStatus);
+        if (!RunVgaVariableUiService.TryValidateStored(text, projection.LogicalRecordId, out RunVgaVariableFailureKind failure, out string detail))
+        {
+            return failure switch
+            {
+                RunVgaVariableFailureKind.FixedColumn => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.FixedColumnViolation, detail, payload, payload.Length + 1, capacity, null, projection.MappingReadiness, projection.EvidenceStatus),
+                RunVgaVariableFailureKind.Hotspot => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.HotspotViolation, detail, payload, payload.Length + 1, capacity, null, projection.MappingReadiness, projection.EvidenceStatus),
+                RunVgaVariableFailureKind.Newline => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.UnsupportedGlyph, detail, payload, payload.Length + 1, capacity, null, projection.MappingReadiness, projection.EvidenceStatus),
+                RunVgaVariableFailureKind.VisualCollision => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.VisualCollision, detail, payload, payload.Length + 1, capacity, null, projection.MappingReadiness, projection.EvidenceStatus),
+                RunVgaVariableFailureKind.RowOverflow => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.RowOverflow, detail, payload, payload.Length + 1, capacity, null, projection.MappingReadiness, projection.EvidenceStatus),
+                RunVgaVariableFailureKind.TooLong => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.RecordCapacityExceeded, detail, payload, payload.Length + 1, capacity, null, projection.MappingReadiness, projection.EvidenceStatus),
+                _ => Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.EncodingFailure, detail, [], 0, capacity, null, projection.MappingReadiness, projection.EvidenceStatus),
+            };
+        }
+        int required = checked(payload.Length + 1);
+        return Result(projection.LogicalRecordId, RuntimeUiLayoutValidationStatus.Valid, UiText.Get("RuntimeUi.Detail.Valid"), payload, required, capacity, null, projection.MappingReadiness, projection.EvidenceStatus);
+    }
 
     private static bool TryEncodeStrict(string text, out byte[] bytes, out string? error)
     {

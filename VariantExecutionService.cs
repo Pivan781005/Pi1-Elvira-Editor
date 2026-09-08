@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum VariantExecutionMode { Run, Debug }
 internal sealed record VariantDebugConfiguration(string HostExecutable, IReadOnlyList<string> HostArguments)

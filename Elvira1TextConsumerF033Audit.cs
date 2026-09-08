@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 // Phase 6C9O2B3 static-only audit. The byte checks deliberately cover only the
 // F032 adapter, its two direct far callers, and the proven renderer dispatch.

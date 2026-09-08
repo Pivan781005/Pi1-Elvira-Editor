@@ -1,15 +1,17 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum FontSourceType { RunVga, RunEga }
-internal enum RunVgaFontLayout { Unknown, OriginalPackedAscii80, OriginalPackedAscii98, OriginalAscii98, ExtendedCp852V5, ExtendedCp852RunIt }
+internal enum RunVgaFontLayout { Unknown, OriginalPackedAscii80, OriginalPackedAscii98, OriginalAscii98, ExtendedCp852V5, ExtendedCp852RunEga, ExtendedCp852RunIt }
 internal enum ElviraGame { Unknown, Elvira1, Elvira2 }
 
 // Reserved slots are game/layout metadata, not a generic CP852 rule. Original
-// previews retain the historical six-row mask; newly generated extended outputs
-// use a full eight-row renderer-cell erase mask.
+// previews retain the historical six-row mask. RUNVGA V5 and RUNIT V2 generated
+// outputs use a full eight-row renderer-cell erase mask; generated RUNEGA
+// intentionally retains the original mask by frozen builder/validator/profile
+// design (RunEgaBootstrapService, ValidateOutput, Elvira1ProductionProfile).
 internal static class FontSlotMetadata
 {
     internal const int HudEraseGlyph = 0x81;
@@ -24,7 +26,8 @@ internal static class FontSlotMetadata
         {
             (ElviraGame.Elvira1, RunVgaFontLayout.OriginalPackedAscii98) or
             (ElviraGame.Elvira1, RunVgaFontLayout.OriginalAscii98) or
-            (ElviraGame.Elvira1, RunVgaFontLayout.ExtendedCp852V5) => Elvira1ReservedSlots,
+            (ElviraGame.Elvira1, RunVgaFontLayout.ExtendedCp852V5) or
+            (ElviraGame.Elvira1, RunVgaFontLayout.ExtendedCp852RunEga) => Elvira1ReservedSlots,
             (ElviraGame.Elvira2, RunVgaFontLayout.OriginalPackedAscii98) or
             (ElviraGame.Elvira2, RunVgaFontLayout.OriginalAscii98) or
             (ElviraGame.Elvira2, RunVgaFontLayout.ExtendedCp852RunIt) => Elvira2RunItReservedSlots,
@@ -38,6 +41,10 @@ internal static class FontSlotMetadata
     {
         if (!IsReserved(loaded, code))
             throw new InvalidOperationException($"Glyph 0x{code:X2} is not reserved for this game/layout.");
+        // Only V5/RUNIT generated outputs carry the patched full-cell erase
+        // mask. Generated RUNEGA keeps the historical original 0x81 bytes by
+        // frozen design (builder, output validator and profile agree), so its
+        // canonical bytes stay the original invariant.
         bool patchedOutput = loaded.Layout is RunVgaFontLayout.ExtendedCp852V5 or RunVgaFontLayout.ExtendedCp852RunIt;
         return (patchedOutput ? PatchedHudFullCellEraseGlyphBytes : OriginalHudEraseGlyphBytes).ToArray();
     }
@@ -54,7 +61,7 @@ internal static class FontSlotMetadata
         {
             GlyphModel glyph = loaded.Glyphs[code];
             bool noncanonicalSource = !glyph.Original.SequenceEqual(PatchedHudFullCellEraseGlyphBytes);
-            glyph.ReplaceEdited(PatchedHudFullCellEraseGlyphBytes);
+            glyph.ReplaceReservedCanonical(GetCanonicalBytes(loaded, code));
             if (noncanonicalSource)
                 loaded.DetectionDetails += " Reserved HUD erase glyph 0x81 is noncanonical in this source; it is protected in memory and will be repaired only by an explicit output operation.";
         }
@@ -78,9 +85,12 @@ internal sealed class FontLoadResult
     public int PhysicalSlotCount => HasFullCp852Font ? 0x100 - RunVgaFontService.OriginalFirstChar : LoadedGlyphCount;
     public IReadOnlyList<int> ReservedGlyphSlots => FontSlotMetadata.GetReservedSlots(Game, Layout);
     public int EditableGlyphCount => Math.Max(0, PhysicalSlotCount - ReservedGlyphSlots.Count);
+    // V8.3: generated RUNEGA is intentionally NOT directly applicable.
+    // Font changes for EGA persist through the CompositeBuild RUNEGA stage;
+    // the editor offers read/preview plus in-memory working copies only.
     public bool CanApply => (Layout == RunVgaFontLayout.OriginalAscii98 || Layout == RunVgaFontLayout.ExtendedCp852V5 || Layout == RunVgaFontLayout.ExtendedCp852RunIt) && FontOffset >= 0 && LoadedGlyphCount > 0;
     public bool CanInitializeEdited => Layout != RunVgaFontLayout.Unknown && LoadedGlyphCount > 0;
-    public bool HasFullCp852Font => Layout is RunVgaFontLayout.ExtendedCp852V5 or RunVgaFontLayout.ExtendedCp852RunIt;
+    public bool HasFullCp852Font => Layout is RunVgaFontLayout.ExtendedCp852V5 or RunVgaFontLayout.ExtendedCp852RunEga or RunVgaFontLayout.ExtendedCp852RunIt;
 }
 
 internal static class RunVgaFontService
@@ -159,6 +169,21 @@ internal static class RunVgaFontService
                 ElviraGame.Elvira1);
             FontSlotMetadata.InitializeReservedEditingState(result);
             return result;
+        }
+
+        // Trusted generated RUNEGA output: strict frozen-output validation
+        // only (size, MZ, font-bank/renderer/bridge/relocation/UI invariants).
+        // An arbitrary EXE can never satisfy ValidateOutput, so recognition
+        // here implies a genuine builder-produced image. Checked before the
+        // generic original-table fallbacks below.
+        if (IsTrustedGeneratedRunEga(data))
+        {
+            return BuildResult(path, RunVgaFontLayout.ExtendedCp852RunEga,
+                RunEgaBootstrapService.FontBankPhysicalOffset, 0, ExtendedGlyphCount, data,
+                "Trusted generated RUNEGA CP852 output detected (frozen font-bank, renderer-segment, bridge and UI validation). " +
+                "Loading the real 256x8 font bank from physical 0x32400. " +
+                "Direct Apply to RUNEGA executables stays disabled; EGA font changes persist through the CompositeBuild RUNEGA stage.",
+                ElviraGame.Elvira1, FontSourceType.RunEga);
         }
 
         // IMPORTANT: Detect the active renderer first. Patched V5 executables intentionally
@@ -379,7 +404,7 @@ internal static class RunVgaFontService
         for (int code = 0; code < ExtendedGlyphCount; code++)
         {
             if (FontSlotMetadata.IsReserved(target, code))
-                target.Glyphs[code].ReplaceEdited(FontSlotMetadata.GetCanonicalBytes(target, code));
+                target.Glyphs[code].ReplaceReservedCanonical(FontSlotMetadata.GetCanonicalBytes(target, code));
             else
                 target.Glyphs[code].ReplaceEdited(fontBytes.AsSpan(code * GlyphBytes, GlyphBytes));
         }
@@ -428,7 +453,13 @@ internal static class RunVgaFontService
         File.WriteAllBytes(path, data);
     }
 
-    private static FontLoadResult BuildResult(string path, RunVgaFontLayout layout, int fontOffset, int firstByteValue, int glyphCount, byte[] data, string details, ElviraGame game = ElviraGame.Elvira1)
+    private static bool IsTrustedGeneratedRunEga(byte[] data)
+    {
+        try { RunEgaBootstrapService.ValidateOutput(data); return true; }
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentException) { return false; }
+    }
+
+    private static FontLoadResult BuildResult(string path, RunVgaFontLayout layout, int fontOffset, int firstByteValue, int glyphCount, byte[] data, string details, ElviraGame game = ElviraGame.Elvira1, FontSourceType sourceType = FontSourceType.RunVga)
     {
         List<GlyphModel> glyphs = GlyphRepository.CreateAllCp852Slots().ToList();
         for (int i = 0; i < glyphCount; i++)
@@ -440,7 +471,7 @@ internal static class RunVgaFontService
                 throw new InvalidDataException("Font table extends beyond RUNVGA.EXE.");
             glyphs[value].LoadFromSource(data.AsSpan(sourceOffset, GlyphBytes).ToArray());
         }
-        return new FontLoadResult { SourcePath = path, Layout = layout, FontOffset = fontOffset, FirstByteValue = firstByteValue, LastByteValue = firstByteValue + glyphCount - 1, LoadedGlyphCount = glyphCount, Glyphs = glyphs, DetectionDetails = details, Game = game };
+        return new FontLoadResult { SourcePath = path, Layout = layout, FontOffset = fontOffset, FirstByteValue = firstByteValue, LastByteValue = firstByteValue + glyphCount - 1, LoadedGlyphCount = glyphCount, Glyphs = glyphs, DetectionDetails = details, Game = game, SourceType = sourceType };
     }
 
     private static FontLoadResult BuildRunItV2Result(string path, byte[] data)

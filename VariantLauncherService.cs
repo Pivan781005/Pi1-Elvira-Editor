@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Read-only routing state. A target is never an instruction to run
 /// DOS; R6R owns process execution.</summary>
@@ -37,7 +37,15 @@ internal sealed record LauncherRedirectionPlan(
 
 /// <summary>Semantic, non-mutating launcher target resolver. It relies only
 /// on immutable ProjectContext, VariantContext and ownership validation; it
-/// deliberately neither reads GAMEPCO nor discovers root *SK artifacts.</summary>
+/// deliberately neither reads GAMEPCO nor discovers root *SK artifacts.
+///
+/// R9F V7 authoritative runnable identity is Installation + Game/Profile +
+/// Runtime + Edition. Every Mods &amp; Launcher consumer (top summary,
+/// edition availability, default-variant choices, launcher readiness,
+/// Run/Debug enablement, preview, executable/data lookup, rebuild
+/// eligibility) must resolve through ResolveEdition with the same explicit
+/// (runtime, edition) pair. The runtime parent (VARIANTS\E1VGA) is a
+/// container and is never treated as the selected edition output.</summary>
 internal sealed class VariantLauncherService
 {
     private readonly VariantDirectoryService _directories;
@@ -57,14 +65,37 @@ internal sealed class VariantLauncherService
                 "No game selected. Use Find games... or Browse folder...");
         if (!ReferenceEquals(project, variant.Project))
             return Invalid(project, variant, "VariantContext does not belong to the active ProjectContext.");
-
-        string root;
-        try { root = _directories.GetVariantDirectoryPath(project, variant); }
+        string projectCode;
+        try { projectCode = _composite.GetProjectVariantCode(project, variant); }
         catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
         { return Invalid(project, variant, ex.Message); }
-        VariantDirectoryOperationResult ownership = _directories.ValidateOwnedVariantDirectory(project, variant);
+        return ResolveEdition(project, variant, projectCode);
+    }
+
+    /// <summary>Authoritative explicit runnable target:
+    /// VARIANTS\&lt;RuntimeKey&gt;\&lt;EditionCode&gt;. Edition subdirectories
+    /// coexist; the runtime root itself is never a runnable output.</summary>
+    public VariantLaunchTarget ResolveEdition(ProjectContext? project, VariantContext? variant, string editionCode)
+    {
+        if (project is null || variant is null)
+            return new("None", 0, 0, string.Empty, string.Empty, string.Empty, string.Empty,
+                VariantDirectoryOperationStatus.InvalidContext, false, VariantLaunchReadiness.NoActiveInstallation,
+                "No game selected. Use Find games... or Browse folder...");
+        if (!ReferenceEquals(project, variant.Project))
+            return Invalid(project, variant, "VariantContext does not belong to the active ProjectContext.");
+
+        string normalizedCode;
+        string root;
+        try
+        {
+            normalizedCode = ProjectVariantOwnership.NormalizeCode(project, editionCode);
+            root = _directories.GetVariantEditionDirectoryPath(project, variant, normalizedCode);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException)
+        { return Invalid(project, variant, ex.Message); }
+        VariantDirectoryOperationResult ownership = _directories.ValidateOwnedVariantEditionDirectory(project, variant, normalizedCode);
         if (ownership.Status == VariantDirectoryOperationStatus.NotFound)
-            return Make(project, variant, root, ownership.Status, false, VariantLaunchReadiness.VariantMissing, "Owned variant directory is missing.");
+            return ResolveMissingEdition(project, variant, normalizedCode);
         if (ownership.Status != VariantDirectoryOperationStatus.AlreadyValid)
             return Make(project, variant, root, ownership.Status, false, VariantLaunchReadiness.ForeignOrInvalidVariant,
                 "Variant directory is not owned by this project/runtime: " + ownership.Status + ".");
@@ -82,7 +113,7 @@ internal sealed class VariantLauncherService
             try
             {
                 VariantManifest manifest = VariantManifestService.Read(root);
-                if (!manifest.ProjectCode.Equals(_composite.GetProjectVariantCode(project, variant), StringComparison.OrdinalIgnoreCase))
+                if (!manifest.ProjectCode.Equals(normalizedCode, StringComparison.OrdinalIgnoreCase))
                     return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
                         "The generated output belongs to a different selected project variant.");
                 // R9D: the launch artifacts must still be byte-identical to the authorized
@@ -125,6 +156,47 @@ internal sealed class VariantLauncherService
             : !authorized ? "Variant is not launch-ready."
             : "Future launcher redirection is authorized; R6Q does not write it.";
         return new(launcher, active, restore, manifestFile?.Classification ?? PristineFileClassification.Immutable, target, authorized, detail);
+    }
+
+    /// <summary>Explicit-edition redirection plan. Same identity as
+    /// ResolveEdition; the implicit overload resolves the composite code.</summary>
+    public LauncherRedirectionPlan CreateRedirectionPlan(ProjectContext project, VariantContext variant, string editionCode)
+    {
+        VariantLaunchTarget target = ResolveEdition(project, variant, editionCode);
+        string launcher = project.GameProfile == ElviraGameProfile.Elvira1 ? "ELVIRA.BAT" : "CERBERUS.BAT";
+        PristineManifestFile? manifestFile = project.PristineManifest.Files.SingleOrDefault(file => file.RelativePath.Equals(launcher, StringComparison.OrdinalIgnoreCase));
+        string active = Path.Combine(project.GameRoot, launcher);
+        string restore = Path.Combine(project.StorageLayout.MutableBackupsRoot, launcher);
+        bool classified = manifestFile?.Classification == PristineFileClassification.MutableBackedUp;
+        bool backup = classified && File.Exists(restore);
+        bool authorized = target.Readiness == VariantLaunchReadiness.LaunchReady && classified && backup;
+        string detail = !classified ? "Launcher is not declared MutableBackedUp in the pristine manifest."
+            : !backup ? "Pristine mutable launcher backup is missing."
+            : !authorized ? "Variant is not launch-ready."
+            : "Future launcher redirection is authorized; R6Q does not write it.";
+        return new(launcher, active, restore, manifestFile?.Classification ?? PristineFileClassification.Immutable, target, authorized, detail);
+    }
+
+    private VariantLaunchTarget ResolveMissingEdition(ProjectContext project, VariantContext variant, string projectCode)
+    {
+        string root;
+        try { root = _directories.GetVariantDirectoryPath(project, variant); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
+        { return Invalid(project, variant, ex.Message); }
+        string editionRoot = Path.Combine(root, projectCode);
+        if (!Directory.Exists(root))
+            return Make(project, variant, editionRoot, VariantDirectoryOperationStatus.NotFound, false, VariantLaunchReadiness.VariantMissing, "Owned variant directory is missing.");
+        // A present runtime root without this edition: legacy flat outputs
+        // are reported (never launched, never deleted); anything else simply
+        // means this edition was never built.
+        VariantDirectoryService.VariantLegacyFlatInfo legacy = _directories.DetectLegacyFlatVariant(project, variant);
+        if (legacy.HasLegacyFiles)
+            return Make(project, variant, editionRoot, VariantDirectoryOperationStatus.ForeignDirectoryConflict, false, VariantLaunchReadiness.ForeignOrInvalidVariant,
+                legacy.HasMatchingMarker
+                    ? "VARIANTS\\" + variant.DirectoryKey + " holds legacy flat owned output (edition " + (legacy.ManifestProjectCode ?? "?") + "). It was left untouched: remove it explicitly via Recovery, then build again."
+                    : "VARIANTS\\" + variant.DirectoryKey + " holds files that are not editor-owned. They were left untouched.");
+        return Make(project, variant, editionRoot, VariantDirectoryOperationStatus.NotFound, false, VariantLaunchReadiness.BuildIncomplete,
+            "No built output for edition " + projectCode + "; build required.");
     }
 
     private static VariantLaunchTarget Invalid(ProjectContext project, VariantContext variant, string detail) =>

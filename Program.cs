@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal static class Program
 {
@@ -197,6 +197,12 @@ internal static class Program
         {
             try { VerifyRuntimeUiLayoutSmoke(args[1], args[2]); Console.WriteLine("Runtime UI layout validation: PASS"); Environment.ExitCode = 0; }
             catch (Exception ex) { Console.Error.WriteLine("Runtime UI layout validation: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runvga-pause-menu-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRunVgaPauseMenuSmoke(args[1], args[2]); Console.WriteLine("RUNVGA Pause.menu: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("RUNVGA Pause.menu: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
         if (args.Length == 3 && args[0].Equals("--text-tab-split-smoke", StringComparison.OrdinalIgnoreCase))
@@ -696,7 +702,7 @@ internal static class Program
                 if (Hash(args[1]) != packedHashBefore)
                     throw new InvalidDataException("Packed RUNVGA changed while previewing it.");
 
-                temporaryCanonical = Path.Combine(Path.GetTempPath(), "ElviraVgaEditor-preview-" + Guid.NewGuid().ToString("N") + ".EXE");
+                temporaryCanonical = Path.Combine(Path.GetTempPath(), "Pi1ElviraEditor-preview-" + Guid.NewGuid().ToString("N") + ".EXE");
                 File.WriteAllBytes(temporaryCanonical, canonical);
                 FontLoadResult unpacked = RunVgaFontService.LoadRunVga(temporaryCanonical);
                 AssertElvira1OriginalPreview(unpacked, RunVgaFontLayout.OriginalAscii98, canonical, "unpacked");
@@ -865,6 +871,144 @@ internal static class Program
         {
             try { RunInstallationSelectorSmoke(args[1], args[2]); Console.WriteLine("Installation selector: PASS"); Environment.ExitCode = 0; }
             catch (Exception ex) { Console.Error.WriteLine("Installation selector: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runtime-ui-grid-reentrancy-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRuntimeUiGridReentrancySmoke(args[1], args[2]); Console.WriteLine("Runtime UI grid reentrancy: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Runtime UI grid reentrancy: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runtime-ui-grid-edit-safety-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRuntimeUiGridEditSafetySmoke(args[1], args[2]); Console.WriteLine("Runtime UI grid edit safety: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Runtime UI grid edit safety: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runtime-ui-legacy-unassigned-ux-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRuntimeUiLegacyUnassignedUxSmoke(args[1], args[2]); Console.WriteLine("Runtime UI legacy-unassigned UX: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Runtime UI legacy-unassigned UX: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runtime-ui-live-localization-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRuntimeUiLiveLocalizationSmoke(args[1], args[2]); Console.WriteLine("Runtime UI live localization: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Runtime UI live localization: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--font-lazy-working-copy-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyFontLazyWorkingCopySmoke(args[1], args[2]); Console.WriteLine("Font lazy working copy: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Font lazy working copy: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--font-real-click-lazy-working-copy-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyFontRealClickLazyWorkingCopySmoke(args[1], args[2]); Console.WriteLine("Font real-click lazy working copy: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Font real-click lazy working copy: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runega-generated-font-load-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRunEgaGeneratedFontLoadSmoke(args[1], args[2]); Console.WriteLine("RUNEGA generated font load: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("RUNEGA generated font load: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--font-clear-glyph-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyFontClearGlyphSmoke(args[1], args[2]); Console.WriteLine("Font clear glyph: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Font clear glyph: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--hud-erase-0x81-invariant-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyHudErase081InvariantSmoke(args[1], args[2]); Console.WriteLine("HUD erase 0x81 invariant: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("HUD erase 0x81 invariant: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runtime-ui-mods-consistency-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRuntimeUiModsConsistencySmoke(args[1], args[2]); Console.WriteLine("Runtime UI and Mods consistency: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Runtime UI and Mods consistency: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--variant-edition-identity-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyVariantEditionIdentitySmoke(args[1], args[2]); Console.WriteLine("Variant edition identity: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Variant edition identity: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runega-ui-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRunEgaUiSmoke(args[1], args[2]); Console.WriteLine("RUNEGA Runtime UI: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("RUNEGA Runtime UI: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runvga-confirm-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRunVgaConfirmSmoke(args[1], args[2]); Console.WriteLine("RUNVGA Confirm.generic: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("RUNVGA Confirm.generic: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runvga-overwrite-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRunVgaOverwriteSmoke(args[1], args[2]); Console.WriteLine("RUNVGA Save.overwrite: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("RUNVGA Save.overwrite: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--legacy-adopt-realsim-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyLegacyAdoptRealSimSmoke(args[1], args[2]); Console.WriteLine("Legacy adoption realsim: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Legacy adoption realsim: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runtime-ui-original-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRuntimeUiOriginalSmoke(args[1], args[2]); Console.WriteLine("Runtime UI Original feedback: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Runtime UI Original feedback: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runega-selector-audit-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRunEgaSelectorAuditSmoke(args[1], args[2]); Console.WriteLine("RUNEGA selector/bridge audit: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("RUNEGA selector/bridge audit: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runega-semantic-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRunEgaSemanticSmoke(args[1], args[2]); Console.WriteLine("RUNEGA semantic fields: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("RUNEGA semantic fields: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runtime-ui-migration-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRuntimeUiMigrationSmoke(args[1], args[2]); Console.WriteLine("Runtime UI schema migration: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Runtime UI schema migration: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--runtime-ui-isolation-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRuntimeUiIsolationSmoke(args[1], args[2]); Console.WriteLine("Runtime UI cross-runtime isolation: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Runtime UI cross-runtime isolation: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--legacy-edition-safety-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyLegacyEditionSafetySmoke(args[1], args[2]); Console.WriteLine("Legacy edition safety: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Legacy edition safety: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--legacy-adopt-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyLegacyAdoptSmoke(args[1], args[2]); Console.WriteLine("Legacy adoption: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Legacy adoption: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--mods-post-adoption-consistency-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyModsPostAdoptionConsistencySmoke(args[1], args[2]); Console.WriteLine("Mods post-adoption consistency: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Mods post-adoption consistency: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
         if (args.Length == 4 && args[0].Equals("--font-activation-smoke", StringComparison.OrdinalIgnoreCase))
@@ -1490,7 +1634,7 @@ internal static class Program
         string fileVersion = System.Diagnostics.FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion ?? string.Empty;
         string informational = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
             .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion;
-        if (AppInfo.ProductVersion != "1.0" || AppInfo.ProductTitle != "π1 Elvira I & II Editor v1.0" ||
+        if (AppInfo.ProductVersion != "1.0" || AppInfo.ProductTitle != "π1 Elvira Editor v1.0" ||
             assemblyVersion != "1.0.0.0" || fileVersion != "1.0.0.0" || informational != "1.0.0")
             throw new InvalidDataException("Current product metadata/title/about text does not resolve to v1.0.");
         foreach (UiLanguage language in new[] { UiLanguage.English, UiLanguage.Slovak, UiLanguage.Czech })
@@ -1565,10 +1709,20 @@ internal static class Program
                 !oldBad.DetectionDetails.Contains("noncanonical", StringComparison.Ordinal) || Hash(bad) != badHash)
                 throw new InvalidDataException($"{target.name}: old bad executable was not identified and repaired only in memory.");
 
-            RunVgaFontService.SaveCopy(oldBad, repaired);
-            byte[] repairedBytes = File.ReadAllBytes(repaired);
-            if (!repairedBytes.AsSpan(target.offset, RunVgaFontService.GlyphBytes).SequenceEqual(fullCell) || Hash(bad) != badHash)
-                throw new InvalidDataException($"{target.name}: explicit output did not repair 0x81 without changing the old source.");
+            // Fail-closed trust (V8.4 reconciliation): a noncanonical
+            // generated image is identified and repaired in memory only.
+            // Persisting it via SaveCopy must be BLOCKED by
+            // RequireTrustedPatchTarget (tampered V5/V2 are not trusted
+            // patch targets); the bad source must remain byte-identical
+            // and no repaired file may appear. This intentionally replaces
+            // the old expectation of an unsafe repair/write.
+            bool blocked = false;
+            try { RunVgaFontService.SaveCopy(oldBad, repaired); }
+            catch (InvalidDataException ex) when (ex.Message.Contains("blocked", StringComparison.OrdinalIgnoreCase)) { blocked = true; }
+            if (!blocked)
+                throw new InvalidDataException($"{target.name}: SaveCopy persisted a noncanonical generated image instead of blocking.");
+            if (File.Exists(repaired) || Hash(bad) != badHash)
+                throw new InvalidDataException($"{target.name}: blocked SaveCopy still wrote output or touched the bad source.");
         }
     }
 
@@ -2180,7 +2334,7 @@ internal static class Program
             string preview = LauncherService.BuildPreview(game, catalog, settings, UiLanguage.English, new DateTime(2026, 8, 25, 2, 43, 0));
             if (File.Exists(Path.Combine(directory, "ELVIRA.BAT")) || File.Exists(Path.Combine(directory, "PI1SND.BAT")) || File.Exists(Path.Combine(directory, VariantConfigurationService.ConfigFileName)))
                 throw new InvalidDataException("Preview created a file.");
-            if (!preview.Contains("Created: 25-08-2026 02:43") || !preview.Contains("Pi1 Elvira I & II Editor v" + AppInfo.ProductVersion) || preview.Contains("call :", StringComparison.OrdinalIgnoreCase) || preview.Contains("exit /b", StringComparison.OrdinalIgnoreCase) || preview.Contains("color ", StringComparison.OrdinalIgnoreCase) || !preview.Contains("call PI1SND.BAT", StringComparison.OrdinalIgnoreCase))
+            if (!preview.Contains("Created: 25-08-2026 02:43") || !preview.Contains("Pi1 Elvira Editor v" + AppInfo.ProductVersion) || preview.Contains("call :", StringComparison.OrdinalIgnoreCase) || preview.Contains("exit /b", StringComparison.OrdinalIgnoreCase) || preview.Contains("color ", StringComparison.OrdinalIgnoreCase) || !preview.Contains("call PI1SND.BAT", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Generated launcher is not pure DOS COMMAND.COM-compatible.");
             string title = game == ElviraGameProfile.Elvira1 ? "ELVIRA: MISTRESS OF THE DARK" : "ELVIRA II: THE JAWS OF CERBERUS";
             if (!preview.Contains(title) || !preview.Contains("Default: English") || !preview.Contains("Press ENTER to start default: English") || !preview.Contains(":forced_setup") || preview.Contains("Auto-start") || preview.Contains("PI1MENU.COM 10"))
@@ -3189,18 +3343,18 @@ internal static class Program
             ProjectContext project = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
             var directories = new VariantDirectoryService(); var builds = new DisposableVariantBuildService(directories);
             VariantContext variant = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
-            RequireDirectoryStatus(directories.EnsureVariantDirectory(project, variant), VariantDirectoryOperationStatus.Created, "build fixture owned directory");
-            RequireBuildStatus(builds.Build(project, variant), DisposableVariantBuildStatus.Success, "initial pristine build");
-            string variantRoot = directories.GetVariantDirectoryPath(project, variant);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project, variant, "EN"), VariantDirectoryOperationStatus.Created, "build fixture owned directory");
+            RequireBuildStatus(builds.Build(project, variant, "EN"), DisposableVariantBuildStatus.Success, "initial pristine build");
+            string variantRoot = directories.GetVariantEditionDirectoryPath(project, variant, "EN");
             File.WriteAllText(Path.Combine(variantRoot, "JUNK.TXT"), "junk");
             File.WriteAllText(Path.Combine(variantRoot, "GAMEPC"), "corrupt variant bytes");
-            RequireBuildStatus(builds.Build(project, variant), DisposableVariantBuildStatus.Success, "non-cumulative rebuild");
+            RequireBuildStatus(builds.Build(project, variant, "EN"), DisposableVariantBuildStatus.Success, "non-cumulative rebuild");
             if (File.Exists(Path.Combine(variantRoot, "JUNK.TXT")) || !File.ReadAllBytes(Path.Combine(variantRoot, "GAMEPC")).SequenceEqual(File.ReadAllBytes(Path.Combine(project.GameRoot, "GAMEPC"))))
                 throw new InvalidDataException("Rebuild reused old variant payload or retained junk.");
 
             string prior = Path.Combine(variantRoot, "PRIOR.TXT"); File.WriteAllText(prior, "preserve on preflight failure");
             string immutable = Path.Combine(project.GameRoot, "RESOURCE.DAT"); byte[] immutableBytes = File.ReadAllBytes(immutable); File.WriteAllBytes(immutable, [7, 7, 7]);
-            RequireBuildStatus(builds.Build(project, variant), DisposableVariantBuildStatus.BaselineInvalid, "baseline gate before clear");
+            RequireBuildStatus(builds.Build(project, variant, "EN"), DisposableVariantBuildStatus.BaselineInvalid, "baseline gate before clear");
             if (!File.Exists(prior)) throw new InvalidDataException("Failed preflight cleared the prior variant.");
             File.WriteAllBytes(immutable, immutableBytes);
 
@@ -3225,10 +3379,16 @@ internal static class Program
 
     private static void VerifyRealDisposableBuildSmoke(string elvira1Root, string elvira2Root)
     {
-        var loader = new ProjectContextLoader(); var directories = new VariantDirectoryService(); var builds = new DisposableVariantBuildService(directories);
-        ProjectContext e1 = RequireSuccess(loader.Open(elvira1Root), "Elvira I real project"); ProjectContext e2 = RequireSuccess(loader.Open(elvira2Root), "Elvira II real project");
-        DisposableVariantBuildResult[] results = VariantContextCatalog.CreateBuiltIns(e1).Concat(VariantContextCatalog.CreateBuiltIns(e2))
-            .Select(variant => builds.Build(variant.Project, variant)).ToArray();
+            var loader = new ProjectContextLoader(); var directories = new VariantDirectoryService(); var builds = new DisposableVariantBuildService(directories);
+            ProjectContext e1 = RequireSuccess(loader.Open(elvira1Root), "Elvira I real project"); ProjectContext e2 = RequireSuccess(loader.Open(elvira2Root), "Elvira II real project");
+            foreach (VariantContext prepared in VariantContextCatalog.CreateBuiltIns(e1).Concat(VariantContextCatalog.CreateBuiltIns(e2)))
+            {
+                VariantDirectoryOperationResult preparedResult = directories.EnsureVariantEditionDirectory(prepared.Project, prepared, "EN");
+                if (preparedResult.Status != VariantDirectoryOperationStatus.Created && preparedResult.Status != VariantDirectoryOperationStatus.AlreadyValid)
+                    throw new InvalidDataException("Real baseline edition directory returned " + preparedResult.Status + ".");
+            }
+            DisposableVariantBuildResult[] results = VariantContextCatalog.CreateBuiltIns(e1).Concat(VariantContextCatalog.CreateBuiltIns(e2))
+                .Select(variant => builds.Build(variant.Project, variant, "EN")).ToArray();
         if (results.Any(result => result.Status != DisposableVariantBuildStatus.Success)) throw new InvalidDataException("A real disposable pristine build failed.");
         if (!File.ReadAllBytes(Path.Combine(results[0].VariantRoot, "GAMEPC")).SequenceEqual(File.ReadAllBytes(Path.Combine(results[1].VariantRoot, "GAMEPC"))))
             throw new InvalidDataException("Elvira I VGA/EGA GAMEPC copies differ.");
@@ -3295,25 +3455,33 @@ internal static class Program
                 service.GetDefinitions(e1).Any(value => value.FrozenDefaultText is not null))
                 throw new InvalidDataException("Frozen runtime UI definitions diverged from the evidence-only profiles.");
 
-            RuntimeUiTextState e1State = service.SetOverride(e1, empty.State, RuntimeUiLogicalRecordId.PauseMenu, "Pauza – Unicode žľť");
+            RuntimeUiTextState e1State = service.SetOverride(e1, empty.State, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "Pauza – Unicode žľť");
             VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
             VariantContext e1Ega = VariantContextCatalog.CreateBuiltIns(e1).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
             RuntimeUiRuntimeProjection vga = service.GetEffectiveRecords(e1Vga, e1State).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu);
             RuntimeUiRuntimeProjection ega = service.GetEffectiveRecords(e1Ega, e1State).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu);
-            if (vga is not { IsOverridden: true, TextOrigin: RuntimeUiTextOrigin.ProjectOverride, EffectiveText: "Pauza – Unicode žľť", MappingReadiness: RuntimeUiMappingReadiness.KnownButMappingIncomplete } ||
-                ega is not { IsOverridden: true, TextOrigin: RuntimeUiTextOrigin.ProjectOverride, EffectiveText: "Pauza – Unicode žľť", MappingReadiness: RuntimeUiMappingReadiness.SupportedAndMapped })
-                throw new InvalidDataException("Elvira I VGA/EGA did not project one shared logical override.");
+            if (vga is not { IsOverridden: true, TextOrigin: RuntimeUiTextOrigin.ProjectOverride, EffectiveText: "Pauza – Unicode žľť", MappingReadiness: RuntimeUiMappingReadiness.SupportedAndMapped })
+                throw new InvalidDataException("Elvira I VGA did not project its runtime-scoped override.");
+            // R9F V3 isolation: a VGA override must never leak into the EGA
+            // view even though the logical record ID is identical.
+            if (ega is not { IsOverridden: false, EffectiveText: null, MappingReadiness: RuntimeUiMappingReadiness.SupportedAndMapped })
+                throw new InvalidDataException("VGA Runtime UI state leaked into the EGA projection.");
             // RUNVGA route evidence is frozen per record: Pause.menu is PROVEN
-            // LIVE, the other listed binary routes are PROVEN BY BINARY, while
-            // layout readiness stays incomplete. EGA evidence is unchanged.
+            // LIVE and R9F Phase 1 maps its 39-byte span (SupportedAndMapped);
+            // the other listed binary routes stay KnownButMappingIncomplete
+            // with PROVEN BY BINARY evidence. EGA evidence follows the frozen
+            // bank descriptor per record (Pause.menu and Save.prompt are
+            // PROVEN LIVE there, the rest PROVEN BY BINARY).
             if (vga.EvidenceStatus != RuntimeUiEvidenceStatus.ProvenLive ||
-                ega.EvidenceStatus != RuntimeUiEvidenceStatus.ProvenByBinary)
+                ega.EvidenceStatus != RuntimeUiEvidenceStatus.ProvenLive)
                 throw new InvalidDataException("Elvira I VGA/EGA route evidence regressed.");
             RuntimeUiRuntimeProjection vgaPrompt = service.GetEffectiveRecords(e1Vga, e1State).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.SavePrompt);
             if (vgaPrompt is not { MappingReadiness: RuntimeUiMappingReadiness.KnownButMappingIncomplete, EvidenceStatus: RuntimeUiEvidenceStatus.ProvenByBinary })
                 throw new InvalidDataException("RUNVGA binary-routed record evidence regressed from PROVEN BY BINARY.");
-            // Saved Runtime UI overrides must keep blocking a full configured
-            // build; an empty project state must not block it.
+            // Invalid saved Runtime UI overrides must keep blocking a full
+            // configured build (this Pause text lacks the frozen hotspot line);
+            // an empty project state must not block it. Valid Pause.menu
+            // overrides are covered by the dedicated Pause smoke.
             if (new RuntimeUiProjectBuildStep(e1State).Preflight(e1, e1Vga) is null)
                 throw new InvalidDataException("RUNVGA Runtime UI saved-override materialization became silently buildable.");
             if (new RuntimeUiProjectBuildStep(RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1)).Preflight(e1, e1Vga) is not null)
@@ -3324,13 +3492,13 @@ internal static class Program
                 throw new InvalidDataException("Runtime UI override persistence was not sparse Unicode project data.");
             RuntimeUiTextLoadResult reloaded = service.Load(e1);
             if (!reloaded.IsSuccess || !reloaded.State!.Overrides.SequenceEqual(e1State.Overrides)) throw new InvalidDataException("Runtime UI JSON did not round-trip deterministically.");
-            RuntimeUiTextState reset = service.RemoveOverride(e1, reloaded.State, RuntimeUiLogicalRecordId.PauseMenu);
+            RuntimeUiTextState reset = service.RemoveOverride(e1, reloaded.State, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu);
             if (reset.Overrides.Count != 0 || service.GetEffectiveRecords(e1Vga, reset).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu).TextOrigin != RuntimeUiTextOrigin.FrozenDefaultUnavailable ||
                 !service.Save(e1, reset).Succeeded || File.ReadAllText(service.GetPath(e1)).Contains("PauseMenu", StringComparison.Ordinal))
                 throw new InvalidDataException("Runtime UI override reset did not return to the frozen/default source.");
 
             VariantContext runit = VariantContextCatalog.CreateBuiltIns(e2).Single();
-            RuntimeUiTextState e2State = service.SetOverride(e2, service.Load(e2).State!, RuntimeUiLogicalRecordId.LoadFailure, "Načítanie zlyhalo");
+            RuntimeUiTextState e2State = service.SetOverride(e2, service.Load(e2).State!, VariantRuntimeKind.Elvira2Vga, RuntimeUiLogicalRecordId.LoadFailure, "Načítanie zlyhalo");
             RuntimeUiRuntimeProjection[] r = service.GetEffectiveRecords(runit, e2State).ToArray();
             if (r.Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.SaveFailure) is not { MappingReadiness: RuntimeUiMappingReadiness.SupportedAndMapped, EvidenceStatus: RuntimeUiEvidenceStatus.ProvenByBinary } ||
                 r.Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.LoadFailure) is not { MappingReadiness: RuntimeUiMappingReadiness.KnownButMappingIncomplete, EvidenceStatus: RuntimeUiEvidenceStatus.Unknown, EffectiveText: "Načítanie zlyhalo" } ||
@@ -3345,10 +3513,15 @@ internal static class Program
                 if (result.Status != expected || result.State is not null) throw new InvalidDataException($"Runtime UI malformed input expected {expected}, received {result.Status}.");
             }
             reject("{", RuntimeUiTextLoadStatus.InvalidJson);
-            reject("{\"schemaVersion\":2,\"gameId\":\"Elvira2\",\"records\":[]}", RuntimeUiTextLoadStatus.UnsupportedSchema);
+            reject("{\"schemaVersion\":99,\"gameId\":\"Elvira2\",\"records\":[]}", RuntimeUiTextLoadStatus.UnsupportedSchema);
             reject("{\"schemaVersion\":1,\"gameId\":\"Elvira1\",\"records\":[]}", RuntimeUiTextLoadStatus.GameMismatch);
             reject("{\"schemaVersion\":1,\"gameId\":\"Elvira2\",\"records\":[{\"logicalRecordId\":\"SaveFailure\",\"text\":\"x\"},{\"logicalRecordId\":\"savefailure\",\"text\":\"y\"}]}", RuntimeUiTextLoadStatus.DuplicateLogicalId);
             reject("{\"schemaVersion\":1,\"gameId\":\"Elvira2\",\"records\":[{\"logicalRecordId\":\"FutureRoute\",\"text\":\"x\"}]}", RuntimeUiTextLoadStatus.UnknownLogicalId);
+            // Schema v2 identity is (runtime, logical record): duplicates and
+            // unknown runtimes fail closed with their own reasons.
+            reject("{\"schemaVersion\":2,\"gameId\":\"Elvira2\",\"records\":[{\"runtime\":\"Elvira2Vga\",\"logicalRecordId\":\"SaveFailure\",\"text\":\"x\"},{\"runtime\":\"Elvira2Vga\",\"logicalRecordId\":\"SaveFailure\",\"text\":\"y\"}]}", RuntimeUiTextLoadStatus.DuplicateLogicalId);
+            reject("{\"schemaVersion\":2,\"gameId\":\"Elvira2\",\"records\":[{\"runtime\":\"FutureRuntime\",\"logicalRecordId\":\"SaveFailure\",\"text\":\"x\"}]}", RuntimeUiTextLoadStatus.UnknownRuntime);
+            reject("{\"schemaVersion\":2,\"gameId\":\"Elvira2\",\"records\":[{\"runtime\":\"Elvira2Vga\",\"logicalRecordId\":\"FutureRoute\",\"text\":\"x\"}]}", RuntimeUiTextLoadStatus.UnknownLogicalId);
 
             var directories = new VariantDirectoryService(); var disposable = new DisposableVariantBuildService(directories);
             foreach (VariantContext variant in VariantContextCatalog.CreateBuiltIns(e1).Concat(VariantContextCatalog.CreateBuiltIns(e2)))
@@ -3380,24 +3553,30 @@ internal static class Program
             VariantContext ega = VariantContextCatalog.CreateBuiltIns(e1).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
             VariantContext runit = VariantContextCatalog.CreateBuiltIns(e2).Single();
 
-            RuntimeUiTextState e1State = texts.SetOverride(e1, texts.Load(e1).State!, RuntimeUiLogicalRecordId.SaveFailure, "Save failed");
+            // R9F EGA contracts: project state stores frozen full records
+            // (prefix + field + frozen tail). A raw message without structure
+            // no longer validates: capacity fit alone never implies editability.
+            RuntimeUiTextState e1State = texts.SetOverride(e1, texts.Load(e1).State!, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "\r    Save failed.");
             RuntimeUiLayoutValidationResult validEga = layouts.Validate(ega, e1State, RuntimeUiLogicalRecordId.SaveFailure);
-            if (validEga is not { Status: RuntimeUiLayoutValidationStatus.Valid, PayloadBytesIncludingTerminator: 12, RecordCapacity: 18 } ||
-                !validEga.EncodedPayload.SequenceEqual(GamePcTextEditor.GetEncoding("CP852").GetBytes("Save failed")))
+            if (validEga is not { Status: RuntimeUiLayoutValidationStatus.Valid, PayloadBytesIncludingTerminator: 18, RecordCapacity: 18 } ||
+                !validEga.EncodedPayload.SequenceEqual(GamePcTextEditor.GetEncoding("CP852").GetBytes("\r    Save failed.")))
                 throw new InvalidDataException("Valid EGA CP852 record did not validate deterministically.");
+            RuntimeUiTextState unstructured = texts.SetOverride(e1, texts.Load(e1).State!, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "Save failed");
+            if (layouts.Validate(ega, unstructured, RuntimeUiLogicalRecordId.SaveFailure).Status != RuntimeUiLayoutValidationStatus.HotspotViolation)
+                throw new InvalidDataException("Unstructured EGA value lost its hotspot failure instead of a misleading Valid.");
             if (layouts.Validate(vga, e1State, RuntimeUiLogicalRecordId.SaveFailure) is not { Status: RuntimeUiLayoutValidationStatus.MappingIncomplete, RecordCapacity: null })
                 throw new InvalidDataException("RUNVGA layout validation borrowed an unproven EGA record capacity or manufactured a span.");
 
-            RuntimeUiTextState exact = texts.SetOverride(e1, e1State, RuntimeUiLogicalRecordId.SaveFailure, new string('A', 17));
-            RuntimeUiTextState oversized = texts.SetOverride(e1, exact, RuntimeUiLogicalRecordId.SaveFailure, new string('A', 18));
+            RuntimeUiTextState exact = texts.SetOverride(e1, e1State, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "\r    " + new string('A', 12));
+            RuntimeUiTextState oversized = texts.SetOverride(e1, exact, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "\r    " + new string('A', 13));
             if (layouts.Validate(ega, exact, RuntimeUiLogicalRecordId.SaveFailure).Status != RuntimeUiLayoutValidationStatus.Valid ||
                 layouts.Validate(ega, oversized, RuntimeUiLogicalRecordId.SaveFailure) is not { Status: RuntimeUiLayoutValidationStatus.RecordCapacityExceeded, PayloadBytesIncludingTerminator: 19 })
                 throw new InvalidDataException("Record capacity/NUL boundary validation failed.");
-            RuntimeUiTextState unsupported = texts.SetOverride(e1, e1State, RuntimeUiLogicalRecordId.SaveFailure, "bad 😀");
+            RuntimeUiTextState unsupported = texts.SetOverride(e1, e1State, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "\r    bad \U0001F600");
             if (layouts.Validate(ega, unsupported, RuntimeUiLogicalRecordId.SaveFailure).Status != RuntimeUiLayoutValidationStatus.EncodingFailure)
                 throw new InvalidDataException("Unsupported Unicode did not fail strict CP852 validation.");
-            string reserved = GamePcTextEditor.GetEncoding("CP852").GetString([(byte)FontSlotMetadata.HudEraseGlyph]);
-            RuntimeUiTextState protectedGlyph = texts.SetOverride(e1, e1State, RuntimeUiLogicalRecordId.SaveFailure, reserved);
+            string reserved = "\r    " + GamePcTextEditor.GetEncoding("CP852").GetString([(byte)FontSlotMetadata.HudEraseGlyph]);
+            RuntimeUiTextState protectedGlyph = texts.SetOverride(e1, e1State, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, reserved);
             if (layouts.Validate(ega, protectedGlyph, RuntimeUiLogicalRecordId.SaveFailure).Status != RuntimeUiLayoutValidationStatus.UnsupportedGlyph)
                 throw new InvalidDataException("Reserved HUD glyph 0x81 was accepted as UI text.");
             RuntimeUiLayoutValidationBatchResult egaBatch = layouts.ValidateAll(ega, e1State);
@@ -3405,7 +3584,7 @@ internal static class Program
                 egaBatch.Records.Any(value => value.Status == RuntimeUiLayoutValidationStatus.BankCapacityExceeded))
                 throw new InvalidDataException("RUNEGA batch bank validation did not preserve its frozen layout.");
 
-            RuntimeUiTextState e2State = texts.SetOverride(e2, texts.Load(e2).State!, RuntimeUiLogicalRecordId.SaveFailure, "Save failed");
+            RuntimeUiTextState e2State = texts.SetOverride(e2, texts.Load(e2).State!, VariantRuntimeKind.Elvira2Vga, RuntimeUiLogicalRecordId.SaveFailure, "Save failed");
             if (layouts.Validate(runit, e2State, RuntimeUiLogicalRecordId.SaveFailure) is not { Status: RuntimeUiLayoutValidationStatus.Valid, RecordCapacity: 21, BankCapacity: 0x800 } ||
                 layouts.Validate(runit, e2State, RuntimeUiLogicalRecordId.LoadFailure).Status != RuntimeUiLayoutValidationStatus.MappingIncomplete ||
                 layouts.Validate(runit, e2State, RuntimeUiLogicalRecordId.FileNotFound).Status != RuntimeUiLayoutValidationStatus.MappingIncomplete ||
@@ -3417,6 +3596,3085 @@ internal static class Program
             _ = layouts.ValidateAll(ega, e1State);
             if ((File.Exists(e1Path) ? File.ReadAllText(e1Path) : null) != before)
                 throw new InvalidDataException("Read-only validation wrote runtime-ui.json.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRunVgaPauseMenuSmoke(string elvira1Source, string elvira2Source)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RunVgaPauseSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            var texts = new RuntimeUiTextService();
+            var layouts = new RuntimeUiLayoutValidationService(texts);
+            // A. Pause original text can be read from the supported packed source.
+            string packedRunVga = Path.Combine(elvira1Source, Elvira1ProductionProfile.ActiveVgaExecutable);
+            if (!RunVgaPauseMenuService.TryDecodeFromFile(packedRunVga, out string? original, out _))
+                throw new InvalidDataException("Pause.menu original could not be decoded from the supported RUNVGA source.");
+            string expectedOriginal = RunVgaPauseMenuService.PauseOriginalText;
+            if (!original!.Equals(expectedOriginal, StringComparison.Ordinal))
+                throw new InvalidDataException("Decoded Pause.menu original diverges from frozen bytes.");
+            if (!original.Contains("Game Paused", StringComparison.Ordinal) || !original.Contains("Continue", StringComparison.Ordinal) || !original.Contains("Quit", StringComparison.Ordinal))
+                throw new InvalidDataException("Decoded Pause.menu original lost its formatted/hotspot content.");
+
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(e1).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            RuntimeUiTextState empty = texts.Load(e1).State!;
+            string validOverride = "     R9F PAUSE!\r\r\r Continue      Quit";
+            RuntimeUiTextState validState = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, validOverride);
+            // B. Valid Pause override passes validation with the proven capacity.
+            RuntimeUiLayoutValidationResult valid = layouts.Validate(vga, validState, RuntimeUiLogicalRecordId.PauseMenu);
+            if (valid.Status != RuntimeUiLayoutValidationStatus.Valid || valid.RecordCapacity != RunVgaPauseMenuService.PauseSpanLengthIncludingNul)
+                throw new InvalidDataException("Valid Pause.menu override did not validate: " + valid.Status + " / " + valid.Detail);
+            // C. Envelope overflow is not a validation failure: geometry that
+            // passes routes to appended materialization at build time.
+            RuntimeUiTextState tooLong = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "     Game PAUSED!!\r\r\r Continue      Quit");
+            if (layouts.Validate(vga, tooLong, RuntimeUiLogicalRecordId.PauseMenu).Status != RuntimeUiLayoutValidationStatus.Valid)
+                throw new InvalidDataException("Over-envelope Pause.menu geometry was rejected at validation.");
+            if (RunVgaVariableUiService.Decide(RuntimeUiLogicalRecordId.PauseMenu, "     Game PAUSED!!\r\r\r Continue      Quit") != RunVgaMaterializationKind.Appended)
+                throw new InvalidDataException("Over-envelope Pause.menu was not routed to appended materialization.");
+            // D. Embedded newline fails closed.
+            RuntimeUiTextState newline = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "     Game\nPaused\r\r\r Continue      Quit");
+            if (layouts.Validate(vga, newline, RuntimeUiLogicalRecordId.PauseMenu).IsValid)
+                throw new InvalidDataException("Pause.menu newline override was accepted.");
+            // E. Unrepresentable CP852 character fails.
+            RuntimeUiTextState emoji = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "     Game \U0001F600\r\r\r Continue      Quit");
+            if (layouts.Validate(vga, emoji, RuntimeUiLogicalRecordId.PauseMenu).Status != RuntimeUiLayoutValidationStatus.EncodingFailure)
+                throw new InvalidDataException("Pause.menu emoji override was accepted.");
+            // F. Fixed-column violation fails (hotspot keywords present but shifted).
+            RuntimeUiTextState shifted = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "     Game Paused\r\r\r  Continue     Quit");
+            if (layouts.Validate(vga, shifted, RuntimeUiLogicalRecordId.PauseMenu).Status != RuntimeUiLayoutValidationStatus.FixedColumnViolation)
+                throw new InvalidDataException("Pause.menu fixed-column shift was accepted.");
+            RuntimeUiTextState noIndent = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "Game Paused\r\r\r Continue      Quit");
+            if (layouts.Validate(vga, noIndent, RuntimeUiLogicalRecordId.PauseMenu).Status != RuntimeUiLayoutValidationStatus.FixedColumnViolation)
+                throw new InvalidDataException("Pause.menu missing leading spaces were accepted.");
+            // G. Translated button labels with frozen anchors validate (the
+            // old English-width hotspot rule is retired for these records).
+            RuntimeUiTextState hotspot = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "     Game Paused\r\r\r Continue      Exit");
+            if (layouts.Validate(vga, hotspot, RuntimeUiLogicalRecordId.PauseMenu).Status != RuntimeUiLayoutValidationStatus.Valid)
+                throw new InvalidDataException("Translated Quit label was rejected.");
+            // G2. Keywordless structural damage still fails as hotspot.
+            RuntimeUiTextState damaged = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "     Game Paused\r\r\r Avanti Salir");
+            if (layouts.Validate(vga, damaged, RuntimeUiLogicalRecordId.PauseMenu).Status != RuntimeUiLayoutValidationStatus.HotspotViolation)
+                throw new InvalidDataException("Keywordless Pause.menu damage was accepted.");
+            RuntimeUiTextState separators = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "     Game Paused Continue      Quit");
+            if (layouts.Validate(vga, separators, RuntimeUiLogicalRecordId.PauseMenu).Status != RuntimeUiLayoutValidationStatus.FixedColumnViolation)
+                throw new InvalidDataException("Pause.menu missing separators were accepted.");
+            // T1. Title-only UX: "Pozastavené" (11 CP852 bytes incl. é) composes
+            // the frozen record: 5 spaces + title + 3 CRs + frozen hotspot.
+            if (!RunVgaPauseMenuService.TryComposeFromTitle("Pozastavené", out string composedTitle, out _, out _))
+                throw new InvalidDataException("Valid Pause.menu title was rejected.");
+            if (!composedTitle.Equals("     Pozastavené\r\r\r Continue      Quit", StringComparison.Ordinal))
+                throw new InvalidDataException("Pause.menu title composition diverged from the frozen layout.");
+            if (!RunVgaPauseMenuService.TryEncodePauseOverride(composedTitle, out byte[] titleSpan, out _, out _))
+                throw new InvalidDataException("Composed Pause.menu title did not encode.");
+            if (titleSpan.Length != RunVgaPauseMenuService.PauseSpanLengthIncludingNul ||
+                !titleSpan.AsSpan(0, 5).SequenceEqual("     "u8.ToArray()) ||
+                !titleSpan.AsSpan(5 + 11, 3).SequenceEqual([(byte)0x0D, (byte)0x0D, (byte)0x0D]) ||
+                !GamePcTextEditor.GetEncoding("CP852").GetString(titleSpan, 5 + 11 + 3, 19).Equals(RunVgaPauseMenuService.PauseHotspotLine, StringComparison.Ordinal))
+                throw new InvalidDataException("Composed Pause.menu title broke the 39-byte span anatomy.");
+            // T2. Title UX rejections: newline, control, empty (title-only
+            // composer keeps its frozen in-place contract). Length beyond
+            // English 11 is governed by the proven one-line visual bound
+            // (16 title columns) in the variable composer: 12 chars pass
+            // (appended), 17 chars fail as row overflow.
+            if (RunVgaPauseMenuService.TryComposeFromTitle("Pozastavené!", out _, out _, out _))
+                throw new InvalidDataException("12-character Pause.menu title was accepted.");
+            if (RunVgaPauseMenuService.TryComposeFromTitle("A\nB", out _, out _, out _) ||
+                RunVgaPauseMenuService.TryComposeFromTitle("A\x01B", out _, out _, out _) ||
+                RunVgaPauseMenuService.TryComposeFromTitle(string.Empty, out _, out _, out _))
+                throw new InvalidDataException("Pause.menu newline/control/empty title was accepted.");
+            // T3. Title round-trips: save composed full record, reload, extract
+            // the semantic title for grid display.
+            RuntimeUiTextState titleState = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, composedTitle);
+            RuntimeUiTextSaveResult titleSaved = texts.Save(e1, titleState);
+            if (!titleSaved.Succeeded) throw new InvalidDataException("Pause.menu title project save failed.");
+            RuntimeUiTextLoadResult titleReloaded = texts.Load(e1);
+            if (!titleReloaded.IsSuccess ||
+                !RunVgaPauseMenuService.TryExtractTitle(titleReloaded.State!.Overrides.Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu).Text, out string? reloadedTitle) ||
+                !reloadedTitle!.Equals("Pozastavené", StringComparison.Ordinal))
+                throw new InvalidDataException("Pause.menu title did not survive project save/load.");
+            RuntimeUiTextState titleReset = texts.RemoveOverride(e1, titleReloaded.State, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu);
+            if (titleReset.Overrides.Count != 0 || !texts.Save(e1, titleReset).Succeeded)
+                throw new InvalidDataException("Pause.menu title reset regressed.");
+            // T4. Legacy full-record overrides stay compatible: extract shows
+            // the title and recomposition is byte-identical to storage.
+            if (!RunVgaPauseMenuService.TryExtractTitle(validOverride, out string? legacyTitle) ||
+                !legacyTitle!.Equals("R9F PAUSE!", StringComparison.Ordinal))
+                throw new InvalidDataException("Legacy full-record Pause.menu override lost its title.");
+            if (!RunVgaPauseMenuService.TryComposeFromTitle(legacyTitle, out string recomposed, out _, out _) ||
+                !recomposed.Equals(validOverride, StringComparison.Ordinal))
+                throw new InvalidDataException("Legacy full-record recomposition diverged.");
+            // T5. No-op materialization: title "Game Paused" composes the
+            // pristine record; applying it to a default V5 may be
+            // byte-identical and must still verify with size unchanged.
+            if (!RunVgaPauseMenuService.TryComposeFromTitle("Game Paused", out string noopFull, out _, out _))
+                throw new InvalidDataException("Pristine Pause.menu title was rejected.");
+            if (!noopFull.Equals(RunVgaPauseMenuService.PauseOriginalText, StringComparison.Ordinal))
+                throw new InvalidDataException("No-op Pause.menu composition diverged from pristine bytes.");
+            string noopSrc = Path.Combine(root, "noop-pristine-runvga.exe");
+            string noopV5 = Path.Combine(root, "noop-pristine-v5.exe");
+            string noopPristineHash = HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable));
+            File.Copy(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable), noopSrc, true);
+            RunVgaBootstrapService.CreateExtendedCp852(noopSrc, noopV5, GlyphRepository.CreateAllCp852Slots());
+            byte[] noopBefore = File.ReadAllBytes(noopV5);
+            byte[] noopAfter = (byte[])noopBefore.Clone();
+            RunVgaPauseMenuService.ApplyToImage(noopAfter, noopFull);
+            RunVgaPauseMenuService.VerifyOnlyPauseBytesChanged(noopBefore, noopAfter);
+            if (noopBefore.Length != noopAfter.Length)
+                throw new InvalidDataException("No-op Pause.menu materialization changed executable size.");
+            if (HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable)) != noopPristineHash)
+                throw new InvalidDataException("No-op Pause.menu check modified the pristine source.");
+            // V1. Variable-width Slovak triple composes POC-exact bytes with
+            // frozen anchors (no English-width limits anywhere).
+            var skPauseEdits = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["title"] = "Pozastavené",
+                ["continue"] = "Pokračuj",
+                ["quit"] = "Koniec"
+            };
+            if (!RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.PauseMenu, skPauseEdits, out string skPauseFull, out _, out string skPauseDetail))
+                throw new InvalidDataException("Slovak Pause.menu triple was rejected: " + skPauseDetail);
+            if (!skPauseFull.Equals("     Pozastavené\r\r\r Pokračuj      Koniec", StringComparison.Ordinal))
+                throw new InvalidDataException("Slovak Pause.menu composition diverged from the POC bytes.");
+            string skPauseLine = skPauseFull.Split("\r\r\r")[1];
+            if (skPauseLine.IndexOf("Pokračuj", StringComparison.Ordinal) != 1 || skPauseLine.IndexOf("Koniec", StringComparison.Ordinal) != 15)
+                throw new InvalidDataException("Slovak Pause.menu anchors moved.");
+            if (skPauseLine.Contains('\n') || skPauseFull.Split("\r\r\r").Length != 2)
+                throw new InvalidDataException("Slovak Pause.menu broke the one-line option row.");
+            if (RunVgaVariableUiService.Decide(RuntimeUiLogicalRecordId.PauseMenu, skPauseFull) != RunVgaMaterializationKind.Appended)
+                throw new InvalidDataException("Over-envelope Pause.menu was not routed to appended materialization.");
+            // V1b. 12-char titles pass the visual bound (appended); 17 fail.
+            var twelveTitle = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["title"] = "Pozastavené!",
+                ["continue"] = "Continue",
+                ["quit"] = "Quit"
+            };
+            if (!RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.PauseMenu, twelveTitle, out _, out _, out _))
+                throw new InvalidDataException("12-character Pause.menu title was rejected.");
+            var seventeenTitle = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["title"] = "12345678901234567",
+                ["continue"] = "Continue",
+                ["quit"] = "Quit"
+            };
+            if (RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.PauseMenu, seventeenTitle, out _, out RunVgaVariableFailureKind seventeenFailure, out _))
+                throw new InvalidDataException("17-character Pause.menu title was accepted.");
+            if (seventeenFailure != RunVgaVariableFailureKind.RowOverflow)
+                throw new InvalidDataException("17-character title did not fail as row overflow.");
+            // V2. A Continue translation reaching the frozen Quit anchor is
+            // rejected as VISUAL COLLISION, never as "max 8 chars".
+            var colliding = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["title"] = "Game Paused",
+                ["continue"] = "12345678901234",
+                ["quit"] = "Quit"
+            };
+            if (RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.PauseMenu, colliding, out _, out RunVgaVariableFailureKind collideFailure, out string collideDetail))
+                throw new InvalidDataException("Colliding Continue translation was accepted.");
+            if (collideFailure != RunVgaVariableFailureKind.VisualCollision || !collideDetail.Contains("Continue", StringComparison.Ordinal) || !collideDetail.Contains("Quit", StringComparison.Ordinal) || collideDetail.Contains("8", StringComparison.Ordinal))
+                throw new InvalidDataException("Collision rejection is not anchor-based: " + collideDetail);
+            // V3. An excessively long Quit is rejected only by the proven
+            // visual row bound (21), never by English length 4.
+            var longQuit = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["title"] = "Game Paused",
+                ["continue"] = "Continue",
+                ["quit"] = "1234567"
+            };
+            if (RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.PauseMenu, longQuit, out _, out RunVgaVariableFailureKind quitFailure, out string quitDetail))
+                throw new InvalidDataException("Overflowing Quit label was accepted.");
+            if (quitFailure != RunVgaVariableFailureKind.RowOverflow || !quitDetail.Contains("21", StringComparison.Ordinal))
+                throw new InvalidDataException("Quit rejection is not row-bound-based: " + quitDetail);
+            // V5. Legacy title-only migration: saved title carries over,
+            // Continue/Quit reset to English originals, byte-identical for
+            // title-only states.
+            if (!RunVgaVariableUiService.TryMigratePauseTitle(validOverride, out string migratedTitle, out string migratedFull))
+                throw new InvalidDataException("Legacy Pause title migration failed.");
+            if (!migratedTitle.Equals("R9F PAUSE!", StringComparison.Ordinal) || !migratedFull.Equals(validOverride, StringComparison.Ordinal))
+                throw new InvalidDataException("Legacy Pause title migration diverged.");
+            // H. Project save/reload roundtrip preserves the override only.
+            RuntimeUiTextSaveResult saved = texts.Save(e1, validState);
+            if (!saved.Succeeded) throw new InvalidDataException("Pause.menu project save failed: " + saved.Detail);
+            RuntimeUiTextLoadResult reloaded = texts.Load(e1);
+            if (!reloaded.IsSuccess || !reloaded.State!.Overrides.SequenceEqual(validState.Overrides))
+                throw new InvalidDataException("Pause.menu project roundtrip diverged.");
+            if (File.ReadAllText(saved.Path).Contains("PointerSitePhysicalOffset", StringComparison.Ordinal))
+                throw new InvalidDataException("Pause.menu project state leaked binary layout metadata.");
+
+            // I/J/K/L. CompositeBuild end-to-end (SK translated V5 variant).
+            var directories = new VariantDirectoryService();
+            var translations = new TranslationProjectService();
+            var graphics = new GraphicsVariantService();
+            TranslationProjectState textState = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(e1, textState, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            textState = translations.Add(textState, sk); translations.Save(e1, textState);
+            GraphicsProjectState graphicsState = GraphicsProjectState.Empty(ElviraGameProfile.Elvira1);
+            string pristinePackedHash = HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable));
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, vga, sk.Code), VariantDirectoryOperationStatus.Created, "pause fixture variant directory");
+            CompositeBuildService pauseBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics, new ActiveProjectBuildInput(sk, graphicsState, validState)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            CompositeBuildResult pauseResult = pauseBuild.Build(e1, vga, CompositeBuildMode.Full);
+            if (pauseResult.Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("Pause.menu composite build failed: " + pauseResult.Status + " / " + pauseResult.Stages.Last().Detail);
+            string variantRoot = directories.GetVariantEditionDirectoryPath(e1, vga, sk.Code);
+            string patchedV5 = Path.Combine(variantRoot, ActiveProjectBuildIdentity.ExecutableName(vga, sk));
+            if (!File.Exists(patchedV5))
+                throw new InvalidDataException("Patched V5 variant output is missing.");
+            byte[] after = File.ReadAllBytes(patchedV5);
+            // Independent pristine V5 expectation from the same packed source.
+            string tmpSrc = Path.Combine(root, "tmp-pristine-runvga.exe");
+            string tmpV5 = Path.Combine(root, "tmp-pristine-v5.exe");
+            File.Copy(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable), tmpSrc, true);
+            RunVgaBootstrapService.CreateExtendedCp852(tmpSrc, tmpV5, GlyphRepository.CreateAllCp852Slots());
+            byte[] beforeV5 = File.ReadAllBytes(tmpV5);
+            RunVgaPauseMenuService.VerifyOnlyPauseBytesChanged(beforeV5, after);
+            // L. Generated variant contains the expected Pause text.
+            if (!RunVgaPauseMenuService.TryDecodePause(after, out string? patchedText, out _))
+                throw new InvalidDataException("Patched V5 Pause.menu did not decode.");
+            if (!patchedText!.Equals(validOverride, StringComparison.Ordinal))
+                throw new InvalidDataException("Patched V5 Pause.menu text mismatch.");
+            // V4. Variable-width Slovak Pause materializes via one
+            // deterministic append: grown image, patched callsite, thunk,
+            // relocated record, relocations, margin fix, whitelist shape.
+            RuntimeUiTextState skPauseState = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, skPauseFull);
+            CompositeBuildService skPauseBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics, new ActiveProjectBuildInput(sk, graphicsState, skPauseState)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (skPauseBuild.Build(e1, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("Slovak Pause.menu composite build failed.");
+            byte[] skPatched = File.ReadAllBytes(patchedV5);
+            if (skPatched.Length != beforeV5.Length + 0x200)
+                throw new InvalidDataException("Appended Slovak Pause.menu output has the wrong size.");
+            if (!skPatched.AsSpan(0xCCF7, 5).SequenceEqual(new byte[] { 0x9A, 0x00, 0x00, 0x26, 0x39 }))
+                throw new InvalidDataException("Pause callsite was not redirected to the append thunk.");
+            int skAppend = beforeV5.Length;
+            byte[] expectedThunk = [0x52, 0xB6, 0x00, 0xBF, 0xC0, 0x00, 0x2E, 0x8A, 0x15, 0x47, 0x0A, 0xD2, 0x74, 0x06, 0x0E, 0xE8, 0x07, 0x00,
+                0xEB, 0xF2, 0xBF, 0xDC, 0x2C, 0x5A, 0xCB, 0xBB, 0x75, 0x02, 0x53, 0xEA, 0x76, 0x02, 0xBD, 0x0C];
+            if (!skPatched.AsSpan(skAppend, expectedThunk.Length).SequenceEqual(expectedThunk))
+                throw new InvalidDataException("Appended Pause thunk diverged from the POC structure.");
+            byte[] skPayload = GamePcTextEditor.GetEncoding("CP852").GetBytes(skPauseFull);
+            if (!skPatched.AsSpan(skAppend + 0xC0, skPayload.Length).SequenceEqual(skPayload) || skPatched[skAppend + 0xC0 + skPayload.Length] != 0x00)
+                throw new InvalidDataException("Appended Pause record diverged from the POC bytes.");
+            if (skPatched[0x1163A] != 0xA0)
+                throw new InvalidDataException("Appended output missed the memory-margin fix.");
+            if (!skPatched.AsSpan(0xCD29, 5).SequenceEqual(new byte[] { 0x9A, 0x92, 0x00, 0xBD, 0x0C }) ||
+                !skPatched.AsSpan(0xCBFC, 5).SequenceEqual(new byte[] { 0x9A, 0x92, 0x00, 0xBD, 0x0C }))
+                throw new InvalidDataException("Unrelated callsites changed during Pause append.");
+            if (!skPatched.AsSpan(0x1A625, 0x1A733 - 0x1A625 + 1).SequenceEqual(beforeV5.AsSpan(0x1A625, 0x1A733 - 0x1A625 + 1)))
+                throw new InvalidDataException("Original 8-record block changed during Pause append.");
+            string skHash = HashFile(patchedV5);
+            if (skPauseBuild.Build(e1, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success || !HashFile(patchedV5).Equals(skHash, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Slovak Pause.menu rebuild was not deterministic.");
+            if (HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable)) != pristinePackedHash)
+                throw new InvalidDataException("Slovak Pause.menu build modified the pristine RUNVGA source.");
+            // K. Pristine source RUNVGA remains byte-identical.
+            if (HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable)) != pristinePackedHash)
+                throw new InvalidDataException("Pause.menu build modified the pristine RUNVGA source.");
+            // J. A second Runtime UI override FOR THIS RUNTIME fails closed.
+            // (EGA-scoped overrides in the same file never block a VGA build.)
+            RuntimeUiTextState both = texts.SetOverride(e1, validState, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.SaveFailure, "Save failed");
+            RuntimeUiTextState egaOnly = texts.SetOverride(e1, validState, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "\r    EGA only.");
+            CompositeBuildService blockedBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics, new ActiveProjectBuildInput(sk, graphicsState, both)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (blockedBuild.Build(e1, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.PreflightFailed)
+                throw new InvalidDataException("Second Runtime UI override did not fail the build closed.");
+            // J2. An EGA-scoped override in shared project state does NOT
+            // block the VGA build and is never materialized into it.
+            CompositeBuildService egaScopedBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics, new ActiveProjectBuildInput(sk, graphicsState, egaOnly)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (egaScopedBuild.Build(e1, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("EGA-scoped override falsely blocked the VGA build.");
+            // M. Route evidence unchanged.
+            Elvira1ProductionProfile.VerifyFrozenInvariants();
+            if (Elvira1ProductionProfile.RunVgaRouteEvidence(RuntimeUiLogicalRecordId.PauseMenu) != FrozenRuntimeEvidence.ProvenLive)
+                throw new InvalidDataException("Pause.menu route evidence regressed.");
+            foreach (RuntimeUiLogicalRecordId id in new[] { RuntimeUiLogicalRecordId.ConfirmGeneric, RuntimeUiLogicalRecordId.SavePrompt, RuntimeUiLogicalRecordId.SaveFailure, RuntimeUiLogicalRecordId.LoadFailure, RuntimeUiLogicalRecordId.FileNotFound, RuntimeUiLogicalRecordId.TryAnotherDisk, RuntimeUiLogicalRecordId.SaveOverwrite })
+                if (Elvira1ProductionProfile.RunVgaRouteEvidence(id) != FrozenRuntimeEvidence.ProvenByBinary)
+                    throw new InvalidDataException("RUNVGA route evidence regressed for " + id);
+            // V6. Proven-live mapping: the three structured records project
+            // SupportedAndMapped/ProvenLive; the other five stay incomplete.
+            var mappingTexts = new RuntimeUiTextService();
+            RuntimeUiTextState mappingEmpty = mappingTexts.Load(e1).State!;
+            foreach (RuntimeUiLogicalRecordId id in new[] { RuntimeUiLogicalRecordId.PauseMenu, RuntimeUiLogicalRecordId.ConfirmGeneric, RuntimeUiLogicalRecordId.SaveOverwrite })
+            {
+                RuntimeUiRuntimeProjection projection = mappingTexts.GetEffectiveRecords(vga, mappingEmpty).Single(value => value.LogicalRecordId == id);
+                if (projection.MappingReadiness != RuntimeUiMappingReadiness.SupportedAndMapped || projection.EvidenceStatus != RuntimeUiEvidenceStatus.ProvenLive)
+                    throw new InvalidDataException("Proven-live VGA mapping regressed for " + id);
+            }
+            foreach (RuntimeUiLogicalRecordId id in new[] { RuntimeUiLogicalRecordId.SavePrompt, RuntimeUiLogicalRecordId.SaveFailure, RuntimeUiLogicalRecordId.LoadFailure, RuntimeUiLogicalRecordId.FileNotFound, RuntimeUiLogicalRecordId.TryAnotherDisk })
+            {
+                if (mappingTexts.GetEffectiveRecords(vga, mappingEmpty).Single(value => value.LogicalRecordId == id).MappingReadiness != RuntimeUiMappingReadiness.KnownButMappingIncomplete)
+                    throw new InvalidDataException("VGA mapping leaked beyond the proven-live records: " + id);
+            }
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRunVgaConfirmSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V5: Confirm.generic is proven-live variable-width. Slovak
+        // values compose POC-exact bytes with frozen anchors; overflow
+        // routes to appended materialization deterministically.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RunVgaConfirmSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            var texts = new RuntimeUiTextService();
+            var layouts = new RuntimeUiLayoutValidationService(texts);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(e1).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            RuntimeUiTextState empty = texts.Load(e1).State!;
+            // A. Authoritative original + anchors + semantic parse.
+            if (!RunVgaVariableUiService.TryDecodeOriginalFromGameRoot(e1.GameRoot, RuntimeUiLogicalRecordId.ConfirmGeneric, out string? original, out _) ||
+                !original!.Equals("    Are you sure ?\r\r\r     Yes       No", StringComparison.Ordinal))
+                throw new InvalidDataException("Confirm.generic original diverged.");
+            if (!RunVgaVariableUiService.TryParse(RuntimeUiLogicalRecordId.ConfirmGeneric, original, out IReadOnlyDictionary<string, string>? fields) || fields is null ||
+                !fields["prompt"].Equals("Are you sure ?", StringComparison.Ordinal) || !fields["yes"].Equals("Yes", StringComparison.Ordinal) || !fields["no"].Equals("No", StringComparison.Ordinal))
+                throw new InvalidDataException("Confirm.generic semantic parse diverged.");
+            // B. POC-exact record: English prompt with Áno/Nie (40 bytes).
+            var pocEdits = new Dictionary<string, string>(StringComparer.Ordinal) { ["prompt"] = "Are you sure ?", ["yes"] = "Áno", ["no"] = "Nie" };
+            if (!RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.ConfirmGeneric, pocEdits, out string pocFull, out _, out _))
+                throw new InvalidDataException("POC Confirm.generic composition failed.");
+            if (!pocFull.Equals("    Are you sure ?\r\r\r     Áno       Nie", StringComparison.Ordinal))
+                throw new InvalidDataException("POC Confirm.generic bytes diverged.");
+            // C. Slovak triple: anchors frozen, no English 3/2 limitation.
+            var skEdits = new Dictionary<string, string>(StringComparer.Ordinal) { ["prompt"] = "Si si istý?", ["yes"] = "Áno", ["no"] = "Nie" };
+            if (!RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.ConfirmGeneric, skEdits, out string skFull, out _, out string skDetail))
+                throw new InvalidDataException("Slovak Confirm.generic was rejected: " + skDetail);
+            if (!skFull.Equals("    Si si istý?\r\r\r     Áno       Nie", StringComparison.Ordinal))
+                throw new InvalidDataException("Slovak Confirm.generic bytes diverged.");
+            string skLine = skFull.Split("\r\r\r")[1];
+            if (skLine.IndexOf("Áno", StringComparison.Ordinal) != 5 || skLine.IndexOf("Nie", StringComparison.Ordinal) != 15)
+                throw new InvalidDataException("Slovak Confirm.generic anchors moved.");
+            // D. Slovak Confirm fits the envelope: in-place materialization.
+            if (RunVgaVariableUiService.Decide(RuntimeUiLogicalRecordId.ConfirmGeneric, skFull) != RunVgaMaterializationKind.InPlace)
+                throw new InvalidDataException("Fitting Confirm.generic was not routed in place.");
+            RuntimeUiTextState skState = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.ConfirmGeneric, skFull);
+            if (layouts.Validate(vga, skState, RuntimeUiLogicalRecordId.ConfirmGeneric).Status != RuntimeUiLayoutValidationStatus.Valid)
+                throw new InvalidDataException("Slovak Confirm.generic did not validate.");
+            // E. Collision (Yes reaching the No anchor) fails as geometry.
+            var collide = new Dictionary<string, string>(StringComparer.Ordinal) { ["prompt"] = "Are you sure ?", ["yes"] = "1234567890", ["no"] = "No" };
+            if (RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.ConfirmGeneric, collide, out _, out RunVgaVariableFailureKind collideFailure, out _))
+                throw new InvalidDataException("Colliding Yes translation was accepted.");
+            if (collideFailure != RunVgaVariableFailureKind.VisualCollision)
+                throw new InvalidDataException("Yes collision did not fail as geometry collision.");
+            // F. Overlong No (4 chars, row 19 > 18) fails as row overflow.
+            var longNo = new Dictionary<string, string>(StringComparer.Ordinal) { ["prompt"] = "Are you sure ?", ["yes"] = "Yes", ["no"] = "Nein" };
+            if (RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.ConfirmGeneric, longNo, out _, out RunVgaVariableFailureKind noFailure, out string noDetail))
+                throw new InvalidDataException("Overflowing No label was accepted.");
+            if (noFailure != RunVgaVariableFailureKind.RowOverflow || !noDetail.Contains("18", StringComparison.Ordinal))
+                throw new InvalidDataException("No rejection is not row-bound-based: " + noDetail);
+            // G. Semantic save/reload + Reset round trip.
+            if (!texts.Save(e1, skState).Succeeded || !texts.Load(e1).IsSuccess)
+                throw new InvalidDataException("Confirm.generic project save/load regressed.");
+            RuntimeUiTextState reset = texts.RemoveOverride(e1, texts.Load(e1).State!, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.ConfirmGeneric);
+            if (reset.Overrides.Count != 0 || !texts.Save(e1, reset).Succeeded)
+                throw new InvalidDataException("Confirm.generic reset regressed.");
+            // H. Overflow Confirm (46 bytes) materializes via append.
+            var maxEdits = new Dictionary<string, string>(StringComparer.Ordinal) { ["prompt"] = "12345678901234567", ["yes"] = "123456789", ["no"] = "Nie" };
+            if (!RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.ConfirmGeneric, maxEdits, out string maxFull, out _, out _))
+                throw new InvalidDataException("Max-width Confirm.generic was rejected.");
+            if (RunVgaVariableUiService.Decide(RuntimeUiLogicalRecordId.ConfirmGeneric, maxFull) != RunVgaMaterializationKind.Appended)
+                throw new InvalidDataException("Over-envelope Confirm.generic was not routed to append.");
+            var translations = new TranslationProjectService();
+            var graphics = new GraphicsVariantService();
+            TranslationProjectState textState = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(e1, textState, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            textState = translations.Add(textState, sk); translations.Save(e1, textState);
+            GraphicsProjectState graphicsState = GraphicsProjectState.Empty(ElviraGameProfile.Elvira1);
+            string pristinePackedHash = HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable));
+            var directories = new VariantDirectoryService();
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, vga, sk.Code), VariantDirectoryOperationStatus.Created, "confirm fixture variant directory");
+            RuntimeUiTextState maxState = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.ConfirmGeneric, maxFull);
+            CompositeBuildService maxBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics, new ActiveProjectBuildInput(sk, graphicsState, maxState)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (maxBuild.Build(e1, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("Overflow Confirm.generic composite build failed.");
+            string variantRoot = directories.GetVariantEditionDirectoryPath(e1, vga, sk.Code);
+            string patchedV5 = Path.Combine(variantRoot, ActiveProjectBuildIdentity.ExecutableName(vga, sk));
+            byte[] patched = File.ReadAllBytes(patchedV5);
+            string tmpSrc = Path.Combine(root, "tmp-confirm-runvga.exe");
+            string tmpV5 = Path.Combine(root, "tmp-confirm-v5.exe");
+            File.Copy(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable), tmpSrc, true);
+            RunVgaBootstrapService.CreateExtendedCp852(tmpSrc, tmpV5, GlyphRepository.CreateAllCp852Slots());
+            byte[] beforeV5 = File.ReadAllBytes(tmpV5);
+            if (patched.Length != beforeV5.Length + 0x200)
+                throw new InvalidDataException("Appended Confirm.generic output has the wrong size.");
+            if (!patched.AsSpan(0xCD29, 5).SequenceEqual(new byte[] { 0x9A, 0x40, 0x00, 0x26, 0x39 }))
+                throw new InvalidDataException("Confirm callsite was not redirected to its thunk.");
+            if (!patched.AsSpan(0xCCF7, 5).SequenceEqual(new byte[] { 0x9A, 0x92, 0x00, 0xBD, 0x0C }) ||
+                !patched.AsSpan(0xCBFC, 5).SequenceEqual(new byte[] { 0x9A, 0x92, 0x00, 0xBD, 0x0C }))
+                throw new InvalidDataException("Unrelated callsites changed during Confirm append.");
+            byte[] maxPayload = GamePcTextEditor.GetEncoding("CP852").GetBytes(maxFull);
+            if (!patched.AsSpan(beforeV5.Length + 0x100, maxPayload.Length).SequenceEqual(maxPayload))
+                throw new InvalidDataException("Appended Confirm record diverged.");
+            string firstHash = HashFile(patchedV5);
+            if (maxBuild.Build(e1, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success || !HashFile(patchedV5).Equals(firstHash, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Confirm.generic rebuild was not deterministic.");
+            if (HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable)) != pristinePackedHash)
+                throw new InvalidDataException("Confirm.generic build modified the pristine RUNVGA source.");
+            // I. In-place Slovak Confirm build keeps the size and span.
+            CompositeBuildService skBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics, new ActiveProjectBuildInput(sk, graphicsState, skState)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (skBuild.Build(e1, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("In-place Slovak Confirm.generic build failed.");
+            byte[] inPlace = File.ReadAllBytes(patchedV5);
+            if (inPlace.Length != beforeV5.Length)
+                throw new InvalidDataException("In-place Confirm.generic build changed executable size.");
+            if (!RunVgaVariableUiService.TryDecodeSpan(inPlace, RuntimeUiLogicalRecordId.ConfirmGeneric, out string? roundTrip, out _) || !roundTrip!.Equals(skFull, StringComparison.Ordinal))
+                throw new InvalidDataException("In-place Confirm.generic round trip diverged.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRunVgaOverwriteSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V5: Save.overwrite is proven-live variable-width (message,
+        // question, Yes, No). The Slovak triple fits the envelope and stays
+        // in place; a max-width triple exercises the append path.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RunVgaOverwriteSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            var texts = new RuntimeUiTextService();
+            var layouts = new RuntimeUiLayoutValidationService(texts);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(e1).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            RuntimeUiTextState empty = texts.Load(e1).State!;
+            // A. Authoritative original + semantic parse.
+            if (!RunVgaVariableUiService.TryDecodeOriginalFromGameRoot(e1.GameRoot, RuntimeUiLogicalRecordId.SaveOverwrite, out string? original, out _) ||
+                !original!.Equals("\r File already exists.\r\r    Overwrite it ?\r\r     Yes       No", StringComparison.Ordinal))
+                throw new InvalidDataException("Save.overwrite original diverged.");
+            if (!RunVgaVariableUiService.TryParse(RuntimeUiLogicalRecordId.SaveOverwrite, original, out IReadOnlyDictionary<string, string>? fields) || fields is null ||
+                !fields["message"].Equals("File already exists.", StringComparison.Ordinal) || !fields["question"].Equals("Overwrite it ?", StringComparison.Ordinal) ||
+                !fields["yes"].Equals("Yes", StringComparison.Ordinal) || !fields["no"].Equals("No", StringComparison.Ordinal))
+                throw new InvalidDataException("Save.overwrite semantic parse diverged.");
+            // B. POC-exact record (63 bytes).
+            var pocEdits = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["message"] = "File already exists.",
+                ["question"] = "Overwrite it ?",
+                ["yes"] = "Áno",
+                ["no"] = "Nie"
+            };
+            if (!RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.SaveOverwrite, pocEdits, out string pocFull, out _, out _))
+                throw new InvalidDataException("POC Save.overwrite composition failed.");
+            if (!pocFull.Equals("\r File already exists.\r\r    Overwrite it ?\r\r     Áno       Nie", StringComparison.Ordinal))
+                throw new InvalidDataException("POC Save.overwrite bytes diverged.");
+            // C. Slovak triple (57 bytes): anchors frozen, in place.
+            var skEdits = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["message"] = "Súbor už existuje.",
+                ["question"] = "Prepísať?",
+                ["yes"] = "Áno",
+                ["no"] = "Nie"
+            };
+            if (!RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.SaveOverwrite, skEdits, out string skFull, out _, out string skDetail))
+                throw new InvalidDataException("Slovak Save.overwrite was rejected: " + skDetail);
+            if (!skFull.Equals("\r Súbor už existuje.\r\r    Prepísať?\r\r     Áno       Nie", StringComparison.Ordinal))
+                throw new InvalidDataException("Slovak Save.overwrite bytes diverged.");
+            string skButtonLine = skFull.Split("\r\r")[2];
+            if (skButtonLine.IndexOf("Áno", StringComparison.Ordinal) != 5 || skButtonLine.IndexOf("Nie", StringComparison.Ordinal) != 15)
+                throw new InvalidDataException("Slovak Save.overwrite anchors moved.");
+            if (RunVgaVariableUiService.Decide(RuntimeUiLogicalRecordId.SaveOverwrite, skFull) != RunVgaMaterializationKind.InPlace)
+                throw new InvalidDataException("Fitting Save.overwrite was not routed in place.");
+            RuntimeUiTextState skState = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.SaveOverwrite, skFull);
+            if (layouts.Validate(vga, skState, RuntimeUiLogicalRecordId.SaveOverwrite).Status != RuntimeUiLayoutValidationStatus.Valid)
+                throw new InvalidDataException("Slovak Save.overwrite did not validate.");
+            // D. Collision/overflow geometry (never English 3/2 limits).
+            var collide = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["message"] = "File already exists.",
+                ["question"] = "Overwrite it ?",
+                ["yes"] = "1234567890",
+                ["no"] = "No"
+            };
+            if (RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.SaveOverwrite, collide, out _, out RunVgaVariableFailureKind collideFailure, out _))
+                throw new InvalidDataException("Colliding Yes translation was accepted.");
+            if (collideFailure != RunVgaVariableFailureKind.VisualCollision)
+                throw new InvalidDataException("Overwrite Yes collision did not fail as geometry collision.");
+            var longNo = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["message"] = "File already exists.",
+                ["question"] = "Overwrite it ?",
+                ["yes"] = "Yes",
+                ["no"] = "Nein"
+            };
+            if (RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.SaveOverwrite, longNo, out _, out RunVgaVariableFailureKind noFailure, out string noDetail))
+                throw new InvalidDataException("Overflowing No label was accepted.");
+            if (noFailure != RunVgaVariableFailureKind.RowOverflow || !noDetail.Contains("18", StringComparison.Ordinal))
+                throw new InvalidDataException("Overwrite No rejection is not row-bound-based: " + noDetail);
+            // E. Semantic save/reload + Reset round trip.
+            if (!texts.Save(e1, skState).Succeeded || !texts.Load(e1).IsSuccess)
+                throw new InvalidDataException("Save.overwrite project save/load regressed.");
+            RuntimeUiTextState reset = texts.RemoveOverride(e1, texts.Load(e1).State!, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.SaveOverwrite);
+            if (reset.Overrides.Count != 0 || !texts.Save(e1, reset).Succeeded)
+                throw new InvalidDataException("Save.overwrite reset regressed.");
+            // F. Max-width triple (66 bytes) exercises the append path.
+            var maxEdits = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["message"] = "12345678901234567890",
+                ["question"] = "12345678901234567",
+                ["yes"] = "123456789",
+                ["no"] = "Nie"
+            };
+            if (!RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.SaveOverwrite, maxEdits, out string maxFull, out _, out _))
+                throw new InvalidDataException("Max-width Save.overwrite was rejected.");
+            if (RunVgaVariableUiService.Decide(RuntimeUiLogicalRecordId.SaveOverwrite, maxFull) != RunVgaMaterializationKind.Appended)
+                throw new InvalidDataException("Over-envelope Save.overwrite was not routed to append.");
+            var translations = new TranslationProjectService();
+            var graphics = new GraphicsVariantService();
+            TranslationProjectState textState = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(e1, textState, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            textState = translations.Add(textState, sk); translations.Save(e1, textState);
+            GraphicsProjectState graphicsState = GraphicsProjectState.Empty(ElviraGameProfile.Elvira1);
+            string pristinePackedHash = HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable));
+            var directories = new VariantDirectoryService();
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, vga, sk.Code), VariantDirectoryOperationStatus.Created, "overwrite fixture variant directory");
+            string variantRoot = directories.GetVariantEditionDirectoryPath(e1, vga, sk.Code);
+            string patchedV5 = Path.Combine(variantRoot, ActiveProjectBuildIdentity.ExecutableName(vga, sk));
+            string tmpSrc = Path.Combine(root, "tmp-overwrite-runvga.exe");
+            string tmpV5 = Path.Combine(root, "tmp-overwrite-v5.exe");
+            File.Copy(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable), tmpSrc, true);
+            RunVgaBootstrapService.CreateExtendedCp852(tmpSrc, tmpV5, GlyphRepository.CreateAllCp852Slots());
+            byte[] beforeV5 = File.ReadAllBytes(tmpV5);
+            // F1. In-place Slovak build: size unchanged, span round-trips.
+            CompositeBuildService skBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics, new ActiveProjectBuildInput(sk, graphicsState, skState)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (skBuild.Build(e1, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("In-place Slovak Save.overwrite build failed.");
+            byte[] inPlace = File.ReadAllBytes(patchedV5);
+            if (inPlace.Length != beforeV5.Length)
+                throw new InvalidDataException("In-place Save.overwrite build changed executable size.");
+            if (!RunVgaVariableUiService.TryDecodeSpan(inPlace, RuntimeUiLogicalRecordId.SaveOverwrite, out string? roundTrip, out _) || !roundTrip!.Equals(skFull, StringComparison.Ordinal))
+                throw new InvalidDataException("In-place Save.overwrite round trip diverged.");
+            // F2. Appended max-width build: grown image, Overwrite thunk,
+            // deterministic hash, pristine source intact.
+            RuntimeUiTextState maxState = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.SaveOverwrite, maxFull);
+            CompositeBuildService maxBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics, new ActiveProjectBuildInput(sk, graphicsState, maxState)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (maxBuild.Build(e1, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("Appended Save.overwrite build failed.");
+            byte[] appended = File.ReadAllBytes(patchedV5);
+            if (appended.Length != beforeV5.Length + 0x200)
+                throw new InvalidDataException("Appended Save.overwrite output has the wrong size.");
+            if (!appended.AsSpan(0xCBFC, 5).SequenceEqual(new byte[] { 0x9A, 0x80, 0x00, 0x26, 0x39 }))
+                throw new InvalidDataException("Overwrite callsite was not redirected to its thunk.");
+            byte[] maxPayload = GamePcTextEditor.GetEncoding("CP852").GetBytes(maxFull);
+            if (!appended.AsSpan(beforeV5.Length + 0x140, maxPayload.Length).SequenceEqual(maxPayload))
+                throw new InvalidDataException("Appended Save.overwrite record diverged.");
+            string maxHash = HashFile(patchedV5);
+            if (maxBuild.Build(e1, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success || !HashFile(patchedV5).Equals(maxHash, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Save.overwrite rebuild was not deterministic.");
+            if (HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable)) != pristinePackedHash)
+                throw new InvalidDataException("Save.overwrite build modified the pristine RUNVGA source.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRuntimeUiGridReentrancySmoke(string elvira1Source, string elvira2Source)
+    {
+        // Regression for the interactive InvalidOperationException ("reentrant
+        // call to SetCurrentCellAddressCore"): the Runtime UI grid was rebuilt
+        // synchronously (Rows.Clear/Add) from inside its own CellEndEdit commit
+        // stack. This smoke runs the same logical sequence through the deferred
+        // path on an STA message loop and proves: (a) a refresh requested from
+        // inside a SelectionChanged transition completes without throwing;
+        // (b) duplicate queued requests coalesce into exactly one rebuild (no
+        // loops); (c) rows, Pause override, dirty flag, selection and actions
+        // stay coherent. Limits: headless unshown form with a created handle;
+        // physical mouse/keyboard commit timing is not reproduced, but the
+        // queue -> pump -> worker path is line-identical to the crash path.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RuntimeUiReentrancySmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Skusobny text." });
+            translations.Save(fixture, translations.Add(text, sk));
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e1) || e1 is null)
+                throw new InvalidDataException("Grid reentrancy fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(e1);
+            if (form.RuntimeUiGridRowCountForTest != 8 || form.RuntimeUiGridPauseRowCountForTest != 1)
+                throw new InvalidDataException("Runtime UI grid did not populate deterministically.");
+            if (!form.RuntimeUiGridPauseOriginalForTest.Equals("Game Paused", StringComparison.Ordinal))
+                throw new InvalidDataException("Pause.menu title-only original regressed.");
+            form.SelectTranslationForTest("SK");
+            if (!form.RuntimeUiGridAllOverrideCellsReadOnlyForTest)
+                throw new InvalidDataException("R9F V8 grid is not fully read-only.");
+            _ = form.Handle; // created handle: BeginInvoke posts to the STA loop from here on
+            int baseline = form.RuntimeUiGridRefreshCountForTest;
+            // R9F V8: inline grid commits never mutate state. An overlong raw
+            // title via the blocked inline path is reverted without touching
+            // project state (semantic validation lives in the editor, not here).
+            form.ApplyRuntimeUiGridEditForTest(RuntimeUiLogicalRecordId.PauseMenu, "This title is way too long");
+            if (form.RuntimeUiOverrideCountForTest != 0 || form.RuntimeUiDirtyForTest || form.RuntimeUiSaveEnabledForTest)
+                throw new InvalidDataException("Blocked inline edit stored project state.");
+            PumpRuntimeUiGrid(form, baseline);
+            baseline = form.RuntimeUiGridRefreshCountForTest;
+            if (!form.RuntimeUiGridPauseOverrideForTest.Equals(string.Empty, StringComparison.Ordinal))
+                throw new InvalidDataException("Blocked inline edit was not reverted.");
+            // Raw unstructured value via inline is likewise rejected.
+            form.ApplyRuntimeUiGridEditForTest(RuntimeUiLogicalRecordId.PauseMenu, "asssss");
+            if (form.RuntimeUiOverrideCountForTest != 0 || form.RuntimeUiDirtyForTest)
+                throw new InvalidDataException("Raw inline value was stored.");
+            PumpRuntimeUiGrid(form, baseline);
+            baseline = form.RuntimeUiGridRefreshCountForTest;
+            // Newline raw value via inline is likewise rejected.
+            form.ApplyRuntimeUiGridEditForTest(RuntimeUiLogicalRecordId.PauseMenu, "A\nB");
+            if (form.RuntimeUiOverrideCountForTest != 0 || form.RuntimeUiDirtyForTest)
+                throw new InvalidDataException("Inline newline was stored.");
+            PumpRuntimeUiGrid(form, baseline);
+            baseline = form.RuntimeUiGridRefreshCountForTest;
+            // Semantic path: a valid title composes and stores.
+            string pauseTitle = "R9F PAUSE!";
+            form.ApplySemanticEditForTest(RuntimeUiLogicalRecordId.PauseMenu, pauseTitle);
+            // Burst of duplicates, including one from inside a grid
+            // SelectionChanged transition (fires inside SetCurrentCellAddressCore).
+            form.QueueRuntimeUiGridRefreshForTest();
+            if (!form.QueueRefreshFromGridTransitionForTest())
+                throw new InvalidDataException("Grid transition handler did not run.");
+            PumpRuntimeUiGrid(form, baseline);
+            if (form.RuntimeUiGridRefreshCountForTest != baseline + 1)
+                throw new InvalidDataException("Queued refreshes did not coalesce into exactly one rebuild.");
+            if (form.RuntimeUiGridRowCountForTest != 8 || form.RuntimeUiGridPauseRowCountForTest != 1)
+                throw new InvalidDataException("Deferred rebuild duplicated or lost rows.");
+            if (!form.RuntimeUiGridPauseOverrideForTest.Equals(pauseTitle, StringComparison.Ordinal))
+                throw new InvalidDataException("Pause.menu title did not survive the deferred refresh.");
+            if (!form.RuntimeUiDirtyForTest || !form.RuntimeUiSaveEnabledForTest || form.RuntimeUiOverrideCountForTest != 1)
+                throw new InvalidDataException("Dirty state, actions or project state diverged after refresh.");
+            if (form.RuntimeUiGridCurrentIdForTest is not RuntimeUiLogicalRecordId.PauseMenu)
+                throw new InvalidDataException("Current record selection was not preserved across refresh.");
+            // A second independent cycle still pumps exactly once (no stuck flag).
+            int second = form.RuntimeUiGridRefreshCountForTest;
+            form.QueueRuntimeUiGridRefreshForTest();
+            PumpRuntimeUiGrid(form, second);
+            if (form.RuntimeUiGridRefreshCountForTest != second + 1 || form.RuntimeUiGridRowCountForTest != 8)
+                throw new InvalidDataException("Second refresh cycle regressed.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRuntimeUiGridEditSafetySmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V8: the Runtime UI grid is evidence/selection only. This keeps
+        // all raw cells locked while proving known RUNVGA originals remain
+        // visible and the structured semantic editor retains the only edit path.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RuntimeUiGridEditSafety", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            translations.Save(fixture, translations.Add(text, sk));
+            var runtimeUi = new RuntimeUiTextService();
+            RuntimeUiTextState legacyState = new(
+                PristineManifestService.GameIdFor(ElviraGameProfile.Elvira1),
+                [],
+                [new(RuntimeUiLogicalRecordId.FileNotFound, "Legacy residue", [VariantRuntimeKind.Elvira1Vga, VariantRuntimeKind.Elvira1Ega], RuntimeUiTextService.ReasonAmbiguous)]);
+            if (!runtimeUi.Save(fixture, "SK", legacyState).Succeeded)
+                throw new InvalidDataException("Could not create the disposable Runtime UI legacy-residue fixture.");
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Grid edit-safety fixture did not validate as an installation.");
+
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            var expectedOriginals = new Dictionary<RuntimeUiLogicalRecordId, string>
+            {
+                [RuntimeUiLogicalRecordId.PauseMenu] = "Game Paused",
+                [RuntimeUiLogicalRecordId.ConfirmGeneric] = "Are you sure ?",
+                [RuntimeUiLogicalRecordId.SavePrompt] = "Insert savegame data disk & enter filename:",
+                [RuntimeUiLogicalRecordId.SaveFailure] = "Save failed.",
+                [RuntimeUiLogicalRecordId.LoadFailure] = "Load failed.",
+                [RuntimeUiLogicalRecordId.FileNotFound] = "File not found.",
+                [RuntimeUiLogicalRecordId.TryAnotherDisk] = "Try another disk.",
+                [RuntimeUiLogicalRecordId.SaveOverwrite] = "File already exists."
+            };
+            if (form.RuntimeUiGridRowCountForTest != expectedOriginals.Count || !form.RuntimeUiGridAllOverrideCellsReadOnlyForTest)
+                throw new InvalidDataException("Original Runtime UI grid is not complete and read-only.");
+            foreach ((RuntimeUiLogicalRecordId id, string expected) in expectedOriginals)
+            {
+                if (!form.RuntimeUiGridOriginalForTest(id).Equals(expected, StringComparison.Ordinal))
+                    throw new InvalidDataException("RUNVGA original display diverged: " + id);
+                if (!form.RuntimeUiGridCellReadOnlyForTest(id))
+                    throw new InvalidDataException("RUNVGA Override cell is editable: " + id);
+            }
+            if (form.OpenSemanticEditorBlockedReasonForTest(0) != "Original")
+                throw new InvalidDataException("Original edition double-click did not report read-only state.");
+            form.ApplyRuntimeUiGridEditForTest(RuntimeUiLogicalRecordId.PauseMenu, "raw grid edit");
+            if (form.RuntimeUiOverrideCountForTest != 0 || form.RuntimeUiDirtyForTest ||
+                !form.RuntimeUiStatusLabelForTest.Contains("Original", StringComparison.Ordinal))
+                throw new InvalidDataException("Original-edition grid edit was not safely blocked.");
+
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            RuntimeUiTextState empty = RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1);
+            var layouts = new RuntimeUiLayoutValidationService(runtimeUi);
+            foreach (RuntimeUiLogicalRecordId id in new[]
+            {
+                RuntimeUiLogicalRecordId.SavePrompt, RuntimeUiLogicalRecordId.SaveFailure,
+                RuntimeUiLogicalRecordId.LoadFailure, RuntimeUiLogicalRecordId.FileNotFound,
+                RuntimeUiLogicalRecordId.TryAnotherDisk
+            })
+            {
+                if (runtimeUi.GetEffectiveRecords(vga, empty).Single(record => record.LogicalRecordId == id).MappingReadiness != RuntimeUiMappingReadiness.KnownButMappingIncomplete ||
+                    layouts.Validate(vga, empty, id).Status != RuntimeUiLayoutValidationStatus.MappingIncomplete)
+                    throw new InvalidDataException("Known-but-incomplete RUNVGA record became editable/mapped: " + id);
+            }
+
+            form.SelectTranslationForTest("SK");
+            if (!form.RuntimeUiGridAllOverrideCellsReadOnlyForTest || form.RuntimeUiGridRowCountForTest != expectedOriginals.Count ||
+                !form.RuntimeUiLegacyNoticeVisibleForTest || form.RuntimeUiLegacyRowCountForTest != 0)
+                throw new InvalidDataException("Editable-edition Runtime UI grid or separate legacy notice regressed.");
+            if (form.OpenSemanticEditorBlockedReasonForTest((int)RuntimeUiLogicalRecordId.SavePrompt) != "ReadOnly")
+                throw new InvalidDataException("Unsupported RUNVGA row opened an editor.");
+            foreach (RuntimeUiLogicalRecordId id in new[]
+            {
+                RuntimeUiLogicalRecordId.PauseMenu, RuntimeUiLogicalRecordId.ConfirmGeneric, RuntimeUiLogicalRecordId.SaveOverwrite
+            })
+            {
+                using RuntimeUiSemanticEditorForm? editor = form.BuildSemanticEditorForTest(id);
+                if (editor is null)
+                    throw new InvalidDataException("Supported RUNVGA editor did not open: " + id);
+            }
+            form.ApplyRuntimeUiGridEditForTest(RuntimeUiLogicalRecordId.PauseMenu, "asssss");
+            if (form.RuntimeUiOverrideCountForTest != 0 || form.RuntimeUiDirtyForTest)
+                throw new InvalidDataException("Raw grid edit bypassed the semantic editor.");
+
+            IReadOnlyDictionary<string, string> acceptedButtons = new Dictionary<string, string>
+            {
+                ["continue"] = "Pokračovať",
+                ["quit"] = "Koniec"
+            };
+            if (!RuntimeUiSemanticEditorForm.TryComposeSemanticField(VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu,
+                "Pozastavené", acceptedButtons, out _, out _))
+                throw new InvalidDataException("VGA semantic Pause fields were incorrectly rejected.");
+            IReadOnlyDictionary<string, string> rejectedButtons = new Dictionary<string, string>
+            {
+                ["continue"] = "Pokračovať",
+                ["quit"] = "Ukončiť"
+            };
+            if (RunVgaVariableUiService.TryCompose(RuntimeUiLogicalRecordId.PauseMenu,
+                new Dictionary<string, string>(rejectedButtons) { ["title"] = "Pozastavené" }, out _, out RunVgaVariableFailureKind failure, out _) ||
+                failure != RunVgaVariableFailureKind.RowOverflow)
+                throw new InvalidDataException("VGA Pause 21-column visual boundary regressed.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRuntimeUiLegacyUnassignedUxSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V8.1: v1 scalar residue has no runtime identity. It must remain
+        // separate from the selected runtime grid until an explicit discard.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RuntimeUiLegacyUnassignedUx", Guid.NewGuid().ToString("N"));
+        string priorLocale = UiText.LocaleId;
+        try
+        {
+            UiText.SetLocale("en");
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            string vgaPath = Path.Combine(fixture.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable);
+            string egaPath = Path.Combine(fixture.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable);
+            string vgaHash = HashFile(vgaPath);
+            string egaHash = HashFile(egaPath);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            translations.Save(fixture, translations.Add(text, sk));
+            var runtimeUi = new RuntimeUiTextService();
+            string statePath = runtimeUi.GetPath(fixture, "SK");
+            Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
+            string v1Scalar = "{\"schemaVersion\":1,\"gameId\":\"Elvira1\",\"records\":[{\"logicalRecordId\":\"PauseMenu\",\"text\":\"Pozastavené\"},{\"logicalRecordId\":\"SavePrompt\",\"text\":\"Legacy prompt\"}]}";
+            File.WriteAllText(statePath, v1Scalar);
+
+            RuntimeUiTextLoadResult migrated = runtimeUi.Load(fixture, "SK");
+            if (!migrated.IsSuccess || migrated.State is not { Overrides.Count: 0, UnassignedLegacy.Count: 2 } migratedState ||
+                migratedState.UnassignedLegacy.SingleOrDefault(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu) is not { Text: "Pozastavené" })
+                throw new InvalidDataException("The v1 Pause.menu scalar was assigned, deleted, or changed during migration.");
+            if (File.ReadAllText(statePath) != v1Scalar)
+                throw new InvalidDataException("Read-only v1 migration rewrote project state without an explicit user action.");
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            VariantContext ega = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
+            if (runtimeUi.GetEffectiveRecords(vga, migratedState).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu).IsOverridden ||
+                runtimeUi.GetEffectiveRecords(ega, migratedState).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu).IsOverridden)
+                throw new InvalidDataException("Unassigned v1 Pause.menu scalar leaked into a runtime projection.");
+
+            if (!RuntimeUiSemanticEditorForm.TryComposeSemanticField(VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "VGA Pause", out string vgaPause, out _) ||
+                !RuntimeUiSemanticEditorForm.TryComposeSemanticField(VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "EGA failed", out string egaFailure, out _))
+                throw new InvalidDataException("Could not prepare assigned runtime-state preservation fixtures.");
+            RuntimeUiTextState prepared = runtimeUi.SetOverride(fixture, migratedState, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, vgaPause);
+            prepared = runtimeUi.SetOverride(fixture, prepared, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, egaFailure);
+            if (!runtimeUi.Save(fixture, "SK", prepared).Succeeded)
+                throw new InvalidDataException("Could not save the disposable v2 legacy-residue fixture.");
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Legacy-unassigned UX fixture did not validate as an installation.");
+
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            form.SelectTranslationForTest("SK");
+            if (form.RuntimeUiGridRowCountForTest != 8 || form.RuntimeUiLegacyRowCountForTest != 0 ||
+                !form.RuntimeUiLegacyNoticeVisibleForTest || !form.RuntimeUiLegacyDiscardEnabledForTest || form.RuntimeUiUnassignedCountForTest != 2)
+                throw new InvalidDataException("Legacy residue was mixed into the VGA runtime grid or its discard action was unavailable.");
+            string notice = form.RuntimeUiLegacyNoticeForTest;
+            if (!notice.Contains("unassigned", StringComparison.OrdinalIgnoreCase) || !notice.Contains("not be used when building", StringComparison.OrdinalIgnoreCase) ||
+                notice.Contains(UiText.Get("RuntimeUi.OriginalUnavailable"), StringComparison.Ordinal))
+                throw new InvalidDataException("Legacy migration notice is unclear or conflates missing source text with missing runtime identity.");
+            if (!form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals("VGA Pause", StringComparison.Ordinal))
+                throw new InvalidDataException("Assigned VGA override was not preserved beside legacy residue.");
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
+            if (!form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.SaveFailure).Equals("EGA failed", StringComparison.Ordinal) ||
+                !form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals(string.Empty, StringComparison.Ordinal))
+                throw new InvalidDataException("Runtime-scoped state leaked while legacy residue was present.");
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            if (!form.SelectRuntimeUiLegacyOverrideForTest(RuntimeUiLogicalRecordId.PauseMenu))
+                throw new InvalidDataException("Legacy migration selection did not retain Pause.menu.");
+            form.DiscardSelectedRuntimeUiLegacyOverrideForTest();
+            if (form.RuntimeUiUnassignedCountForTest != 1 || !form.RuntimeUiLegacyNoticeVisibleForTest || form.RuntimeUiGridRowCountForTest != 8 ||
+                !form.RuntimeUiDirtyForTest || !form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals("VGA Pause", StringComparison.Ordinal))
+                throw new InvalidDataException("Selected legacy discard removed runtime state or the unrelated residue.");
+            if (!form.SelectRuntimeUiLegacyOverrideForTest(RuntimeUiLogicalRecordId.SavePrompt))
+                throw new InvalidDataException("Selected legacy discard did not preserve the unrelated residue.");
+            form.DiscardSelectedRuntimeUiLegacyOverrideForTest();
+            if (form.RuntimeUiUnassignedCountForTest != 0 || form.RuntimeUiLegacyNoticeVisibleForTest)
+                throw new InvalidDataException("Explicit final legacy discard left migration state behind.");
+            form.SaveRuntimeUiForTest();
+            RuntimeUiTextLoadResult reloaded = runtimeUi.Load(fixture, "SK");
+            if (!reloaded.IsSuccess || reloaded.State is not { UnassignedLegacy.Count: 0, Overrides.Count: 2 } persisted ||
+                !runtimeUi.GetOverridesForRuntime(persisted, VariantRuntimeKind.Elvira1Vga).Single().Text.Equals(vgaPause, StringComparison.Ordinal) ||
+                !runtimeUi.GetOverridesForRuntime(persisted, VariantRuntimeKind.Elvira1Ega).Single().Text.Equals(egaFailure, StringComparison.Ordinal))
+                throw new InvalidDataException("Legacy discard did not persist while preserving assigned runtime state.");
+            if (HashFile(vgaPath) != vgaHash || HashFile(egaPath) != egaHash || Directory.Exists(Path.Combine(fixture.GameRoot, "VARIANTS")))
+                throw new InvalidDataException("Legacy project-state cleanup touched an executable or variant output.");
+            _ = elvira2Source;
+        }
+        finally
+        {
+            UiText.SetLocale(priorLocale);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void VerifyRuntimeUiLiveLocalizationSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V8.2: EN<->SK<->CS switches regenerate Runtime UI presentation
+        // from existing in-memory state. No reload, no save, no dirty state,
+        // no binary/project mutation; selection and column widths survive.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RuntimeUiLiveLocalization", Guid.NewGuid().ToString("N"));
+        string priorLocale = UiText.LocaleId;
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            translations.Save(fixture, translations.Add(text, sk));
+            var runtimeUi = new RuntimeUiTextService();
+            RuntimeUiTextState legacyState = new(
+                PristineManifestService.GameIdFor(ElviraGameProfile.Elvira1),
+                [],
+                [new(RuntimeUiLogicalRecordId.SavePrompt, "Legacy prompt", [VariantRuntimeKind.Elvira1Vga, VariantRuntimeKind.Elvira1Ega], RuntimeUiTextService.ReasonAmbiguous)]);
+            if (!runtimeUi.Save(fixture, "SK", legacyState).Succeeded)
+                throw new InvalidDataException("Could not create the disposable live-localization fixture.");
+            string stateBefore = File.ReadAllText(runtimeUi.GetPath(fixture, "SK"));
+            string gamePcHash = HashFile(Path.Combine(fixture.GameRoot, "GAMEPC"));
+            string vgaHash = HashFile(Path.Combine(fixture.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable));
+            string egaHash = HashFile(Path.Combine(fixture.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable));
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Live-localization fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            form.SelectTranslationForTest("SK");
+            form.SetRuntimeUiGridColumnWidthForTest("Override", 321);
+            if (!form.SelectRuntimeUiRowForTest(RuntimeUiLogicalRecordId.PauseMenu))
+                throw new InvalidDataException("Pause.menu row vanished before the locale switch.");
+            if (form.RuntimeUiOverrideCountForTest != 0 || form.RuntimeUiDirtyForTest)
+                throw new InvalidDataException("Fixture carries unexpected Runtime UI state.");
+
+            UiText.SetLocale("sk");
+            if (form.RuntimeUiGridRowCountForTest != 8)
+                throw new InvalidDataException("Locale switch changed the authoritative VGA row set.");
+            string skStatus = form.RuntimeUiGridStatusForTest(RuntimeUiLogicalRecordId.PauseMenu);
+            string skDetail = form.RuntimeUiGridDetailForTest(RuntimeUiLogicalRecordId.PauseMenu);
+            string skLabel = form.RuntimeUiStatusLabelForTest;
+            string skNotice = form.RuntimeUiLegacyNoticeForTest;
+            if (!skStatus.Equals("Platné", StringComparison.Ordinal) || !skDetail.Contains("zmestí", StringComparison.Ordinal))
+                throw new InvalidDataException("SK Runtime UI presentation did not localize: " + skStatus + " / " + skDetail);
+            if (!skLabel.Equals(UiText.Get("RuntimeUi.ProjectStateLoaded"), StringComparison.Ordinal))
+                throw new InvalidDataException("SK Runtime UI status line did not localize.");
+            if (!skNotice.Contains("nepriradenú", StringComparison.OrdinalIgnoreCase) ||
+                skNotice.Contains(UiText.Get("RuntimeUi.OriginalUnavailable"), StringComparison.Ordinal))
+                throw new InvalidDataException("SK legacy migration notice did not localize cleanly.");
+            var counters = (form.GraphicsLoadCount, form.TextLoadCount, form.RuntimeUiLoadCount, form.FontBindCount,
+                form.WorkflowRefreshCount, form.PreviewRenderCount, form.ApplyInstallationRequestedCount,
+                form.ApplyInstallationEffectiveCount, form.ModsRefreshCount);
+
+            UiText.SetLocale("en");
+            string enStatus = form.RuntimeUiGridStatusForTest(RuntimeUiLogicalRecordId.PauseMenu);
+            string enDetail = form.RuntimeUiGridDetailForTest(RuntimeUiLogicalRecordId.PauseMenu);
+            if (!enStatus.Equals("Valid", StringComparison.Ordinal) || !enDetail.Contains("fits", StringComparison.Ordinal))
+                throw new InvalidDataException("EN Runtime UI presentation did not regenerate without reload: " + enStatus + " / " + enDetail);
+            if (!form.RuntimeUiGridOriginalForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals("Game Paused", StringComparison.Ordinal) ||
+                !form.RuntimeUiGridLogicalNameForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals("Pause.menu", StringComparison.Ordinal))
+                throw new InvalidDataException("Locale switch translated source/game data or logical IDs.");
+            if (!form.RuntimeUiStatusLabelForTest.Equals(UiText.Get("RuntimeUi.ProjectStateLoaded"), StringComparison.Ordinal) ||
+                !form.RuntimeUiLegacyNoticeForTest.Contains("unassigned", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("EN status line or legacy notice did not regenerate.");
+            AssertLiveLocalizationPreserved(form, counters, 321);
+
+            UiText.SetLocale("cs");
+            string csDetail = form.RuntimeUiGridDetailForTest(RuntimeUiLogicalRecordId.PauseMenu);
+            if (!form.RuntimeUiGridStatusForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals("Platné", StringComparison.Ordinal) ||
+                !csDetail.Contains("vejde", StringComparison.Ordinal))
+                throw new InvalidDataException("CS Runtime UI presentation did not regenerate without reload.");
+            AssertLiveLocalizationPreserved(form, counters, 321);
+
+            UiText.SetLocale("sk");
+            if (!form.RuntimeUiGridStatusForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals(skStatus, StringComparison.Ordinal) ||
+                !form.RuntimeUiGridDetailForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals(skDetail, StringComparison.Ordinal) ||
+                !form.RuntimeUiStatusLabelForTest.Equals(skLabel, StringComparison.Ordinal) ||
+                !form.RuntimeUiLegacyNoticeForTest.Equals(skNotice, StringComparison.Ordinal))
+                throw new InvalidDataException("SK presentation did not round-trip across locale switches.");
+            AssertLiveLocalizationPreserved(form, counters, 321);
+            if (enDetail.Equals(skDetail, StringComparison.Ordinal) || enDetail.Equals(csDetail, StringComparison.Ordinal) ||
+                skDetail.Equals(csDetail, StringComparison.Ordinal))
+                throw new InvalidDataException("Localized Detail cells did not actually differ per locale.");
+
+            if (form.RuntimeUiOverrideCountForTest != 0 || form.RuntimeUiDirtyForTest || !form.RuntimeUiStatusLabelForTest.Equals(skLabel, StringComparison.Ordinal))
+                throw new InvalidDataException("Language switches mutated Runtime UI project state.");
+            if (!File.ReadAllText(runtimeUi.GetPath(fixture, "SK")).Equals(stateBefore, StringComparison.Ordinal) ||
+                HashFile(Path.Combine(fixture.GameRoot, "GAMEPC")) != gamePcHash ||
+                HashFile(Path.Combine(fixture.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable)) != vgaHash ||
+                HashFile(Path.Combine(fixture.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable)) != egaHash ||
+                Directory.Exists(Path.Combine(fixture.GameRoot, "VARIANTS")))
+                throw new InvalidDataException("Language switches touched project, binary, or variant state.");
+            _ = elvira2Source;
+        }
+        finally
+        {
+            UiText.SetLocale(priorLocale);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void AssertLiveLocalizationPreserved(MainForm form,
+        (int Graphics, int Text, int RuntimeUi, int Font, int Workflow, int Preview, int InstallReq, int InstallEff, int Mods) baseline,
+        int expectedOverrideWidth)
+    {
+        var now = (form.GraphicsLoadCount, form.TextLoadCount, form.RuntimeUiLoadCount, form.FontBindCount,
+            form.WorkflowRefreshCount, form.PreviewRenderCount, form.ApplyInstallationRequestedCount,
+            form.ApplyInstallationEffectiveCount, form.ModsRefreshCount);
+        if (!now.Equals(baseline))
+            throw new InvalidDataException("A pure locale switch triggered data reload/reactivation: before=" + baseline + " after=" + now + ".");
+        if (form.RuntimeUiGridCurrentIdForTest is not RuntimeUiLogicalRecordId.PauseMenu)
+            throw new InvalidDataException("Locale switch lost the Runtime UI row selection.");
+        if (form.RuntimeUiGridColumnWidthForTest("Override") != expectedOverrideWidth)
+            throw new InvalidDataException("Locale switch reset a user-resized Runtime UI column width.");
+        if (form.RuntimeUiGridRowCountForTest != 8 || form.RuntimeUiLegacyRowCountForTest != 0)
+            throw new InvalidDataException("Locale switch mixed legacy residue into the runtime grid.");
+    }
+
+    private static void VerifyFontLazyWorkingCopySmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V8.2: the first mutating action on a normal editable glyph
+        // clones ORIGINAL into the edited working copy and applies the same
+        // mutation in one step. Viewing never creates state; 0x81 stays
+        // protected; nothing is written to the executable.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1FontLazyWorkingCopy", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            string runVgaPath = Path.Combine(fixture.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable);
+            string gamePcPath = Path.Combine(fixture.GameRoot, "GAMEPC");
+            string runVgaHash = HashFile(runVgaPath);
+            string gamePcHash = HashFile(gamePcPath);
+            using var font = new FontEditorForm();
+            font.LoadFromGameDirectory(fixture.GameRoot);
+            if (font.SourceLoadCount != 1)
+                throw new InvalidDataException("Font source did not load exactly once.");
+
+            // A. Normal editable glyph starts without an edited working copy.
+            if (!font.SelectGlyphForTest(0x31))
+                throw new InvalidDataException("Editable glyph 0x31 could not be selected.");
+            if (font.GlyphHasEditedForTest(0x31))
+                throw new InvalidDataException("Viewing a glyph created an edited working copy.");
+            byte[] original31 = font.GlyphOriginalForTest(0x31);
+            if (original31.Length != 8 || original31.All(value => value == 0))
+                throw new InvalidDataException("Glyph 0x31 has no valid original bitmap.");
+
+            // C. First pixel click clones the original and toggles in one step.
+            font.ToggleCurrentPixelForTest(0, 0);
+            if (!font.GlyphHasEditedForTest(0x31))
+                throw new InvalidDataException("First pixel mutation did not create the edited working copy.");
+            byte[] edited31 = font.GlyphEditedForTest(0x31);
+            for (int row = 0; row < 8; row++)
+            {
+                byte expected = row == 0 ? (byte)(original31[row] ^ 0x80) : original31[row];
+                if (edited31[row] != expected)
+                    throw new InvalidDataException("First click was lost or touched more than the intended pixel.");
+            }
+
+            // E. First shift mutation on a fresh glyph works in one action.
+            using var shifted = new FontEditorForm();
+            shifted.LoadFromGameDirectory(fixture.GameRoot);
+            if (!shifted.SelectGlyphForTest(0x41) || shifted.GlyphHasEditedForTest(0x41))
+                throw new InvalidDataException("Fresh glyph 0x41 is not in view-only state.");
+            byte[] original41 = shifted.GlyphOriginalForTest(0x41);
+            shifted.ShiftCurrentGlyphForTest(1, 0);
+            if (!shifted.GlyphHasEditedForTest(0x41))
+                throw new InvalidDataException("First shift mutation did not create the edited working copy.");
+            byte[] edited41 = shifted.GlyphEditedForTest(0x41);
+            for (int row = 0; row < 8; row++)
+            {
+                if (edited41[row] != (byte)(original41[row] >> 1))
+                    throw new InvalidDataException("Shift was not applied in the same operation as working-copy creation.");
+            }
+
+            // F. Merely selecting/viewing a fresh glyph creates nothing.
+            if (!shifted.SelectGlyphForTest(0x42) || shifted.GlyphHasEditedForTest(0x42))
+                throw new InvalidDataException("Selecting a fresh glyph created edited state.");
+
+            // G. Protected 0x81 cannot auto-create editable state.
+            if (!shifted.SelectGlyphForTest(FontSlotMetadata.HudEraseGlyph))
+                throw new InvalidDataException("Protected glyph 0x81 could not be selected.");
+            shifted.ToggleCurrentPixelForTest(0, 0);
+            shifted.ShiftCurrentGlyphForTest(1, 0);
+            if (shifted.GlyphHasEditedForTest(FontSlotMetadata.HudEraseGlyph))
+                throw new InvalidDataException("Protected glyph 0x81 became editable through lazy creation.");
+
+            // I. Explicit Restore glyph still resets an edited glyph to original.
+            if (!font.SelectGlyphForTest(0x31))
+                throw new InvalidDataException("Edited glyph 0x31 could not be reselected.");
+            font.ResetCurrentGlyphForTest();
+            if (!font.GlyphHasEditedForTest(0x31) || !font.GlyphEditedForTest(0x31).SequenceEqual(font.GlyphOriginalForTest(0x31)))
+                throw new InvalidDataException("Explicit Restore glyph did not reset the edited glyph to original.");
+
+            // H. First edits are in-memory only: no executable/game mutation.
+            if (HashFile(runVgaPath) != runVgaHash || HashFile(gamePcPath) != gamePcHash ||
+                Directory.Exists(Path.Combine(fixture.GameRoot, "VARIANTS")))
+                throw new InvalidDataException("Lazy working-copy creation wrote to game files.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyFontRealClickLazyWorkingCopySmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V8.3: exercises the REAL GlyphMatrixControl input path that V8.2
+        // bypassed. V8.2 invoked the toggle handler directly while the matrix
+        // itself was configured non-editable (editable = HasEdited), so real
+        // mouse clicks never raised PixelToggled. This smoke drives the same
+        // hit-testing and OnMouseDown/OnKeyDown entry points a physical
+        // click/keypress uses.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1FontRealClickLazy", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            string runVgaPath = Path.Combine(fixture.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable);
+            string runVgaHash = HashFile(runVgaPath);
+            using var font = new FontEditorForm();
+            font.LoadFromGameDirectory(fixture.GameRoot);
+            if (font.SourceLoadCount != 1)
+                throw new InvalidDataException("Font source did not load exactly once.");
+
+            // A/B. Fresh glyph: no working copy, yet the matrix must already
+            // accept gestures — this is the assertion V8.2 could not make.
+            if (!font.SelectGlyphForTest(0x62) || font.GlyphHasEditedForTest(0x62))
+                throw new InvalidDataException("Glyph 0x62 is not in view-only state.");
+            if (!font.EditedMatrixForTest.IsEditableForTest)
+                throw new InvalidDataException("EDITED matrix is not editable before a working copy exists; real clicks cannot arrive.");
+            byte[] original62 = font.GlyphOriginalForTest(0x62);
+            if (original62.Length != 8 || original62.All(value => value == 0))
+                throw new InvalidDataException("Glyph 0x62 has no valid original bitmap.");
+
+            // C/D. One real control click creates the copy AND toggles.
+            if (!font.EditedMatrixForTest.SimulatePixelClickForTest(2, 3))
+                throw new InvalidDataException("The real control path did not accept the click.");
+            if (!font.GlyphHasEditedForTest(0x62))
+                throw new InvalidDataException("Real first click did not create the edited working copy.");
+            byte[] edited62 = font.GlyphEditedForTest(0x62);
+            for (int row = 0; row < 8; row++)
+            {
+                byte expected = row == 2 ? (byte)(original62[row] ^ (1 << (7 - 3))) : original62[row];
+                if (edited62[row] != expected)
+                    throw new InvalidDataException("The real first click was lost or touched more than the intended pixel.");
+            }
+
+            // E. First shift through the real key path, same single action.
+            using var shifted = new FontEditorForm();
+            shifted.LoadFromGameDirectory(fixture.GameRoot);
+            if (!shifted.SelectGlyphForTest(0x78) || shifted.GlyphHasEditedForTest(0x78))
+                throw new InvalidDataException("Glyph 0x78 is not in view-only state.");
+            if (!shifted.EditedMatrixForTest.IsEditableForTest)
+                throw new InvalidDataException("EDITED matrix rejects shift keys before a working copy exists.");
+            byte[] original78 = shifted.GlyphOriginalForTest(0x78);
+            shifted.EditedMatrixForTest.SimulateShiftKeyForTest(System.Windows.Forms.Keys.Right);
+            if (!shifted.GlyphHasEditedForTest(0x78))
+                throw new InvalidDataException("Real first shift did not create the edited working copy.");
+            byte[] edited78 = shifted.GlyphEditedForTest(0x78);
+            for (int row = 0; row < 8; row++)
+            {
+                if (edited78[row] != (byte)(original78[row] >> 1))
+                    throw new InvalidDataException("Shift was not applied in the same operation as working-copy creation.");
+            }
+
+            // 6x8 renderer proof at control level: columns 6-7 are inactive,
+            // so clicking them requests no mutation and creates no state.
+            if (!shifted.SelectGlyphForTest(0x79) || shifted.GlyphHasEditedForTest(0x79))
+                throw new InvalidDataException("Glyph 0x79 is not in view-only state.");
+            if (!shifted.EditedMatrixForTest.SimulatePixelClickForTest(0, 6))
+                throw new InvalidDataException("The real control path unexpectedly rejected an in-grid gesture.");
+            if (shifted.GlyphHasEditedForTest(0x79))
+                throw new InvalidDataException("A renderer-inactive column click created edited state.");
+
+            // F/G. Viewing alone is clean; explicit Reset still restores.
+            if (!font.SelectGlyphForTest(0x62))
+                throw new InvalidDataException("Edited glyph 0x62 could not be reselected.");
+            font.ResetCurrentGlyphForTest();
+            if (!font.GlyphHasEditedForTest(0x62) || !font.GlyphEditedForTest(0x62).SequenceEqual(font.GlyphOriginalForTest(0x62)))
+                throw new InvalidDataException("Explicit Reset glyph did not restore the edited glyph to original.");
+            if (HashFile(runVgaPath) != runVgaHash || Directory.Exists(Path.Combine(fixture.GameRoot, "VARIANTS")))
+                throw new InvalidDataException("Real-click lazy editing wrote to game files.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRunEgaGeneratedFontLoadSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V8.3: a trusted generated RUNEGASK.EXE must load its real 256x8
+        // bank (physical 0x32400) through the same loader the manual Open
+        // game EXE path uses, instead of Unknown / Loaded 0 with fallbacks.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RunEgaGeneratedFont", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            string packedRunEga = Path.Combine(fixture.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable);
+            string packedHash = HashFile(packedRunEga);
+            string generated = Path.Combine(root, "gen", Elvira1ProductionProfile.GeneratedSlovakEgaExecutable);
+            RunEgaBootstrapService.CreateFrozenCp852(packedRunEga, generated, GlyphRepository.CreateAllCp852Slots());
+            byte[] image = File.ReadAllBytes(generated);
+
+            FontLoadResult loaded = RunVgaFontService.LoadRunVga(generated);
+            if (loaded.Layout != RunVgaFontLayout.ExtendedCp852RunEga || loaded.SourceType != FontSourceType.RunEga)
+                throw new InvalidDataException("Generated RUNEGA was not recognized as a supported RUNEGA font layout.");
+            if (loaded.Game != ElviraGame.Elvira1 || loaded.LoadedGlyphCount != 256 ||
+                loaded.FontOffset != RunEgaBootstrapService.FontBankPhysicalOffset ||
+                loaded.FirstByteValue != 0 || loaded.LastByteValue != 0xFF)
+                throw new InvalidDataException("Generated RUNEGA bank geometry diverged from the frozen profile.");
+            for (int code = 0; code < 256; code++)
+            {
+                if (!loaded.Glyphs[code].IsLoadedFromSource)
+                    throw new InvalidDataException($"A fallback bitmap was mistaken for loaded source data: 0x{code:X2}.");
+            }
+            foreach (int code in new[] { 0x41, 0x62, 0x94, 0xE1 })
+            {
+                byte[] expected = image.AsSpan(RunEgaBootstrapService.FontBankPhysicalOffset + code * 8, 8).ToArray();
+                if (!loaded.Glyphs[code].Original.SequenceEqual(expected))
+                    throw new InvalidDataException($"RUNEGA glyph 0x{code:X2} does not show actual EXE bank bytes.");
+            }
+            // Frozen RUNEGA 0x81 invariant is the historical original mask by
+            // builder/validator/profile design (see the 0x81 invariant smoke);
+            // the slot must still be reserved and never user-editable.
+            if (!loaded.Glyphs[FontSlotMetadata.HudEraseGlyph].Original.SequenceEqual(FontSlotMetadata.OriginalHudEraseGlyphBytes) ||
+                !FontSlotMetadata.IsReserved(loaded, FontSlotMetadata.HudEraseGlyph))
+                throw new InvalidDataException("Generated RUNEGA 0x81 diverged from its frozen invariant or protection.");
+            if (loaded.CanApply)
+                throw new InvalidDataException("Generated RUNEGA became a direct patch target; only CompositeBuild may persist EGA fonts.");
+            // RUNEGA reserved-working-state paths must keep the original mask
+            // and never substitute V5/RUNIT FCx8 bytes (centralized canonical).
+            if (!FontSlotMetadata.GetCanonicalBytes(loaded, FontSlotMetadata.HudEraseGlyph).SequenceEqual(FontSlotMetadata.OriginalHudEraseGlyphBytes))
+                throw new InvalidDataException("RUNEGA 0x81 canonical bytes are not the frozen original mask.");
+            // The exact copy path the editor UI uses for reserved slots.
+            loaded.Glyphs[FontSlotMetadata.HudEraseGlyph].ReplaceReservedCanonical(
+                FontSlotMetadata.GetCanonicalBytes(loaded, FontSlotMetadata.HudEraseGlyph));
+            if (!loaded.Glyphs[FontSlotMetadata.HudEraseGlyph].Edited.SequenceEqual(FontSlotMetadata.OriginalHudEraseGlyphBytes))
+                throw new InvalidDataException("RUNEGA Reset-glyph path substituted non-canonical 0x81 bytes.");
+            byte[] hostileImport = image.AsSpan(RunEgaBootstrapService.FontBankPhysicalOffset, RunVgaFontService.ExtendedFontBytes).ToArray();
+            FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes.CopyTo(hostileImport, FontSlotMetadata.HudEraseGlyph * 8);
+            RunVgaFontService.ImportFontBytesIntoEdited(loaded, hostileImport, "hostile FCx8 probe");
+            if (!loaded.Glyphs[FontSlotMetadata.HudEraseGlyph].Edited.SequenceEqual(FontSlotMetadata.OriginalHudEraseGlyphBytes))
+                throw new InvalidDataException("RUNEGA font import replaced reserved 0x81 with foreign bytes.");
+
+            // Same FontEditorForm path as manual Open game EXE.
+            using var form = new FontEditorForm();
+            form.LoadExecutableForTest(generated);
+            if (form.SourceLoadCount != 1)
+                throw new InvalidDataException("Font editor did not load the generated RUNEGA source exactly once.");
+            if (form.IsApplyEnabledForTest)
+                throw new InvalidDataException("Apply stays enabled for a RUNEGA source; direct patching must remain disabled.");
+            if (!form.SelectGlyphForTest(0x41) || form.GlyphHasEditedForTest(0x41) || !form.EditedMatrixForTest.IsEditableForTest)
+                throw new InvalidDataException("RUNEGA in-memory working-copy editing is not available for a normal glyph.");
+            try
+            {
+                RunVgaFontService.SaveCopy(loaded, Path.Combine(root, "gen", "MUTANT.EXE"));
+                throw new InvalidDataException("Direct RUNEGA patching was silently enabled.");
+            }
+            catch (InvalidOperationException) { }
+
+            // Strictness: size alone never classifies an arbitrary MZ as a font.
+            string bogus = Path.Combine(root, "bogus.exe");
+            byte[] junk = new byte[0x1000];
+            junk[0] = (byte)'M';
+            junk[1] = (byte)'Z';
+            File.WriteAllBytes(bogus, junk);
+            FontLoadResult unknown = RunVgaFontService.LoadRunVga(bogus);
+            if (unknown.Layout != RunVgaFontLayout.Unknown || unknown.LoadedGlyphCount != 0)
+                throw new InvalidDataException("An arbitrary MZ executable was recognized as a font layout.");
+
+            if (HashFile(packedRunEga) != packedHash || !File.ReadAllBytes(generated).SequenceEqual(image) ||
+                Directory.Exists(Path.Combine(fixture.GameRoot, "VARIANTS")))
+                throw new InvalidDataException("RUNEGA font loading touched game or variant state.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyHudErase081InvariantSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V8.3: 0x81 is engine-owned HUD erase state, never user-editable.
+        // Original sources carry 00FCFCFCFCFCFC00; generated V5/RUNIT-V2 carry
+        // the patched full-cell FCFCFCFCFCFCFCFC; generated RUNEGA keeps the
+        // original mask by frozen builder/validator/profile design.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1HudErase081", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            Directory.CreateDirectory(Path.Combine(root, "gen"));
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            ProjectContext e2 = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
+            byte[] originalHud = Convert.FromHexString("00FCFCFCFCFCFC00");
+            byte[] patchedHud = Convert.FromHexString("FCFCFCFCFCFCFCFC");
+            var loadedResults = new List<FontLoadResult>();
+
+            FontLoadResult packedVga = RunVgaFontService.LoadRunVga(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable));
+            if (packedVga.Layout != RunVgaFontLayout.OriginalPackedAscii98 ||
+                !packedVga.Glyphs[FontSlotMetadata.HudEraseGlyph].Original.SequenceEqual(originalHud))
+                throw new InvalidDataException("Original packed RUNVGA 0x81 diverged from the historical original invariant.");
+            loadedResults.Add(packedVga);
+
+            string v5Path = Path.Combine(root, "gen", "RUNVGA_V5.EXE");
+            RunVgaBootstrapService.CreateExtendedCp852(
+                Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable), v5Path, GlyphRepository.CreateAllCp852Slots());
+            FontLoadResult genV5 = RunVgaFontService.LoadRunVga(v5Path);
+            if (genV5.Layout != RunVgaFontLayout.ExtendedCp852V5 ||
+                !genV5.Glyphs[FontSlotMetadata.HudEraseGlyph].Original.SequenceEqual(patchedHud))
+                throw new InvalidDataException("Generated VGA V5 0x81 diverged from the patched full-cell invariant.");
+            byte[] v5Image = File.ReadAllBytes(v5Path);
+            if (!genV5.Glyphs[0x41].Original.SequenceEqual(v5Image.AsSpan(0x3AE60 + 0x41 * 8, 8).ToArray()))
+                throw new InvalidDataException("Generated V5 normal glyphs do not show actual EXE bank bytes.");
+            loadedResults.Add(genV5);
+
+            string egaPath = Path.Combine(root, "gen", Elvira1ProductionProfile.GeneratedSlovakEgaExecutable);
+            RunEgaBootstrapService.CreateFrozenCp852(
+                Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable), egaPath, GlyphRepository.CreateAllCp852Slots());
+            FontLoadResult genEga = RunVgaFontService.LoadRunVga(egaPath);
+            if (genEga.Layout != RunVgaFontLayout.ExtendedCp852RunEga ||
+                !genEga.Glyphs[FontSlotMetadata.HudEraseGlyph].Original.SequenceEqual(originalHud))
+                throw new InvalidDataException("Generated RUNEGA 0x81 diverged from its frozen original-mask invariant.");
+            loadedResults.Add(genEga);
+
+            string packedItPath = Path.Combine(e2.GameRoot, "RUNIT.EXE");
+            FontLoadResult packedIt = RunVgaFontService.LoadRunVga(packedItPath);
+            if (packedIt.Layout != RunVgaFontLayout.OriginalPackedAscii98 ||
+                !packedIt.Glyphs[FontSlotMetadata.HudEraseGlyph].Original.SequenceEqual(originalHud))
+                throw new InvalidDataException("Original packed RUNIT 0x81 diverged from the historical original invariant.");
+            loadedResults.Add(packedIt);
+
+            byte[] canonicalIt = RunItBootstrapService.UnpackCanonicalOriginal(File.ReadAllBytes(packedItPath));
+            byte[] fontImage = RunItBootstrapService.CreateFontImage(canonicalIt, GlyphRepository.CreateAllCp852Slots(), out _);
+            string v2Path = Path.Combine(root, "gen", "RUNIT_V2.EXE");
+            File.WriteAllBytes(v2Path, RunItBootstrapService.BuildExtended(canonicalIt, fontImage));
+            FontLoadResult genV2 = RunVgaFontService.LoadRunVga(v2Path);
+            if (genV2.Layout != RunVgaFontLayout.ExtendedCp852RunIt ||
+                !genV2.Glyphs[FontSlotMetadata.HudEraseGlyph].Original.SequenceEqual(patchedHud))
+                throw new InvalidDataException("Generated RUNIT V2 0x81 diverged from the patched full-cell invariant.");
+            loadedResults.Add(genV2);
+
+            // Renderer invariant: 8 stored rows everywhere; 0x81 reserved in
+            // every layout; the editor matrix refuses 0x81 gestures.
+            foreach (FontLoadResult result in loadedResults)
+            {
+                foreach (GlyphModel glyph in result.Glyphs)
+                {
+                    if (glyph.Original.Length != 8)
+                        throw new InvalidDataException("A glyph bitmap is not an 8-row cell.");
+                }
+                if (!FontSlotMetadata.IsReserved(result, FontSlotMetadata.HudEraseGlyph))
+                    throw new InvalidDataException("0x81 lost its reserved status: " + result.Layout);
+            }
+            using var form = new FontEditorForm();
+            form.LoadExecutableForTest(v5Path);
+            if (!form.SelectGlyphForTest(FontSlotMetadata.HudEraseGlyph) || form.EditedMatrixForTest.IsEditableForTest)
+                throw new InvalidDataException("0x81 became editable in the font editor.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyFontClearGlyphSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V8.3b: Clear glyph creates an explicit all-zero Edited working
+        // copy (real zero HEX, not [EMPTY]). Lazy-clone behavior is intact:
+        // later pixel edits modify the zero bitmap, and Reset still restores
+        // exact Original bytes while retaining explicit-copy semantics.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1FontClearGlyph", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            string runVgaPath = Path.Combine(fixture.GameRoot, Elvira1ProductionProfile.ActiveVgaExecutable);
+            string gamePcPath = Path.Combine(fixture.GameRoot, "GAMEPC");
+            string runVgaHash = HashFile(runVgaPath);
+            string gamePcHash = HashFile(gamePcPath);
+            using var font = new FontEditorForm();
+            font.LoadFromGameDirectory(fixture.GameRoot);
+            if (font.SourceLoadCount != 1)
+                throw new InvalidDataException("Font source did not load exactly once.");
+
+            // 1/8. Fresh glyph starts without Edited state.
+            if (!font.SelectGlyphForTest(0x42) || font.GlyphHasEditedForTest(0x42))
+                throw new InvalidDataException("Glyph 0x42 is not in view-only state.");
+            byte[] original42 = font.GlyphOriginalForTest(0x42);
+            if (original42.Length != 8 || original42.All(value => value == 0))
+                throw new InvalidDataException("Glyph 0x42 has no valid original bitmap.");
+            if (!font.IsClearGlyphEnabledForTest)
+                throw new InvalidDataException("Clear glyph is not available for a normal editable glyph.");
+
+            // 2/3/4. Clear creates explicit zero state; Original untouched.
+            font.ClearCurrentGlyphForTest();
+            if (!font.GlyphHasEditedForTest(0x42))
+                throw new InvalidDataException("Clear glyph did not create Edited state.");
+            if (!font.GlyphEditedForTest(0x42).SequenceEqual(new byte[8]) ||
+                !font.GlyphOriginalForTest(0x42).SequenceEqual(original42))
+                throw new InvalidDataException("Clear glyph did not produce an exact zero bitmap or modified Original.");
+
+            // 5. First pixel after Clear modifies the ZERO bitmap (mask 0x20 at row 1, col 2).
+            font.ToggleCurrentPixelForTest(1, 2);
+            byte[] afterPixel = font.GlyphEditedForTest(0x42);
+            for (int row = 0; row < 8; row++)
+            {
+                byte expected = row == 1 ? (byte)0x20 : (byte)0x00;
+                if (afterPixel[row] != expected)
+                    throw new InvalidDataException("Pixel edit after Clear did not modify the zero bitmap.");
+            }
+
+            // 6/7. Reset restores exact Original bytes and retains explicit-copy semantics.
+            font.ResetCurrentGlyphForTest();
+            if (!font.GlyphHasEditedForTest(0x42) || !font.GlyphEditedForTest(0x42).SequenceEqual(original42))
+                throw new InvalidDataException("Reset after Clear did not restore exact Original bytes as an explicit copy.");
+
+            // 8. Viewing another fresh glyph creates nothing.
+            if (!font.SelectGlyphForTest(0x43) || font.GlyphHasEditedForTest(0x43))
+                throw new InvalidDataException("Selecting a fresh glyph created Edited state.");
+
+            // 9. Reserved glyph rejects Clear (disabled + no state).
+            if (!font.SelectGlyphForTest(FontSlotMetadata.HudEraseGlyph))
+                throw new InvalidDataException("Reserved glyph 0x81 could not be selected.");
+            if (font.IsClearGlyphEnabledForTest)
+                throw new InvalidDataException("Clear glyph is available for reserved 0x81.");
+            font.ClearCurrentGlyphForTest();
+            if (font.GlyphHasEditedForTest(FontSlotMetadata.HudEraseGlyph))
+                throw new InvalidDataException("Clear created working state for reserved 0x81.");
+
+            // MODEL level: ClearToZero() itself fails closed for reserved
+            // 0x81 even when invoked directly, bypassing all UI gates. A
+            // normal model glyph still clears (positive control).
+            var reservedModel = new GlyphModel(FontSlotMetadata.HudEraseGlyph, "model-probe", "model-probe");
+            bool rejected = false;
+            try { reservedModel.ClearToZero(); }
+            catch (InvalidOperationException) { rejected = true; }
+            if (!rejected || reservedModel.HasEdited || !reservedModel.Edited.SequenceEqual(new byte[8]))
+                throw new InvalidDataException("Model-level ClearToZero accepted reserved 0x81 or mutated it.");
+            var normalModel = new GlyphModel(0x42, "model-probe", "model-probe");
+            normalModel.ClearToZero();
+            if (!normalModel.HasEdited || !normalModel.Edited.SequenceEqual(new byte[8]))
+                throw new InvalidDataException("Model-level ClearToZero regressed for a normal glyph.");
+
+            // Unsupported slot: the packed 98-glyph table ends at 0x81, so
+            // 0x82 has no source glyph in this layout.
+            if (!font.SelectGlyphForTest(0x82))
+                throw new InvalidDataException("Unsupported slot 0x82 could not be selected.");
+            if (font.IsClearGlyphEnabledForTest)
+                throw new InvalidDataException("Clear glyph is available for an unsupported slot.");
+            font.ClearCurrentGlyphForTest();
+            if (font.GlyphHasEditedForTest(0x82))
+                throw new InvalidDataException("Clear created working state for an unsupported slot.");
+
+            // 10/11/12. In-memory only: no executable/VARIANTS mutation.
+            if (HashFile(runVgaPath) != runVgaHash || HashFile(gamePcPath) != gamePcHash ||
+                Directory.Exists(Path.Combine(fixture.GameRoot, "VARIANTS")))
+                throw new InvalidDataException("Clear-glyph editing wrote to game files.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRuntimeUiModsConsistencySmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F UI/Mods consistency: grid column UX + Pause-only Reset gating +
+        // owned-variant availability for translated Mods entries.
+        // A. Columns resizable with sane initials (Details is the fill share).
+        // B. Manual widths survive refresh and language switches.
+        // C. Details full text reachable via tooltip. D/E. Reset enabled only
+        // for Pause+override. F. Reset restores blank/original fallback.
+        // G. Pristine EN GAMEPC Available. H. Built SK GAMEPCSK Available from
+        // the owned variant dir. I. Unbuilt S1 genuinely Missing. J. Launcher
+        // target uses the same resolved path. K. No GameRoot writes.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RuntimeUiModsSmoke", Guid.NewGuid().ToString("N"));
+        string priorLocale = UiText.LocaleId;
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant skCreated = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            text = translations.Add(text, skCreated);
+            TranslationProjectVariant s1Created = translations.Create(fixture, text, "Slovencina test", "S1", new Dictionary<int, string> { [393] = "Prirucna taska." });
+            text = translations.Add(text, s1Created);
+            translations.Save(fixture, text);
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e1) || e1 is null)
+                throw new InvalidDataException("Mods consistency fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(e1);
+            if (!form.RuntimeUiGridColumnsResizableForTest)
+                throw new InvalidDataException("Runtime UI columns are not all manually resizable.");
+            if (form.RuntimeUiGridColumnWidthForTest("LogicalId") is < 140 or > 160 ||
+                form.RuntimeUiGridColumnWidthForTest("Original") is < 180 or > 220)
+                throw new InvalidDataException("Runtime UI initial Record/Original widths regressed.");
+            if (form.RuntimeUiGridColumnWidthForTest("Override") is < 250 or > 350 ||
+                form.RuntimeUiGridColumnWidthForTest("Status") is < 180 or > 240)
+                throw new InvalidDataException("Runtime UI initial Override/Validation widths regressed.");
+            // B. Manual widths survive refresh and language switches.
+            form.SetRuntimeUiGridColumnWidthForTest("Override", 333);
+            form.QueueRuntimeUiGridRefreshForTest();
+            if (form.RuntimeUiGridColumnWidthForTest("Override") != 333)
+                throw new InvalidDataException("Refresh reset manually adjusted Runtime UI widths.");
+            UiText.SetLocale("sk");
+            if (form.RuntimeUiGridColumnWidthForTest("Override") != 333)
+                throw new InvalidDataException("Language switch reset Runtime UI widths.");
+            UiText.SetLocale(priorLocale);
+            // C. Details full text obtainable via tooltip.
+            if (!form.RuntimeUiGridPauseDetailTooltipForTest.Equals(UiText.Get("RuntimeUi.Detail.Valid"), StringComparison.Ordinal))
+                throw new InvalidDataException("Details tooltip does not carry the full diagnostic text.");
+            form.SelectTranslationForTest("SK");
+            _ = form.Handle;
+            int baseline = form.RuntimeUiGridRefreshCountForTest;
+            // D. Reset enabled for Pause.menu only when an override exists.
+            // R9F V8: overrides arrive via the semantic editor, never inline.
+            form.ApplySemanticEditForTest(RuntimeUiLogicalRecordId.PauseMenu, "Testovacia");
+            PumpRuntimeUiGrid(form, baseline);
+            baseline = form.RuntimeUiGridRefreshCountForTest;
+            if (!form.SelectRuntimeUiRowForTest(RuntimeUiLogicalRecordId.PauseMenu) || !form.RuntimeUiResetEnabledForTest)
+                throw new InvalidDataException("Reset was not enabled for Pause.menu with an override.");
+            // E. Reset disabled on rows without overrides (including the
+            // still-unsupported five and the not-yet-overridden
+            // proven-live rows).
+            foreach (RuntimeUiLogicalRecordId id in new[] { RuntimeUiLogicalRecordId.ConfirmGeneric, RuntimeUiLogicalRecordId.SavePrompt, RuntimeUiLogicalRecordId.SaveFailure, RuntimeUiLogicalRecordId.LoadFailure, RuntimeUiLogicalRecordId.FileNotFound, RuntimeUiLogicalRecordId.TryAnotherDisk, RuntimeUiLogicalRecordId.SaveOverwrite })
+            {
+                if (!form.SelectRuntimeUiRowForTest(id))
+                    throw new InvalidDataException("Runtime UI row is missing: " + id);
+                if (form.RuntimeUiResetEnabledForTest)
+                    throw new InvalidDataException("Reset was enabled on unsupported row: " + id);
+            }
+            // F. Reset clears the title override and restores the fallback.
+            if (!form.SelectRuntimeUiRowForTest(RuntimeUiLogicalRecordId.PauseMenu))
+                throw new InvalidDataException("Pause.menu row vanished.");
+            form.ResetRuntimeUiOverrideForTest();
+            PumpRuntimeUiGrid(form, baseline);
+            if (form.RuntimeUiOverrideCountForTest != 0 ||
+                !form.RuntimeUiGridPauseOverrideForTest.Equals(string.Empty, StringComparison.Ordinal) ||
+                !form.RuntimeUiGridPauseOriginalForTest.Equals("Game Paused", StringComparison.Ordinal) ||
+                !form.RuntimeUiDirtyForTest || !form.RuntimeUiSaveEnabledForTest)
+                throw new InvalidDataException("Reset did not restore blank override with original fallback.");
+            // G. Pristine EN baseline resolves to GameRoot.
+            if (!form.IsVariantEntryAvailableForTest("GAMEPC"))
+                throw new InvalidDataException("Pristine GAMEPC did not resolve Available.");
+            if (!form.VariantEntryResolvedPathForTest("GAMEPC").Equals(Path.Combine(fixture.GameRoot, "GAMEPC"), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("GAMEPC did not resolve to the pristine GameRoot path.");
+            // H/I. Build SK only: SK becomes Available from the owned variant
+            // dir, unbuilt S1 stays genuinely Missing.
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            TranslationProjectVariant sk = translations.Load(fixture).State!.Variants.Single(item => item.Code == "SK");
+            var graphics = new GraphicsVariantService();
+            var directories = new VariantDirectoryService();
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(fixture, vga, sk.Code), VariantDirectoryOperationStatus.Created, "mods fixture variant directory");
+            CompositeBuildService skBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1), RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1))),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (skBuild.Build(fixture, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("SK fixture build failed.");
+            string expectedSk = Path.Combine(directories.GetVariantEditionDirectoryPath(fixture, vga, sk.Code), "GAMEPCSK");
+            if (!form.IsVariantEntryAvailableForTest("GAMEPCSK") || !File.Exists(expectedSk))
+                throw new InvalidDataException("Built SK GAMEPCSK did not resolve Available from the owned build location.");
+            if (!form.VariantEntryResolvedPathForTest("GAMEPCSK").Equals(expectedSk, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("SK availability did not use the owned variant directory.");
+            form.RefreshVariantGridForTest();
+            if (!form.VariantGridRowStatusForTest("GAMEPCSK").Equals(UiText.Get("VariantAvailable"), StringComparison.Ordinal))
+                throw new InvalidDataException("Mods grid does not show the built SK entry Available.");
+            if (form.IsVariantEntryAvailableForTest("GAMEPCS1") ||
+                !form.VariantGridRowStatusForTest("GAMEPCS1").Equals(UiText.Get("VariantMissing"), StringComparison.Ordinal))
+                throw new InvalidDataException("Unbuilt S1 entry did not resolve genuinely Missing.");
+            // J. Launcher/readiness target uses the same resolved artifact path.
+            if (!form.VariantLaunchDataPathForTest().Equals(expectedSk, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Launcher target diverged from the availability path.");
+            // K. Nothing translated was written to pristine GameRoot.
+            if (File.Exists(Path.Combine(fixture.GameRoot, "GAMEPCSK")) || File.Exists(Path.Combine(fixture.GameRoot, "GAMEPCS1")))
+                throw new InvalidDataException("Translated data reached pristine GameRoot.");
+            _ = elvira2Source;
+        }
+        finally
+        {
+            UiText.SetLocale(priorLocale);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void VerifyVariantEditionIdentitySmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V3 runnable identity is Installation + Project + Edition +
+        // Runtime. Owned outputs live in VARIANTS\<RuntimeKey>\<EditionCode>
+        // (VARIANTS\E1VGA\SK): SK and S1 builds for the same runtime coexist
+        // independently, and Variant Manager status never depends on which
+        // runtime is selected. S1-never-built must read Missing (not corrupt).
+        string root = Path.Combine(Path.GetTempPath(), "Pi1VariantEditionSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant skCreated = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            text = translations.Add(text, skCreated);
+            TranslationProjectVariant s1Created = translations.Create(fixture, text, "Slovencina test", "S1", new Dictionary<int, string> { [393] = "Prirucna taska." });
+            text = translations.Add(text, s1Created);
+            translations.Save(fixture, text);
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e1) || e1 is null)
+                throw new InvalidDataException("Edition identity fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(e1);
+            if (form.ActiveVariantForTest?.VariantId != BuiltInVariantId.Elvira1Vga)
+                throw new InvalidDataException("Default active runtime is not Elvira I VGA.");
+            form.SelectTranslationForTest("SK");
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            // The five remaining VGA rows are genuinely non-editable at
+            // every layer: locked cells, programmatic edits rejected without
+            // touching state/dirty/actions. (Pause.menu, Confirm.generic and
+            // Save.overwrite are proven-live editable variable-width rows.)
+            foreach (RuntimeUiLogicalRecordId id in new[] { RuntimeUiLogicalRecordId.SavePrompt, RuntimeUiLogicalRecordId.SaveFailure, RuntimeUiLogicalRecordId.LoadFailure, RuntimeUiLogicalRecordId.FileNotFound, RuntimeUiLogicalRecordId.TryAnotherDisk })
+            {
+                if (form.RuntimeUiGridCellEditableForTest(id))
+                    throw new InvalidDataException("Unsupported VGA row is editable: " + id);
+                form.ApplyRuntimeUiGridEditForTest(id, "xxx");
+                if (form.RuntimeUiOverrideCountForTest != 0 || form.RuntimeUiDirtyForTest || form.RuntimeUiSaveEnabledForTest || form.RuntimeUiResetEnabledForTest)
+                    throw new InvalidDataException("Unsupported VGA edit altered state: " + id);
+            }
+            form.QueueRuntimeUiGridRefreshForTest();
+            var graphics = new GraphicsVariantService();
+            var directories = new VariantDirectoryService();
+            TranslationProjectVariant sk = translations.Load(fixture).State!.Variants.Single(item => item.Code == "SK");
+            TranslationProjectVariant s1 = translations.Load(fixture).State!.Variants.Single(item => item.Code == "S1");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(fixture, vga, sk.Code), VariantDirectoryOperationStatus.Created, "edition fixture variant directory");
+            // A. Build E1VGA/SK (edition identity recorded in the manifest).
+            CompositeBuildService skBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1), RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1))),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (skBuild.Build(fixture, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("SK fixture build failed.");
+            string skRoot = directories.GetVariantEditionDirectoryPath(fixture, vga, sk.Code);
+            string s1Root = directories.GetVariantEditionDirectoryPath(fixture, vga, s1.Code);
+            string expectedSk = Path.Combine(skRoot, "GAMEPCSK");
+            string expectedS1 = Path.Combine(s1Root, "GAMEPCS1");
+            if (!File.Exists(expectedSk))
+                throw new InvalidDataException("SK build did not materialize GAMEPCSK in the owned runtime+edition directory.");
+            if (VariantManifestService.Read(skRoot).ProjectCode != "SK")
+                throw new InvalidDataException("Manifest identity does not record the built edition.");
+            // B. E1VGA reports Ready.
+            if (!form.RuntimeVariantBuildStatusForTest(BuiltInVariantId.Elvira1Vga).Equals(VariantBuildStatus.Ready.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("Built E1VGA/SK was not reported Ready.");
+            // C/D. Switch to EGA: E1VGA must remain Ready (selection-independent).
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
+            if (!form.RuntimeVariantBuildStatusForTest(BuiltInVariantId.Elvira1Vga).Equals(VariantBuildStatus.Ready.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("E1VGA lost Ready status merely because EGA was selected.");
+            if (!form.RuntimeVariantBuildStatusForTest(BuiltInVariantId.Elvira1Ega).Equals(VariantBuildStatus.Missing.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("Unbuilt EGA row did not stay Missing.");
+            // E/F. Switch back: still Ready, no physical change.
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            if (!form.RuntimeVariantBuildStatusForTest(BuiltInVariantId.Elvira1Vga).Equals(VariantBuildStatus.Ready.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("E1VGA did not stay Ready after switching back.");
+            // G covered by D+F (both directions, same physical artifacts).
+            // H. GAMEPCSK resolves to the owned artifact (not GameRoot, not metadata).
+            if (!form.IsVariantEntryAvailableForTest("GAMEPCSK") || !File.Exists(expectedSk))
+                throw new InvalidDataException("GAMEPCSK did not resolve to the owned artifact.");
+            if (!form.VariantEntryResolvedPathForTest("GAMEPCSK").Equals(expectedSk, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("GAMEPCSK resolved to the wrong location.");
+            // I/J. GAMEPCS1 resolves to its exact expected location and reads
+            // Missing because it was never built — not corrupt, no error state.
+            if (!form.VariantEntryResolvedPathForTest("GAMEPCS1").Equals(expectedS1, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("GAMEPCS1 did not resolve to its owned location.");
+            if (form.IsVariantEntryAvailableForTest("GAMEPCS1") ||
+                !form.VariantGridRowStatusForTest("GAMEPCS1").Equals(UiText.Get("VariantMissing"), StringComparison.Ordinal))
+                throw new InvalidDataException("Never-built S1 was not cleanly Missing.");
+            // M-positive: with SK built and selected, launcher/readiness uses
+            // the same resolved artifact path as availability.
+            if (!form.VariantLaunchDataPathForTest().Equals(expectedSk, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Launcher target diverged from the availability path.");
+            // K/L. Building S1 coexists with SK: each edition owns an
+            // independent runtime+edition directory, and neither build
+            // deletes or replaces the other.
+            string skHashBeforeS1 = HashFile(expectedSk);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(fixture, vga, s1.Code), VariantDirectoryOperationStatus.Created, "S1 edition fixture directory");
+            CompositeBuildService s1Build = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(s1, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1), RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1))),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, s1), s1.DataFile],
+                projectVariantProvider: (_, _) => s1.Code);
+            if (s1Build.Build(fixture, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("S1 fixture build failed.");
+            if (!File.Exists(expectedS1))
+                throw new InvalidDataException("S1 build did not materialize GAMEPCS1 in its owned runtime+edition directory.");
+            if (!File.Exists(expectedSk) || !HashFile(expectedSk).Equals(skHashBeforeS1, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("S1 build deleted or replaced the SK output.");
+            if (VariantManifestService.Read(s1Root).ProjectCode != "S1" || VariantManifestService.Read(skRoot).ProjectCode != "SK")
+                throw new InvalidDataException("Edition manifests do not record their independent identities.");
+            // M-coexistence: with SK still selected, SK stays Available and
+            // the launcher still targets SK; selecting S1 targets S1.
+            form.RefreshVariantGridForTest();
+            if (!form.IsVariantEntryAvailableForTest("GAMEPCSK") ||
+                !form.VariantGridRowStatusForTest("GAMEPCSK").Equals(UiText.Get("VariantAvailable"), StringComparison.Ordinal))
+                throw new InvalidDataException("SK lost availability merely because S1 was built.");
+            if (!form.IsVariantEntryAvailableForTest("GAMEPCS1") ||
+                !form.VariantGridRowStatusForTest("GAMEPCS1").Equals(UiText.Get("VariantAvailable"), StringComparison.Ordinal))
+                throw new InvalidDataException("Built S1 entry is not Available alongside SK.");
+            if (!form.VariantLaunchDataPathForTest().Equals(expectedSk, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("SK launcher target diverged after the S1 build.");
+            form.SelectTranslationForTest("S1");
+            if (!form.VariantLaunchDataPathForTest().Equals(expectedS1, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("S1 launcher target did not resolve the S1 artifact.");
+            form.SelectTranslationForTest("SK");
+            // Cross-runtime isolation: building EGA/SK changes neither VGA artifact.
+            VariantContext ega = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(fixture, ega, sk.Code), VariantDirectoryOperationStatus.Created, "EGA edition fixture directory");
+            CompositeBuildService egaBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1), RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1))),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (egaBuild.Build(fixture, ega, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("EGA/SK fixture build failed.");
+            if (!HashFile(expectedSk).Equals(skHashBeforeS1, StringComparison.OrdinalIgnoreCase) || !File.Exists(expectedS1))
+                throw new InvalidDataException("EGA build touched VGA edition artifacts.");
+            if (!form.RuntimeVariantBuildStatusForTest(BuiltInVariantId.Elvira1Vga).Equals(VariantBuildStatus.Ready.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("VGA/SK lost Ready status after the EGA build.");
+            // N. Pristine GameRoot never receives generated translations.
+            if (File.Exists(Path.Combine(fixture.GameRoot, "GAMEPCSK")) || File.Exists(Path.Combine(fixture.GameRoot, "GAMEPCS1")))
+                throw new InvalidDataException("Translated data reached pristine GameRoot.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRunEgaUiSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F RUNEGA audit + materializer. A. Frozen descriptor cross-check.
+        // B. Authoritative originals decode from the packed source. C. No
+        // undecodable record (all eight decode; reasons N/A). D. Support
+        // classifications pinned. E-Q per enabled field/record. R/S frozen
+        // subfield protection. No RUNVGA/RUNIT behavior changes here.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RunEgaUiSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var texts = new RuntimeUiTextService();
+            var layouts = new RuntimeUiLayoutValidationService(texts);
+            VariantContext ega = VariantContextCatalog.CreateBuiltIns(e1).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
+            RuntimeUiTextState empty = texts.Load(e1).State!;
+            // A. Contract table matches the frozen bank descriptor + evidence.
+            var expectedEvidence = new Dictionary<RuntimeUiLogicalRecordId, FrozenRuntimeEvidence>
+            {
+                [RuntimeUiLogicalRecordId.PauseMenu] = FrozenRuntimeEvidence.ProvenLive,
+                [RuntimeUiLogicalRecordId.ConfirmGeneric] = FrozenRuntimeEvidence.ProvenByBinary,
+                [RuntimeUiLogicalRecordId.SavePrompt] = FrozenRuntimeEvidence.ProvenLive,
+                [RuntimeUiLogicalRecordId.SaveFailure] = FrozenRuntimeEvidence.ProvenByBinary,
+                [RuntimeUiLogicalRecordId.LoadFailure] = FrozenRuntimeEvidence.ProvenByBinary,
+                [RuntimeUiLogicalRecordId.FileNotFound] = FrozenRuntimeEvidence.ProvenByBinary,
+                [RuntimeUiLogicalRecordId.TryAnotherDisk] = FrozenRuntimeEvidence.ProvenByBinary,
+                [RuntimeUiLogicalRecordId.SaveOverwrite] = FrozenRuntimeEvidence.ProvenByBinary,
+            };
+            foreach (RunEgaUiFieldContract contract in RunEgaUiService.Contracts)
+            {
+                FrozenRuntimeUiRecord frozen = Elvira1ProductionProfile.RunEga.RuntimeUi.RuntimeRecords
+                    .Single(record => record.Name.Equals(contract.DisplayName, StringComparison.Ordinal));
+                if (frozen.BankOffset != contract.BankOffset || frozen.Length != contract.Length || frozen.Evidence != expectedEvidence[contract.Id])
+                    throw new InvalidDataException("EGA contract diverges from the frozen descriptor: " + contract.DisplayName);
+                RuntimeUiEvidenceStatus expectedStatus = frozen.Evidence == FrozenRuntimeEvidence.ProvenLive
+                    ? RuntimeUiEvidenceStatus.ProvenLive : RuntimeUiEvidenceStatus.ProvenByBinary;
+                if (texts.GetEffectiveRecords(ega, empty).Single(value => value.LogicalRecordId == contract.Id) is not { MappingReadiness: RuntimeUiMappingReadiness.SupportedAndMapped } projection ||
+                    projection.EvidenceStatus != expectedStatus)
+                    throw new InvalidDataException("EGA mapping/evidence regressed: " + contract.DisplayName);
+            }
+            // B. Authoritative originals (pinned binary facts, strict CP852).
+            var expectedOriginals = new Dictionary<RuntimeUiLogicalRecordId, string>
+            {
+                [RuntimeUiLogicalRecordId.PauseMenu] = "     Game Paused\r\r\r Continue      Quit",
+                [RuntimeUiLogicalRecordId.ConfirmGeneric] = "    Are you sure ?\r\r\r     Yes       No",
+                [RuntimeUiLogicalRecordId.SavePrompt] = "\r Insert savegame data disk & enter filename:\r\r   ",
+                [RuntimeUiLogicalRecordId.SaveFailure] = "\r    Save failed.",
+                [RuntimeUiLogicalRecordId.LoadFailure] = "\r    Load failed.",
+                [RuntimeUiLogicalRecordId.FileNotFound] = "\r  File not found.",
+                [RuntimeUiLogicalRecordId.TryAnotherDisk] = "\r  Try another disk.",
+                [RuntimeUiLogicalRecordId.SaveOverwrite] = "\r File already exists.\r\r    Overwrite it ?\r\r     Yes       No",
+            };
+            string packedRunEga = Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable);
+            foreach ((RuntimeUiLogicalRecordId id, string expected) in expectedOriginals)
+            {
+                if (!RunEgaUiService.TryDecodeOriginal(packedRunEga, id, out string? decoded, out _) || !decoded!.Equals(expected, StringComparison.Ordinal))
+                    throw new InvalidDataException("EGA original decode diverged: " + id);
+            }
+            // D. Classifications pinned (no D by audit evidence; mechanism kept data-driven).
+            if (RunEgaUiService.Contract(RuntimeUiLogicalRecordId.PauseMenu).Kind != RunEgaUiContractKind.SafeStructuredText ||
+                RunEgaUiService.Contract(RuntimeUiLogicalRecordId.ConfirmGeneric).Kind != RunEgaUiContractKind.SafeStructuredText ||
+                RunEgaUiService.Contract(RuntimeUiLogicalRecordId.SavePrompt).Kind != RunEgaUiContractKind.SafeStructuredText ||
+                RunEgaUiService.Contract(RuntimeUiLogicalRecordId.SaveFailure).Kind != RunEgaUiContractKind.SafeSimpleText ||
+                RunEgaUiService.Contract(RuntimeUiLogicalRecordId.SaveOverwrite).Kind != RunEgaUiContractKind.SafeStructuredText ||
+                !RunEgaUiService.Contracts.All(contract => RunEgaUiService.IsEditable(contract.Id)))
+                throw new InvalidDataException("EGA support classification regressed.");
+            if (RunEgaUiService.Contract(RuntimeUiLogicalRecordId.PauseMenu).MaxFieldBytes != 14 ||
+                RunEgaUiService.Contract(RuntimeUiLogicalRecordId.ConfirmGeneric).MaxFieldBytes != 14 ||
+                RunEgaUiService.Contract(RuntimeUiLogicalRecordId.SavePrompt).MaxFieldBytes != 43 ||
+                RunEgaUiService.Contract(RuntimeUiLogicalRecordId.SaveFailure).MaxFieldBytes != 12 ||
+                RunEgaUiService.Contract(RuntimeUiLogicalRecordId.SaveOverwrite).MaxFieldBytes != 21)
+                throw new InvalidDataException("EGA field capacity regressed.");
+            // E/F/H/I/J per enabled field (valid translated values).
+            var validFields = new Dictionary<RuntimeUiLogicalRecordId, string>
+            {
+                [RuntimeUiLogicalRecordId.PauseMenu] = "Pozastavené",
+                [RuntimeUiLogicalRecordId.ConfirmGeneric] = "Naozaj?",
+                [RuntimeUiLogicalRecordId.SavePrompt] = "Vložte disk a zadajte meno:",
+                [RuntimeUiLogicalRecordId.SaveFailure] = "Neuložené!",
+                [RuntimeUiLogicalRecordId.LoadFailure] = "Chyba čít.",
+                [RuntimeUiLogicalRecordId.FileNotFound] = "Súbor chýba.",
+                [RuntimeUiLogicalRecordId.TryAnotherDisk] = "Skúste iný disk.",
+                [RuntimeUiLogicalRecordId.SaveOverwrite] = "Súbor už existuje.",
+            };
+            foreach ((RuntimeUiLogicalRecordId id, string field) in validFields)
+            {
+                RunEgaUiFieldContract contract = RunEgaUiService.Contract(id);
+                if (!RunEgaUiService.TryComposeField(id, field, out string full, out _, out _))
+                    throw new InvalidDataException("Valid EGA field was rejected: " + id);
+                if (!full.StartsWith(contract.Prefix, StringComparison.Ordinal) ||
+                    (contract.Tail.Length > 0 && !full.EndsWith(contract.Tail, StringComparison.Ordinal)) || !full.Contains(field, StringComparison.Ordinal))
+                    throw new InvalidDataException("EGA composition broke frozen formatting: " + id);
+                RuntimeUiLayoutValidationResult validated = layouts.Validate(ega, texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Ega, id, full), id);
+                if (validated.Status != RuntimeUiLayoutValidationStatus.Valid || validated.RecordCapacity != contract.Length)
+                    throw new InvalidDataException("Valid EGA override did not validate: " + id + " / " + validated.Detail);
+                if (!RunEgaUiService.TryExtractField(full, id, out string? back) || !back!.Equals(field, StringComparison.Ordinal))
+                    throw new InvalidDataException("EGA field round-trip diverged: " + id);
+            }
+            // G. NUL/control rejection per field.
+            foreach (RuntimeUiLogicalRecordId id in validFields.Keys)
+            {
+                if (RunEgaUiService.TryComposeField(id, "A\0B", out _, out _, out _) ||
+                    RunEgaUiService.TryComposeField(id, "A\x01B", out _, out _, out _) ||
+                    RunEgaUiService.TryComposeField(id, string.Empty, out _, out _, out _))
+                    throw new InvalidDataException("EGA NUL/control/empty field was accepted: " + id);
+            }
+            // K/L. Save/load roundtrip + reset for one record.
+            RuntimeUiTextState pauseState = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.PauseMenu,
+                RunEgaUiService.Contract(RuntimeUiLogicalRecordId.PauseMenu).Prefix + "Pozastavené" + "\r\r\r Continue      Quit");
+            if (!texts.Save(e1, pauseState).Succeeded || !texts.Load(e1).IsSuccess)
+                throw new InvalidDataException("EGA project save/load regressed.");
+            RuntimeUiTextState pauseReset = texts.RemoveOverride(e1, texts.Load(e1).State!, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.PauseMenu);
+            if (pauseReset.Overrides.Count != 0 || !texts.Save(e1, pauseReset).Succeeded)
+                throw new InvalidDataException("EGA reset regressed.");
+            // R/S. Frozen geometry is protected: shifted buttons fail with a
+            // fixed-column violation; structurally damaged records without
+            // intact keywords fail as hotspot violations; both block the build.
+            // Translated button labels that preserve every column stay valid
+            // (V4 hotspot-label contract).
+            RuntimeUiTextState shifted = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.ConfirmGeneric, "    Are you sure ?\r\r\r      Yes     No");
+            RuntimeUiLayoutValidationResult shiftedResult = layouts.Validate(ega, shifted, RuntimeUiLogicalRecordId.ConfirmGeneric);
+            if (shiftedResult.Status != RuntimeUiLayoutValidationStatus.FixedColumnViolation)
+                throw new InvalidDataException("EGA shifted buttons were accepted: " + shiftedResult.Status + " / " + shiftedResult.Detail);
+            RuntimeUiTextState damaged = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.PauseMenu, "     Game Paused\r\rX Avanti Salir");
+            if (layouts.Validate(ega, damaged, RuntimeUiLogicalRecordId.PauseMenu).Status != RuntimeUiLayoutValidationStatus.HotspotViolation)
+                throw new InvalidDataException("EGA separator damage was accepted.");
+            if (new RuntimeUiProjectBuildStep(shifted).Preflight(e1, ega) is null)
+                throw new InvalidDataException("EGA subfield damage did not block the build.");
+            // EN gate split: runtime-ui stage passes contract-valid state, the
+            // executable stage demands a translated variant.
+            RuntimeUiTextState oneValid = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "\r    Uložené!");
+            var egaDirectories = new VariantDirectoryService();
+            var english = new TranslationProjectVariant("English", "EN", "GAMEPC", ega.SourceExecutableName, new Dictionary<int, string>());
+            string? enGate = new TranslationAwareExecutableBuildStep(egaDirectories, english, oneValid).Preflight(e1, ega);
+            if (enGate is null || !enGate.Contains("translated variant", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("EGA EN-gate did not fail closed.");
+            if (new RuntimeUiProjectBuildStep(oneValid).Preflight(e1, ega) is not null)
+                throw new InvalidDataException("Contract-valid EGA state falsely blocked the runtime-ui stage.");
+            // Form-level EGA grid: field-only display, all cells editable,
+            // compose-on-edit, row-specific reset.
+            {
+                var formTranslations = new TranslationProjectService();
+                TranslationProjectState formText = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+                TranslationProjectVariant formSk = formTranslations.Create(e1, formText, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+                formTranslations.Save(e1, formTranslations.Add(formText, formSk));
+                if (!GameInstallationValidator.TryValidate(e1.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e1inst) || e1inst is null)
+                    throw new InvalidDataException("EGA grid fixture did not validate as an installation.");
+                using var form = new MainForm();
+                form.InitializeInstallationStateForTest();
+                form.ActivateInstallationForTest(e1inst);
+                form.SelectTranslationForTest("SK");
+                form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
+                if (!form.RuntimeUiGridAllOverrideCellsReadOnlyForTest)
+                    throw new InvalidDataException("R9F V8 EGA grid is not fully read-only.");
+                if (!form.RuntimeUiGridPauseOriginalForTest.Equals("Game Paused", StringComparison.Ordinal))
+                    throw new InvalidDataException("EGA Pause title display regressed.");
+                // R9F V8: EGA edits also go through the semantic editor, never inline.
+                form.ApplySemanticEditForTest(RuntimeUiLogicalRecordId.ConfirmGeneric, "Naozaj?");
+                if (!form.RuntimeUiGridPauseOverrideForTest.Equals(string.Empty, StringComparison.Ordinal) ||
+                    form.RuntimeUiOverrideCountForTest != 1 || !form.RuntimeUiDirtyForTest || !form.RuntimeUiSaveEnabledForTest)
+                    throw new InvalidDataException("EGA grid edit diverged.");
+                if (!form.SelectRuntimeUiRowForTest(RuntimeUiLogicalRecordId.ConfirmGeneric) || !form.RuntimeUiResetEnabledForTest)
+                    throw new InvalidDataException("EGA Reset was not enabled for the edited row.");
+                form.ResetRuntimeUiOverrideForTest();
+                form.QueueRuntimeUiGridRefreshForTest();
+                if (form.RuntimeUiOverrideCountForTest != 0 || !form.RuntimeUiDirtyForTest)
+                    throw new InvalidDataException("EGA grid reset regressed.");
+            }
+            // M/N/O/P/Q. Materializer end-to-end with two overrides.
+            var translations = new TranslationProjectService();
+            TranslationProjectVariant sk = translations.Load(e1).State!.Variants.Single(item => item.Code == "SK");
+            var graphics = new GraphicsVariantService();
+            var directories = new VariantDirectoryService();
+            RuntimeUiTextState uiState = texts.SetOverride(e1, empty, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.PauseMenu,
+                RunEgaUiService.Contract(RuntimeUiLogicalRecordId.PauseMenu).Prefix + "Pozastavené" + "\r\r\r Continue      Quit");
+            uiState = texts.SetOverride(e1, uiState, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "\r    Neuložené!");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, ega, sk.Code), VariantDirectoryOperationStatus.Created, "ega fixture variant directory");
+            string pristineEgaHash = HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable));
+            CompositeBuildService egaBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1), uiState)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (egaBuild.Build(e1, ega, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("EGA composite build failed.");
+            string variantRoot = directories.GetVariantEditionDirectoryPath(e1, ega, sk.Code);
+            string patchedEga = Path.Combine(variantRoot, ActiveProjectBuildIdentity.ExecutableName(ega, sk));
+            byte[] after = File.ReadAllBytes(patchedEga);
+            string tmpSrc = Path.Combine(root, "tmp-pristine-runega.exe");
+            string tmpOut = Path.Combine(root, "tmp-pristine-egaout.exe");
+            File.Copy(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable), tmpSrc, true);
+            RunEgaBootstrapService.CreateFrozenCp852(tmpSrc, tmpOut, GlyphRepository.CreateAllCp852Slots());
+            byte[] beforeEga = File.ReadAllBytes(tmpOut);
+            RunEgaUiFieldContract[] enabledSpans = [RunEgaUiService.Contract(RuntimeUiLogicalRecordId.PauseMenu), RunEgaUiService.Contract(RuntimeUiLogicalRecordId.SaveFailure)];
+            RunEgaUiService.VerifyOnlyEgaSpansChanged(beforeEga, after, enabledSpans);
+            RunEgaBootstrapService.ValidateOutput(after);
+            if (!RunEgaUiService.TryDecodeBankSpan(after, RuntimeUiLogicalRecordId.PauseMenu, out string? patchedPause, out _) ||
+                !RunEgaUiService.TryDecodeBankSpan(after, RuntimeUiLogicalRecordId.SaveFailure, out string? patchedFailed, out _))
+                throw new InvalidDataException("Patched EGA spans did not decode.");
+            if (!patchedPause!.Contains("Pozastavené", StringComparison.Ordinal) || !patchedFailed!.Contains("Neuložené!", StringComparison.Ordinal))
+                throw new InvalidDataException("Patched EGA output lost the translations.");
+            if (HashFile(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable)) != pristineEgaHash)
+                throw new InvalidDataException("EGA build modified the pristine source.");
+            string hash1 = HashFile(patchedEga);
+            if (egaBuild.Build(e1, ega, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success ||
+                !HashFile(patchedEga).Equals(hash1, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("EGA rebuild was not deterministic.");
+            // Q. No-op override (original full) applies byte-identically.
+            if (!RunEgaUiService.TryDecodeOriginal(Path.Combine(e1.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable), RuntimeUiLogicalRecordId.SaveFailure, out string? originalFull, out _))
+                throw new InvalidDataException("EGA no-op source did not decode.");
+            byte[] noopAfter = (byte[])beforeEga.Clone();
+            RunEgaUiService.ApplyOverridesToImage(noopAfter, [new RuntimeUiTextOverride(VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, originalFull!)]);
+            RunEgaUiService.VerifyOnlyEgaSpansChanged(beforeEga, noopAfter,
+                [RunEgaUiService.Contract(RuntimeUiLogicalRecordId.SaveFailure)]);
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void PumpRuntimeUiGrid(MainForm form, int baseline)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(15);
+        while (form.RuntimeUiGridRefreshCountForTest == baseline)
+        {
+            if (DateTime.UtcNow >= deadline)
+                throw new InvalidDataException("Queued Runtime UI refresh did not complete on the STA loop.");
+            Application.DoEvents();
+            Thread.Sleep(5);
+        }
+    }
+
+    private static void VerifyLegacyAdoptSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V4 §3: controlled, explicit adoption of a proven legacy flat
+        // owned output into its runtime+edition directory. All-or-nothing:
+        // aborts leave every byte untouched; success restores normal
+        // ownership so Rebuild becomes available.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1LegacyAdoptSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant skCreated = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            text = translations.Add(text, skCreated);
+            translations.Save(fixture, text);
+            TranslationProjectVariant sk = translations.Load(fixture).State!.Variants.Single(item => item.Code == "SK");
+            var graphics = new GraphicsVariantService();
+            var directories = new VariantDirectoryService();
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(fixture, vga, sk.Code), VariantDirectoryOperationStatus.Created, "adopt fixture edition directory");
+            CompositeBuildService skBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1), RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1))),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (skBuild.Build(fixture, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("Adopt fixture SK build failed.");
+            string editionRoot = directories.GetVariantEditionDirectoryPath(fixture, vga, sk.Code);
+            string runtimeRoot = directories.GetVariantDirectoryPath(fixture, vga);
+            var editionPayload = Directory.EnumerateFiles(editionRoot, "*", SearchOption.AllDirectories)
+                .Where(path => !Path.GetFileName(path).Equals(VariantDirectoryService.OwnershipMarkerFileName, StringComparison.OrdinalIgnoreCase))
+                .Select(path => (Relative: Path.GetRelativePath(editionRoot, path), Hash: HashFile(path))).ToArray();
+            string legacyMarkerJson = "{\"SchemaVersion\":1,\"Product\":\"Pi1ElviraVariantDirectory\",\"GameId\":\"Elvira1\",\"VariantId\":\"Elvira1Vga\",\"DirectoryKey\":\"E1VGA\",\"BaselineFingerprint\":\"" + fixture.BaselineFingerprint + "\"}";
+
+            void SimulateLegacy()
+            {
+                foreach (string file in Directory.EnumerateFiles(editionRoot, "*", SearchOption.AllDirectories))
+                {
+                    if (Path.GetFileName(file).Equals(VariantDirectoryService.OwnershipMarkerFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                    string destination = Path.Combine(runtimeRoot, Path.GetRelativePath(editionRoot, file));
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                    File.Move(file, destination);
+                }
+                File.Delete(Path.Combine(editionRoot, VariantDirectoryService.OwnershipMarkerFileName));
+                if (Directory.EnumerateFiles(editionRoot, "*", SearchOption.AllDirectories).Any())
+                    throw new InvalidDataException("Legacy simulation left files behind.");
+                Directory.Delete(editionRoot, recursive: true);
+                File.WriteAllText(Path.Combine(runtimeRoot, VariantDirectoryService.OwnershipMarkerFileName), legacyMarkerJson);
+            }
+
+            Dictionary<string, string> SnapshotRoot() => Directory.EnumerateFiles(runtimeRoot, "*", SearchOption.AllDirectories)
+                .ToDictionary(path => Path.GetRelativePath(runtimeRoot, path), HashFile, StringComparer.OrdinalIgnoreCase);
+
+            void RequireUntouched(Dictionary<string, string> before, string stage)
+            {
+                Dictionary<string, string> after = SnapshotRoot();
+                if (!before.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).SequenceEqual(after.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)))
+                    throw new InvalidDataException("Aborted adoption touched legacy output: " + stage);
+            }
+
+            SimulateLegacy();
+            var recovery = new RecoverySafetyService(directories, skBuild);
+            // Form-level: the Adopt action is offered with an explanation.
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e1) || e1 is null)
+                throw new InvalidDataException("Adopt fixture did not validate as an installation.");
+            using (var form = new MainForm())
+            {
+                form.InitializeInstallationStateForTest();
+                form.ActivateInstallationForTest(e1);
+                form.SelectTranslationForTest("SK");
+                form.OpenModsForTest();
+                if (!form.AdoptLegacyEnabledForTest)
+                    throw new InvalidDataException("Adopt legacy output was not offered for proven legacy.");
+                if (!form.RecoveryStatusForTest.Contains("E1VGA", StringComparison.Ordinal))
+                    throw new InvalidDataException("Recovery status does not explain the legacy output.");
+            }
+            // Negatives: each aborts, then the mutation is reverted and the
+            // snapshot proves everything was left untouched.
+            Dictionary<string, string> pristine = SnapshotRoot();
+            File.WriteAllText(Path.Combine(runtimeRoot, "FOREIGN.DAT"), "external");
+            if (recovery.AdoptLegacyFlatVariant(fixture, vga, sk.Code).Succeeded)
+                throw new InvalidDataException("Adoption accepted unknown files.");
+            File.Delete(Path.Combine(runtimeRoot, "FOREIGN.DAT"));
+            RequireUntouched(pristine, "unknown file");
+            string gamepcsk = Path.Combine(runtimeRoot, "GAMEPCSK");
+            byte[] gamepcskBytes = File.ReadAllBytes(gamepcsk);
+            File.WriteAllBytes(gamepcsk, gamepcskBytes.Select((cell, index) => index == gamepcskBytes.Length / 2 ? (byte)(cell ^ 0x01) : cell).ToArray());
+            if (recovery.AdoptLegacyFlatVariant(fixture, vga, sk.Code).Succeeded)
+                throw new InvalidDataException("Adoption accepted a hash mismatch.");
+            File.WriteAllBytes(gamepcsk, gamepcskBytes);
+            RequireUntouched(pristine, "hash mismatch");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(fixture, vga, sk.Code), VariantDirectoryOperationStatus.Created, "blocking edition directory");
+            if (recovery.AdoptLegacyFlatVariant(fixture, vga, sk.Code).Succeeded)
+                throw new InvalidDataException("Adoption accepted an existing edition output.");
+            if (directories.DeleteVariantEditionDirectory(fixture, vga, sk.Code).Status != VariantDirectoryOperationStatus.Deleted)
+                throw new InvalidDataException("Blocking edition directory was not removed.");
+            RequireUntouched(pristine, "existing edition");
+            File.Delete(Path.Combine(runtimeRoot, VariantDirectoryService.OwnershipMarkerFileName));
+            if (recovery.AdoptLegacyFlatVariant(fixture, vga, sk.Code).Succeeded)
+                throw new InvalidDataException("Adoption accepted unmarked (foreign) contents.");
+            File.WriteAllText(Path.Combine(runtimeRoot, VariantDirectoryService.OwnershipMarkerFileName), legacyMarkerJson);
+            RequireUntouched(pristine, "foreign marker");
+            string manifestBackup = Path.Combine(root, "manifest-backup.json");
+            File.Copy(Path.Combine(runtimeRoot, VariantManifestService.FileName), manifestBackup, overwrite: true);
+            File.Delete(Path.Combine(runtimeRoot, VariantManifestService.FileName));
+            if (recovery.AdoptLegacyFlatVariant(fixture, vga, sk.Code).Succeeded)
+                throw new InvalidDataException("Adoption accepted a missing manifest.");
+            File.Copy(manifestBackup, Path.Combine(runtimeRoot, VariantManifestService.FileName), overwrite: true);
+            RequireUntouched(pristine, "missing manifest");
+            // Positive: read-only census agrees, then adoption restores full
+            // ownership byte-identically; launcher and rebuild follow.
+            RecoverySafetyOperationResult census = recovery.VerifyLegacyAdoption(fixture, vga, sk.Code);
+            if (!census.Succeeded)
+                throw new InvalidDataException("Adoption census refused proven legacy: " + census.Detail);
+            RecoverySafetyOperationResult adopted = recovery.AdoptLegacyFlatVariant(fixture, vga, sk.Code);
+            if (!adopted.Succeeded)
+                throw new InvalidDataException("Proven legacy adoption failed: " + adopted.Detail);
+            if (directories.ValidateOwnedVariantEditionDirectory(fixture, vga, sk.Code).Status != VariantDirectoryOperationStatus.AlreadyValid)
+                throw new InvalidDataException("Adopted edition output did not validate.");
+            foreach ((string relative, string hash) in editionPayload)
+            {
+                string adoptedPath = Path.Combine(editionRoot, relative);
+                if (!File.Exists(adoptedPath) || !HashFile(adoptedPath).Equals(hash, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Adopted payload diverged: " + relative);
+            }
+            if (VariantManifestService.Read(editionRoot).ProjectCode != "SK" || File.Exists(Path.Combine(runtimeRoot, VariantDirectoryService.OwnershipMarkerFileName)))
+                throw new InvalidDataException("Adoption left the legacy root marker or manifest behind.");
+            // The runtime root persists BY DESIGN as the container of the
+            // adopted edition: no loose files may remain beside it.
+            string[] rootFiles = Directory.EnumerateFiles(runtimeRoot, "*", SearchOption.TopDirectoryOnly).ToArray();
+            string[] rootDirs = Directory.EnumerateDirectories(runtimeRoot, "*", SearchOption.TopDirectoryOnly).ToArray();
+            if (rootFiles.Length != 0 || rootDirs.Length != 1 || !rootDirs[0].Equals(editionRoot, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Adoption left loose files beside the adopted edition.");
+            var launcher = new VariantLauncherService(directories, skBuild);
+            if (launcher.Resolve(fixture, vga).Readiness != VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("Adopted output is not launch-ready: " + launcher.Resolve(fixture, vga).Detail);
+            if (recovery.RebuildOwnedVariant(fixture, vga, sk.Code).BuildResult?.Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("Rebuild after adoption failed.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyLegacyAdoptRealSimSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V6: fixture reproducing the REAL flat layout (schema-1 root
+        // marker + SK/Full manifest + payload + game-content subdirs, NO
+        // edition subdir) for VGA and EGA, plus every §7 negative and the
+        // Default-variant ComboBox UX assertions. Real directories untouched.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1LegacyAdoptRealSimSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant skCreated = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            text = translations.Add(text, skCreated);
+            TranslationProjectVariant s1Created = translations.Create(fixture, text, "Slovencina test", "S1", new Dictionary<int, string> { [393] = "Prirucna taska." });
+            text = translations.Add(text, s1Created);
+            translations.Save(fixture, text);
+            TranslationProjectVariant sk = translations.Load(fixture).State!.Variants.Single(item => item.Code == "SK");
+            var graphics = new GraphicsVariantService();
+            var directories = new VariantDirectoryService();
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            VariantContext ega = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
+            CompositeBuildService BuildFor(TranslationProjectVariant translation, RuntimeUiTextState ui) => new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(translation, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1), ui)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, translation), translation.DataFile],
+                projectVariantProvider: (_, _) => translation.Code);
+            var emptyUi = RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1);
+            foreach (VariantContext runtime in new[] { vga, ega })
+            {
+                RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(fixture, runtime, sk.Code), VariantDirectoryOperationStatus.Created, "realsim edition directory");
+                if (BuildFor(sk, emptyUi).Build(fixture, runtime, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                    throw new InvalidDataException("Realsim SK build failed for " + runtime.VariantId + ".");
+            }
+            // Simulate the real flat layout per runtime, including a
+            // game-content subdirectory listed in the manifest.
+            foreach (VariantContext runtime in new[] { vga, ega })
+            {
+                string editionRoot = directories.GetVariantEditionDirectoryPath(fixture, runtime, sk.Code);
+                string runtimeRoot = directories.GetVariantDirectoryPath(fixture, runtime);
+                foreach (string file in Directory.EnumerateFiles(editionRoot, "*", SearchOption.AllDirectories))
+                {
+                    if (Path.GetFileName(file).Equals(VariantDirectoryService.OwnershipMarkerFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                    string destination = Path.Combine(runtimeRoot, Path.GetRelativePath(editionRoot, file));
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                    File.Move(file, destination);
+                }
+                File.Delete(Path.Combine(editionRoot, VariantDirectoryService.OwnershipMarkerFileName));
+                if (Directory.EnumerateFiles(editionRoot, "*", SearchOption.AllDirectories).Any())
+                    throw new InvalidDataException("Legacy simulation left files behind for " + runtime.VariantId + ".");
+                Directory.Delete(editionRoot, recursive: true);
+                string extraDir = Path.Combine(runtimeRoot, "DOSBOX");
+                Directory.CreateDirectory(extraDir);
+                File.WriteAllBytes(Path.Combine(extraDir, "EXTRA.DAT"), [0x44, 0x4F, 0x53]);
+                VariantManifest manifest = VariantManifestService.Read(runtimeRoot);
+                var extended = manifest.OutputArtifacts.Append(new VariantManifestArtifact(
+                    Path.Combine("DOSBOX", "EXTRA.DAT").Replace('\\', '/'),
+                    new FileInfo(Path.Combine(extraDir, "EXTRA.DAT")).Length,
+                    HashFile(Path.Combine(extraDir, "EXTRA.DAT")))).OrderBy(a => a.RelativePath, StringComparer.Ordinal).ToArray();
+                var rewritten = manifest with { OutputArtifacts = extended };
+                File.WriteAllText(Path.Combine(runtimeRoot, VariantManifestService.FileName),
+                    System.Text.Json.JsonSerializer.Serialize(rewritten, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                File.WriteAllText(Path.Combine(runtimeRoot, VariantDirectoryService.OwnershipMarkerFileName),
+                    "{\"SchemaVersion\":1,\"Product\":\"Pi1ElviraVariantDirectory\",\"GameId\":\"Elvira1\",\"VariantId\":\"" + runtime.VariantId + "\",\"DirectoryKey\":\"" + runtime.DirectoryKey + "\",\"BaselineFingerprint\":\"" + fixture.BaselineFingerprint + "\"}");
+                if (manifest.ProjectCode != "SK" || manifest.BuildState != "Full")
+                    throw new InvalidDataException("Realsim manifest identity diverged for " + runtime.VariantId + ".");
+            }
+            var recovery = new RecoverySafetyService(directories, BuildFor(sk, emptyUi));
+            // Form-level: Adopt offered with explanation for the selected SK
+            // edition on both runtimes; withheld when S1 is selected.
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e1) || e1 is null)
+                throw new InvalidDataException("Realsim fixture did not validate as an installation.");
+            var modCatalog = new VariantCatalog(fixture.GameRoot, ElviraGameProfile.Elvira1, [
+                VariantNaming.Create("English", "EN", ElviraGameProfile.Elvira1, true, 1),
+                VariantNaming.Create("Slovenčina", "SK", ElviraGameProfile.Elvira1, true, 2),
+                VariantNaming.Create("Slovenčina test", "S1", ElviraGameProfile.Elvira1, true, 3),
+            ], configurationExists: true);
+            VariantConfigurationService.Save(modCatalog);
+            using (var form = new MainForm())
+            {
+                form.InitializeInstallationStateForTest();
+                form.ActivateInstallationForTest(e1);
+                form.SelectTranslationForTest("SK");
+                form.OpenModsForTest();
+                if (!form.AdoptLegacyEnabledForTest)
+                    throw new InvalidDataException("Adopt was not offered for the real-shape VGA legacy.");
+                if (!form.RecoveryStatusForTest.Contains("SK", StringComparison.Ordinal))
+                    throw new InvalidDataException("Recovery status does not name the legacy edition.");
+                form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
+                form.OpenModsForTest();
+                if (!form.AdoptLegacyEnabledForTest)
+                    throw new InvalidDataException("Adopt was not offered for the real-shape EGA legacy.");
+                form.SelectTranslationForTest("S1");
+                form.OpenModsForTest();
+                if (form.AdoptLegacyEnabledForTest)
+                    throw new InvalidDataException("Adopt was offered although the manifest code differs from the selected edition.");
+                form.SelectTranslationForTest("SK");
+                form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+                form.OpenModsForTest();
+                // Default-variant ComboBox: human labels, identity, layout.
+                IReadOnlyList<string> labels = form.DefaultVariantLabelsForTest;
+                if (labels.Count != 3 || labels.Any(label => label.Contains("VariantEntry {", StringComparison.Ordinal)))
+                    throw new InvalidDataException("Default variant ComboBox exposes record debug text.");
+                string[] expectedLabels = ["English (EN) — RUNVGA.EXE", "Slovenčina (SK) — RUNVGASK.EXE", "Slovenčina test (S1) — RUNVGAS1.EXE"];
+                if (!labels.SequenceEqual(expectedLabels, StringComparer.Ordinal))
+                    throw new InvalidDataException("Default variant labels diverged: " + string.Join(" | ", labels));
+                if (!form.SelectDefaultVariantForTest("GAMEPCS1") || !form.DefaultVariantSelectedDataFileForTest.Equals("GAMEPCS1", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Default variant selection identity diverged.");
+                form.SimulateDefaultVariantLayoutForTest(600);
+                if (form.DefaultVariantComboWidthForTest < 175 || form.DefaultVariantDropDownWidthForTest < form.DefaultVariantComboWidthForTest)
+                    throw new InvalidDataException("Default variant dropdown does not fit its control.");
+                if (form.DefaultVariantFlowWidthForTest - form.DefaultVariantComboRightForTest > 12)
+                    throw new InvalidDataException("Default variant ComboBox does not fill the available row width.");
+            }
+            // Service-level per runtime: detect, adopt, rebuild, resolve.
+            foreach (VariantContext runtime in new[] { vga, ega })
+            {
+                string editionRoot = directories.GetVariantEditionDirectoryPath(fixture, runtime, sk.Code);
+                string runtimeRoot = directories.GetVariantDirectoryPath(fixture, runtime);
+                Dictionary<string, string> Snapshot() => Directory.EnumerateFiles(runtimeRoot, "*", SearchOption.AllDirectories)
+                    .ToDictionary(path => Path.GetRelativePath(runtimeRoot, path), HashFile, StringComparer.OrdinalIgnoreCase);
+                void RequireUntouched(Dictionary<string, string> before, string stage)
+                {
+                    Dictionary<string, string> after = Snapshot();
+                    if (!before.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).SequenceEqual(after.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)))
+                        throw new InvalidDataException("Aborted adoption touched legacy output (" + runtime.VariantId + "/" + stage + ").");
+                }
+                // 1-3. Candidate detected; edition path conflicting; Adopt offered
+                // state verified above at UI level — here the path resolution.
+                var editionProbe = new VariantLauncherService(directories, BuildFor(sk, emptyUi));
+                if (editionProbe.Resolve(fixture, runtime).Readiness != VariantLaunchReadiness.ForeignOrInvalidVariant)
+                    throw new InvalidDataException("Legacy parent layout did not report foreign/invalid for " + runtime.VariantId + ".");
+                Dictionary<string, string> pristine = Snapshot();
+                // §7 negatives: each aborts with everything untouched.
+                string markerPath = Path.Combine(runtimeRoot, VariantDirectoryService.OwnershipMarkerFileName);
+                string markerJson = File.ReadAllText(markerPath);
+                foreach ((string name, Func<string, string> mutate) in new (string, Func<string, string>)[]
+                {
+                    ("product", json => json.Replace("Pi1ElviraVariantDirectory", "SomethingElse", StringComparison.Ordinal)),
+                    ("game", json => json.Replace("\"GameId\":\"Elvira1\"", "\"GameId\":\"Elvira2\"", StringComparison.Ordinal)),
+                    ("variant", json => json.Replace("\"VariantId\":\"" + runtime.VariantId + "\"", "\"VariantId\":\"" + (runtime.VariantId == BuiltInVariantId.Elvira1Vga ? "Elvira1Ega" : "Elvira1Vga") + "\"", StringComparison.Ordinal)),
+                    ("key", json => json.Replace("\"DirectoryKey\":\"" + runtime.DirectoryKey + "\"", "\"DirectoryKey\":\"E9ZZZ\"", StringComparison.Ordinal)),
+                    ("baseline", json => json.Replace(fixture.BaselineFingerprint, new string('0', fixture.BaselineFingerprint.Length), StringComparison.Ordinal)),
+                })
+                {
+                    File.WriteAllText(markerPath, mutate(markerJson));
+                    if (recovery.AdoptLegacyFlatVariant(fixture, runtime, sk.Code).Succeeded)
+                        throw new InvalidDataException("Adoption accepted a bad marker (" + name + ").");
+                    File.WriteAllText(markerPath, markerJson);
+                    RequireUntouched(pristine, "marker-" + name);
+                }
+                string manifestPath = Path.Combine(runtimeRoot, VariantManifestService.FileName);
+                string manifestJson = File.ReadAllText(manifestPath);
+                string otherRuntimeKind = runtime.RuntimeKind == VariantRuntimeKind.Elvira1Vga ? "Elvira1Ega" : "Elvira1Vga";
+                File.WriteAllText(manifestPath, manifestJson.Replace("\"RuntimeKind\": \"" + runtime.RuntimeKind + "\"", "\"RuntimeKind\": \"" + otherRuntimeKind + "\"", StringComparison.Ordinal));
+                if (recovery.AdoptLegacyFlatVariant(fixture, runtime, sk.Code).Succeeded)
+                    throw new InvalidDataException("Adoption accepted a runtime-kind mismatch.");
+                File.WriteAllText(manifestPath, manifestJson);
+                RequireUntouched(pristine, "runtime-kind");
+                if (recovery.AdoptLegacyFlatVariant(fixture, runtime, "S1").Succeeded)
+                    throw new InvalidDataException("Adoption accepted a project code different from the selected edition.");
+                RequireUntouched(pristine, "code-mismatch");
+                // 4-10. Explicit adoption succeeds; Rebuild + launcher follow.
+                if (!recovery.VerifyLegacyAdoption(fixture, runtime, sk.Code).Succeeded)
+                    throw new InvalidDataException("Adoption census refused real-shape legacy for " + runtime.VariantId + ".");
+                RecoverySafetyOperationResult adopted = recovery.AdoptLegacyFlatVariant(fixture, runtime, sk.Code);
+                if (!adopted.Succeeded)
+                    throw new InvalidDataException("Real-shape adoption failed for " + runtime.VariantId + ": " + adopted.Detail);
+                if (directories.ValidateOwnedVariantEditionDirectory(fixture, runtime, sk.Code).Status != VariantDirectoryOperationStatus.AlreadyValid)
+                    throw new InvalidDataException("Adopted edition did not validate for " + runtime.VariantId + ".");
+                foreach ((string relative, string hash) in pristine.Where(pair =>
+                    !pair.Key.Equals(VariantDirectoryService.OwnershipMarkerFileName, StringComparison.OrdinalIgnoreCase) &&
+                    !pair.Key.Equals(VariantManifestService.FileName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    string adoptedPath = Path.Combine(editionRoot, relative);
+                    if (!File.Exists(adoptedPath) || !HashFile(adoptedPath).Equals(hash, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException("Adopted payload diverged (" + runtime.VariantId + "/" + relative + ").");
+                }
+                if (VariantManifestService.Read(editionRoot).ProjectCode != "SK")
+                    throw new InvalidDataException("Adopted manifest identity diverged for " + runtime.VariantId + ".");
+                var launcher = new VariantLauncherService(directories, BuildFor(sk, emptyUi));
+                if (launcher.Resolve(fixture, runtime).Readiness != VariantLaunchReadiness.LaunchReady)
+                    throw new InvalidDataException("Adopted output is not launch-ready for " + runtime.VariantId + ".");
+                if (recovery.RebuildOwnedVariant(fixture, runtime, sk.Code).BuildResult?.Status != CompositeBuildStatus.Success)
+                    throw new InvalidDataException("Rebuild after adoption failed for " + runtime.VariantId + ".");
+            }
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyModsPostAdoptionConsistencySmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V7 focused post-adoption fixture: VARIANTS\E1VGA\SK owned with
+        // marker + manifest + GAMEPCSK + RUNVGASK.EXE, runtime parent as
+        // container. Proves one authoritative runtime+edition identity across
+        // manager, top summary, edition table, launcher, Run/Debug, rebuild,
+        // plus Default-variant geometry. TEMP fixtures only; real user data
+        // is never touched.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1ModsPostAdoptSmoke", Guid.NewGuid().ToString("N"));
+        string priorLocale = UiText.LocaleId;
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant skCreated = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            text = translations.Add(text, skCreated);
+            TranslationProjectVariant s1Created = translations.Create(fixture, text, "Slovencina test", "S1", new Dictionary<int, string> { [393] = "Prirucna taska." });
+            text = translations.Add(text, s1Created);
+            translations.Save(fixture, text);
+            var modCatalog = new VariantCatalog(fixture.GameRoot, ElviraGameProfile.Elvira1, [
+                VariantNaming.Create("English", "EN", ElviraGameProfile.Elvira1, true, 1),
+                VariantNaming.Create("Slovak", "SK", ElviraGameProfile.Elvira1, true, 2),
+                VariantNaming.Create("Slovencina test", "S1", ElviraGameProfile.Elvira1, true, 3),
+            ], configurationExists: true);
+            VariantConfigurationService.Save(modCatalog);
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e1) || e1 is null)
+                throw new InvalidDataException("Post-adoption fixture did not validate as an installation.");
+            var directories = new VariantDirectoryService();
+            var graphics = new GraphicsVariantService();
+            TranslationProjectVariant sk = translations.Load(fixture).State!.Variants.Single(item => item.Code == "SK");
+            TranslationProjectVariant s1 = translations.Load(fixture).State!.Variants.Single(item => item.Code == "S1");
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            VariantContext ega = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(fixture, vga, sk.Code), VariantDirectoryOperationStatus.Created, "post-adoption fixture directory");
+            CompositeBuildService skBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1), RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1))),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (skBuild.Build(fixture, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("Post-adoption SK fixture build failed.");
+            string editionRoot = directories.GetVariantEditionDirectoryPath(fixture, vga, sk.Code);
+            string runtimeRoot = directories.GetVariantDirectoryPath(fixture, vga);
+            string expectedSk = Path.Combine(editionRoot, "GAMEPCSK");
+            string expectedExe = Path.Combine(editionRoot, ActiveProjectBuildIdentity.ExecutableName(vga, sk));
+            if (!File.Exists(expectedSk) || !File.Exists(expectedExe))
+                throw new InvalidDataException("Post-adoption fixture did not materialize both artifacts in E1VGA\\SK.");
+            if (File.Exists(Path.Combine(runtimeRoot, "GAMEPCSK")))
+                throw new InvalidDataException("Runtime parent was treated as edition output.");
+            // 1. Edition directory is editor-owned.
+            if (directories.ValidateOwnedVariantEditionDirectory(fixture, vga, sk.Code).Status != VariantDirectoryOperationStatus.AlreadyValid)
+                throw new InvalidDataException("Adopted edition directory is not editor-owned.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(e1);
+            form.SelectTranslationForTest("SK");
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            form.OpenModsForTest();
+            // 2. Variant Manager Ready.
+            if (!form.RuntimeVariantBuildStatusForTest(BuiltInVariantId.Elvira1Vga).Equals(VariantBuildStatus.Ready.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("Variant Manager did not report Ready for adopted E1VGA\\SK.");
+            // 3-4. Top summary + launch readiness Ready, never foreign/incomplete.
+            if (!form.VariantLaunchOwnershipForTest().Equals(VariantDirectoryOperationStatus.AlreadyValid.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("Top Mods ownership diverged: " + form.ModsPresentationForTest);
+            if (!form.VariantLaunchReadinessForTest().Equals(VariantLaunchReadiness.LaunchReady.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("Top Mods launch readiness diverged: " + form.ModsPresentationForTest);
+            if (form.ModsPresentationForTest.Contains("ForeignDirectoryConflict", StringComparison.Ordinal) ||
+                form.ModsPresentationForTest.Contains("ForeignOrInvalidVariant", StringComparison.Ordinal))
+                throw new InvalidDataException("Top summary still reports the stale foreign state.");
+            // 5-7. SK Available from the owned location; both artifacts resolve there.
+            if (!form.IsVariantEntryAvailableForTest("GAMEPCSK"))
+                throw new InvalidDataException("SK bottom row did not report Available.");
+            if (!form.VariantEntryResolvedPathForTest("GAMEPCSK").Equals(expectedSk, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("GAMEPCSK did not resolve from E1VGA\\SK.");
+            if (!form.VariantLaunchDataPathForTest().Equals(expectedSk, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Launcher data target diverged from availability path.");
+            if (!form.VariantLaunchExecutablePathForTest().Equals(expectedExe, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("RUNVGASK.EXE did not resolve from E1VGA\\SK.");
+            form.RefreshVariantGridForTest();
+            if (!form.VariantGridRowStatusForTest("GAMEPCSK").Equals(UiText.Get("VariantAvailable"), StringComparison.Ordinal))
+                throw new InvalidDataException("Mods grid does not show adopted SK Available.");
+            // 8. Parent is container, never selected output.
+            if (form.VariantLaunchDataPathForTest().StartsWith(runtimeRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                !form.VariantLaunchDataPathForTest().StartsWith(editionRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Launcher treated the runtime parent as edition output.");
+            // 9-10. Rebuild enabled; Run consistent with readiness.
+            if (!form.RebuildEnabledForTest)
+                throw new InvalidDataException("Rebuild is not enabled for the adopted edition.");
+            if (!form.RunEnabledForTest)
+                throw new InvalidDataException("Run is not enabled for the launch-ready target.");
+            // 11. SK -> EN -> SK keeps the same correct state.
+            form.SelectTranslationForTest("EN");
+            form.OpenModsForTest();
+            string enReadiness = form.VariantLaunchReadinessForTest();
+            if (enReadiness.Equals(VariantLaunchReadiness.LaunchReady.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("Unbuilt EN edition falsely reports LaunchReady.");
+            form.SelectTranslationForTest("SK");
+            form.OpenModsForTest();
+            if (!form.VariantLaunchReadinessForTest().Equals(VariantLaunchReadiness.LaunchReady.ToString(), StringComparison.Ordinal) ||
+                !form.IsVariantEntryAvailableForTest("GAMEPCSK") ||
+                !form.RuntimeVariantBuildStatusForTest(BuiltInVariantId.Elvira1Vga).Equals(VariantBuildStatus.Ready.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("SK -> EN -> SK did not preserve the adopted Ready state.");
+            // 12. Reopening Mods keeps the same state.
+            form.OpenModsForTest();
+            if (!form.VariantLaunchReadinessForTest().Equals(VariantLaunchReadiness.LaunchReady.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("Reopening Mods lost the adopted Ready state.");
+            // Equivalent EGA fixture behaves consistently.
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(fixture, ega, sk.Code), VariantDirectoryOperationStatus.Created, "EGA post-adoption directory");
+            CompositeBuildService egaBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1), RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1))),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (egaBuild.Build(fixture, ega, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("EGA/SK fixture build failed.");
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
+            form.OpenModsForTest();
+            if (!form.VariantLaunchReadinessForTest().Equals(VariantLaunchReadiness.LaunchReady.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("EGA/SK did not resolve Ready consistently.");
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            form.OpenModsForTest();
+            if (!form.VariantLaunchReadinessForTest().Equals(VariantLaunchReadiness.LaunchReady.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("VGA/SK lost Ready after the EGA build.");
+            // Never-built S1: genuinely Missing, never Foreign.
+            form.SelectTranslationForTest("S1");
+            form.OpenModsForTest();
+            string s1Root = directories.GetVariantEditionDirectoryPath(fixture, vga, s1.Code);
+            string expectedS1 = Path.Combine(s1Root, "GAMEPCS1");
+            if (!form.VariantEntryResolvedPathForTest("GAMEPCS1").Equals(expectedS1, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("S1 did not resolve to its owned location.");
+            if (form.IsVariantEntryAvailableForTest("GAMEPCS1"))
+                throw new InvalidDataException("Never-built S1 falsely reports Available.");
+            if (form.VariantLaunchReadinessForTest().Equals(VariantLaunchReadiness.ForeignOrInvalidVariant.ToString(), StringComparison.Ordinal))
+                throw new InvalidDataException("Never-built S1 falsely reports Foreign.");
+            form.SelectTranslationForTest("SK");
+            form.OpenModsForTest();
+            // Foreign negative: unowned S1 directory never looks Available.
+            string foreignS1 = directories.GetVariantEditionDirectoryPath(fixture, vga, s1.Code);
+            Directory.CreateDirectory(foreignS1);
+            File.WriteAllBytes(Path.Combine(foreignS1, "GAMEPCS1"), new byte[] { 0x46 });
+            try
+            {
+                if (directories.ValidateOwnedVariantEditionDirectory(fixture, vga, s1.Code).Status != VariantDirectoryOperationStatus.ForeignDirectoryConflict)
+                    throw new InvalidDataException("Foreign S1 directory was not classified Foreign.");
+                form.SelectTranslationForTest("S1");
+                form.OpenModsForTest();
+                if (form.IsVariantEntryAvailableForTest("GAMEPCS1"))
+                    throw new InvalidDataException("Foreign S1 falsely reports Available.");
+                if (!form.VariantLaunchReadinessForTest().Equals(VariantLaunchReadiness.ForeignOrInvalidVariant.ToString(), StringComparison.Ordinal))
+                    throw new InvalidDataException("Foreign S1 did not report ForeignOrInvalidVariant.");
+                form.SelectTranslationForTest("SK");
+                form.OpenModsForTest();
+            }
+            finally { if (Directory.Exists(foreignS1)) Directory.Delete(foreignS1, true); }
+            // Corrupt negative: owned marker but tampered payload fails closed.
+            string skHash = HashFile(expectedSk);
+            File.WriteAllBytes(expectedSk, new byte[] { 0x00, 0x01, 0x02 });
+            try
+            {
+                form.OpenModsForTest();
+                if (form.VariantLaunchReadinessForTest().Equals(VariantLaunchReadiness.LaunchReady.ToString(), StringComparison.Ordinal))
+                    throw new InvalidDataException("Corrupt SK falsely reports LaunchReady.");
+                if (form.IsVariantEntryAvailableForTest("GAMEPCSK"))
+                    throw new InvalidDataException("Corrupt SK falsely reports Available.");
+            }
+            finally
+            {
+                var rebuild = new RecoverySafetyService(directories, skBuild);
+                if (rebuild.RebuildOwnedVariant(fixture, vga, sk.Code).BuildResult?.Status != CompositeBuildStatus.Success)
+                    throw new InvalidDataException("Rebuild after corruption failed.");
+                if (!HashFile(expectedSk).Equals(skHash, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Rebuilt SK payload diverged deterministically.");
+                form.OpenModsForTest();
+                if (!form.VariantLaunchReadinessForTest().Equals(VariantLaunchReadiness.LaunchReady.ToString(), StringComparison.Ordinal))
+                    throw new InvalidDataException("Rebuilt SK did not return to LaunchReady.");
+                if (!form.IsVariantEntryAvailableForTest("GAMEPCSK"))
+                    throw new InvalidDataException("Rebuilt SK did not return to Available.");
+            }
+            form.SelectTranslationForTest("SK");
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            form.OpenModsForTest();
+            // 16. Default-variant identity: friendly labels, object identity, no string parsing.
+            IReadOnlyList<string> labels = form.DefaultVariantLabelsForTest;
+            if (labels.Any(label => label.Contains("VariantEntry {", StringComparison.Ordinal)))
+                throw new InvalidDataException("Default variant ComboBox exposes record debug text.");
+            if (!form.SelectDefaultVariantForTest("GAMEPCSK") || !form.DefaultVariantSelectedDataFileForTest.Equals("GAMEPCSK", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Default variant SK selection identity diverged.");
+            if (!form.SelectDefaultVariantForTest("GAMEPCS1") || !form.DefaultVariantSelectedDataFileForTest.Equals("GAMEPCS1", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Default variant S1 selection identity diverged.");
+            // 11-13. Default-variant geometry: visible control never exceeds
+            // the shared header width (620); dropdown alone may grow wider.
+            // Narrow rows still fill; wide rows cap instead of stretching.
+            form.SimulateDefaultVariantLayoutForTest(600);
+            if (form.DefaultVariantComboWidthForTest < 175 || form.DefaultVariantComboWidthForTest > form.SharedSelectorVisibleWidthForTest)
+                throw new InvalidDataException("Default variant control width out of range (narrow): " + form.DefaultVariantComboWidthForTest);
+            if (form.DefaultVariantDropDownWidthForTest < form.DefaultVariantComboWidthForTest)
+                throw new InvalidDataException("Default variant dropdown does not fit its control (narrow).");
+            if (form.DefaultVariantFlowWidthForTest - form.DefaultVariantComboRightForTest > 24)
+                throw new InvalidDataException("Default variant ComboBox does not fill its narrow row.");
+            form.SimulateDefaultVariantLayoutForTest(1400);
+            if (form.DefaultVariantComboWidthForTest > form.SharedSelectorVisibleWidthForTest)
+                throw new InvalidDataException("Default variant control stretched beyond the shared header width: " + form.DefaultVariantComboWidthForTest);
+            if (form.DefaultVariantDropDownWidthForTest < form.DefaultVariantComboWidthForTest)
+                throw new InvalidDataException("Default variant dropdown is narrower than its control (wide).");
+            if (Math.Abs(form.HeaderInstallationComboWidthForTest - form.SharedSelectorVisibleWidthForTest) > 24)
+                throw new InvalidDataException("Header ComboBox width diverged from the shared selector width.");
+            // When the row is wide enough to cap, the visible widths match;
+            // when headless/narrow, the control only fills what exists and
+            // never exceeds the header width (proven above).
+            if (form.DefaultVariantComboWidthForTest == form.SharedSelectorVisibleWidthForTest &&
+                Math.Abs(form.DefaultVariantComboWidthForTest - form.HeaderInstallationComboWidthForTest) > 24)
+                throw new InvalidDataException("Default variant right edge does not align with the header ComboBoxes.");
+            if (File.Exists(Path.Combine(fixture.GameRoot, "GAMEPCSK")) || File.Exists(Path.Combine(fixture.GameRoot, "GAMEPCS1")))
+                throw new InvalidDataException("Translated data reached pristine GameRoot.");
+            _ = elvira2Source;
+        }
+        finally
+        {
+            UiText.SetLocale(priorLocale);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void VerifyRuntimeUiOriginalSmoke(string elvira1Source, string elvira2Source)
+    {
+
+        // R9F V4 §1: the Original edition stays immutable, but an explicit
+        // edit attempt now explains itself (localized) instead of silently
+        // doing nothing. Editable editions still open the editor normally.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RuntimeUiOriginalSmoke", Guid.NewGuid().ToString("N"));
+        string priorLocale = UiText.LocaleId;
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant skCreated = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            translations.Save(fixture, translations.Add(text, skCreated));
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e1) || e1 is null)
+                throw new InvalidDataException("Original feedback fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(e1);
+            if (!form.ActiveProjectCodeForTest.Equals("EN", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Fixture did not start on the Original edition.");
+            // Double-click is blocked with an explicit reason on Original.
+            if (form.OpenSemanticEditorBlockedReasonForTest(0) != "Original")
+                throw new InvalidDataException("Original edit attempt was not reported as edition-blocked.");
+            // The message is localized in all three locales.
+            var expectedMessages = new Dictionary<string, string>
+            {
+                ["en"] = "The Original edition is read-only. Select or create an editable edition first.",
+                ["sk"] = "Edícia Original je iba na čítanie. Najskôr vyberte alebo vytvorte upraviteľnú edíciu.",
+                ["cs"] = "Edice Original je pouze pro čtení. Nejprve vyberte nebo vytvořte upravitelnou edici."
+            };
+            foreach ((string locale, string expected) in expectedMessages)
+            {
+                UiText.SetLocale(locale);
+                if (!UiText.Get("RuntimeUi.Detail.OriginalEditionReadOnly").Equals(expected, StringComparison.Ordinal))
+                    throw new InvalidDataException("Original read-only message diverged in locale " + locale + ".");
+            }
+            UiText.SetLocale(priorLocale);
+            // In-cell edits on Original explain via the status notice and
+            // store nothing.
+            form.ApplyRuntimeUiGridEditForTest(RuntimeUiLogicalRecordId.PauseMenu, "X");
+            if (!form.RuntimeUiStatusLabelForTest.Contains("Original", StringComparison.Ordinal) ||
+                form.RuntimeUiOverrideCountForTest != 0 || form.RuntimeUiDirtyForTest || form.RuntimeUiSaveEnabledForTest)
+                throw new InvalidDataException("Original in-cell edit stored state or gave no feedback.");
+            // Unsupported rows stay read-only-gated even on editable editions.
+            form.SelectTranslationForTest("SK");
+            if (form.OpenSemanticEditorBlockedReasonForTest(0) is not null)
+                throw new InvalidDataException("Editable edition did not open the Pause.menu editor.");
+            if (form.BuildSemanticEditorForTest(RuntimeUiLogicalRecordId.PauseMenu) is null)
+                throw new InvalidDataException("Editable edition Pause.menu editor did not build.");
+            if (form.OpenSemanticEditorBlockedReasonForTest(1) is not null)
+                throw new InvalidDataException("Editable edition did not open the proven-live Confirm.generic editor.");
+            if (form.BuildSemanticEditorForTest(RuntimeUiLogicalRecordId.ConfirmGeneric) is null)
+                throw new InvalidDataException("Editable edition Confirm.generic editor did not build.");
+            if (form.OpenSemanticEditorBlockedReasonForTest(2) != "ReadOnly")
+                throw new InvalidDataException("Still-unsupported VGA row lost its read-only gate.");
+            _ = elvira2Source;
+        }
+        finally
+        {
+            UiText.SetLocale(priorLocale);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void VerifyRunEgaSelectorAuditSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V3 §3: audit of the already-generated RUNEGA Runtime UI
+        // mechanism. Pins every frozen fact the variable-length decision
+        // rests on: bank geometry, selector operands, bridge bytes,
+        // relocation entry, record contiguity, and the current in-place
+        // limits. Relocation is NOT proven safe (see assertions below).
+        ProjectContext probe;
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RunEgaSelectorAudit", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            probe = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            FrozenRuntimeUiDescriptor descriptor = Elvira1ProductionProfile.RunEga.RuntimeUi;
+            if (!descriptor.IsFrozen || !descriptor.IsPersistentBank(0x31000, 0x317FF, 0x33400, 0x33BFF, 0x3100))
+                throw new InvalidDataException("RUNEGA Runtime UI bank identity diverged.");
+            if (descriptor.ModuleEndInclusive - descriptor.ModuleStart + 1 != 0x800)
+                throw new InvalidDataException("RUNEGA Runtime UI bank is not 0x800 bytes.");
+            if (descriptor.BridgeOffset != 0x00D4 || descriptor.BridgeRelocationOffset != 0x00DB)
+                throw new InvalidDataException("RUNEGA bridge offsets diverged.");
+            int[] selectors = descriptor.RuntimeRecords.Select(record => record.Selector).Order().ToArray();
+            if (!selectors.SequenceEqual(Enumerable.Range(0xF000, 8)))
+                throw new InvalidDataException("RUNEGA selectors are not unique/contiguous F000..F007.");
+            // Record spans are contiguous and non-uniform: resolution cannot
+            // be algorithmic (no stride), and no selector/offset table exists
+            // anywhere in the 9-byte bridge.
+            int[] bankOffsets = descriptor.RuntimeRecords.Select(record => record.BankOffset).ToArray();
+            int[] lengths = descriptor.RuntimeRecords.Select(record => record.Length).ToArray();
+            if (!bankOffsets.SequenceEqual(new[] { 0x00DD, 0x0107, 0x012E, 0x0161, 0x0173, 0x0185, 0x0198, 0x01AD }) ||
+                !lengths.SequenceEqual(new[] { 42, 39, 51, 18, 18, 19, 21, 62 }))
+                throw new InvalidDataException("RUNEGA bank map diverged from the frozen descriptor.");
+            if (lengths.Distinct().Count() == 1)
+                throw new InvalidDataException("RUNEGA record uniformity claim is false; audit premise broken.");
+            for (int i = 0; i < bankOffsets.Length - 1; i++)
+                if (bankOffsets[i] + lengths[i] != bankOffsets[i + 1])
+                    throw new InvalidDataException("RUNEGA record spans are not contiguous.");
+            // Pointer sites: six MOV DI (0xBF), two MOV BP (0xBD), with the
+            // frozen original data offsets in the canonical image.
+            (int Site, byte Op, int Original)[] sites =
+            [
+                (0xCDD8, 0xBF, 0x2D21), (0xCE0A, 0xBF, 0x2D48), (0xCBFC, 0xBF, 0x2D70), (0xCD03, 0xBF, 0x2DA4),
+                (0xCD1A, 0xBF, 0x2DB6), (0xCD1D, 0xBD, 0x2DC8), (0xCD06, 0xBD, 0x2DDC), (0xCCDD, 0xBF, 0x2DF2)
+            ];
+            byte[] packed = File.ReadAllBytes(Path.Combine(probe.GameRoot, Elvira1ProductionProfile.ActiveEgaExecutable));
+            byte[] canonical = RunEgaBootstrapService.CanonicalizePacked(packed);
+            RunEgaBootstrapService.ValidateCanonical(canonical);
+            static ushort U16(byte[] image, int offset) => (ushort)(image[offset] | (image[offset + 1] << 8));
+            foreach ((int site, byte op, int original) in sites)
+            {
+                if (canonical[site] != op || U16(canonical, site + 1) != original)
+                    throw new InvalidDataException($"RUNEGA pointer site 0x{site:X} diverged from the frozen route.");
+            }
+            // Generated output: bridge bytes, exactly one new relocation word
+            // for the bridge segment operand, patched selectors, records at
+            // their frozen offsets, and zeros elsewhere in the bank.
+            byte[] output = RunEgaBootstrapService.Build(canonical, GlyphRepository.CreateAllCp852Slots());
+            RunEgaBootstrapService.ValidateOutput(output);
+            const int Ui = 0x33400;
+            byte[] bridge = output.AsSpan(Ui + 0x00D4, 9).ToArray();
+            if (!bridge.SequenceEqual(Convert.FromHexString("BBBE0253EABF02290D")))
+                throw new InvalidDataException("RUNEGA bridge bytes diverged.");
+            int headerParagraphs = U16(output, 8) * 16, relocCount = U16(output, 6), relocTable = U16(output, 0x18);
+            bool bridgeRelocated = false;
+            for (int i = 0; i < relocCount; i++)
+            {
+                int entry = relocTable + i * 4;
+                if (headerParagraphs + U16(output, entry + 2) * 16 + U16(output, entry) == Ui + 0x00DB) bridgeRelocated = true;
+            }
+            if (!bridgeRelocated)
+                throw new InvalidDataException("RUNEGA bridge relocation entry is missing.");
+            ushort[] patched = [0xF000, 0xF001, 0xF002, 0xF003, 0xF004, 0xF005, 0xF006, 0xF007];
+            for (int i = 0; i < sites.Length; i++)
+            {
+                if (output[sites[i].Site] != sites[i].Op || U16(output, sites[i].Site + 1) != patched[i])
+                    throw new InvalidDataException($"RUNEGA site 0x{sites[i].Site:X} was not patched to selector 0x{patched[i]:X4}.");
+            }
+            for (int i = Ui; i < Ui + 0x00D4; i++)
+                if (output[i] != 0x00)
+                    throw new InvalidDataException($"RUNEGA bank pre-bridge byte 0x{i:X} is not zero in the generated baseline.");
+            for (int i = Ui + 0x01EB; i < Ui + 0x0800; i++)
+                if (output[i] != 0x00)
+                    throw new InvalidDataException($"RUNEGA bank tail byte 0x{i:X} is not zero in the generated baseline.");
+            // The zeros above are a GENERATOR fact, not a free-space proof:
+            // no debugger/memory evidence shows the runtime never uses them
+            // as scratch, the 9-byte bridge holds no selector/offset table,
+            // and non-uniform spans rule out stride computation. Arbitrary
+            // record relocation inside the bank is therefore NOT proven safe,
+            // and the fixed English-envelope limits stay authoritative. A
+            // 20-bytes-including-NUL translation into the 19-byte
+            // FileNotFound envelope must still fail closed here.
+            if (RunEgaUiService.TryComposeField(RuntimeUiLogicalRecordId.FileNotFound, "1234567890123456", out _, out _, out string detail))
+                throw new InvalidDataException("Over-envelope RUNEGA field was accepted despite unproven relocation.");
+            if (!detail.Contains("20", StringComparison.Ordinal) || !detail.Contains("19", StringComparison.Ordinal))
+                throw new InvalidDataException("Over-envelope rejection did not report binary vs envelope capacity: " + detail);
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRunEgaSemanticSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V3 §§7-9,18: semantic contracts per structured record. Only the
+        // proven message field is editable; buttons/questions/geometry stay
+        // visibly read-only with reasons. Compose/decompose round-trips are
+        // exact; Slovak boundary behavior is pinned.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RunEgaSemanticSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var originals = new Dictionary<RuntimeUiLogicalRecordId, string>
+            {
+                [RuntimeUiLogicalRecordId.PauseMenu] = "     Game Paused\r\r\r Continue      Quit",
+                [RuntimeUiLogicalRecordId.ConfirmGeneric] = "    Are you sure ?\r\r\r     Yes       No",
+                [RuntimeUiLogicalRecordId.SavePrompt] = "\r Insert savegame data disk & enter filename:\r\r   ",
+                [RuntimeUiLogicalRecordId.SaveFailure] = "\r    Save failed.",
+                [RuntimeUiLogicalRecordId.LoadFailure] = "\r    Load failed.",
+                [RuntimeUiLogicalRecordId.FileNotFound] = "\r  File not found.",
+                [RuntimeUiLogicalRecordId.TryAnotherDisk] = "\r  Try another disk.",
+                [RuntimeUiLogicalRecordId.SaveOverwrite] = "\r File already exists.\r\r    Overwrite it ?\r\r     Yes       No",
+            };
+            var expectedKeys = new Dictionary<RuntimeUiLogicalRecordId, string[]>
+            {
+                [RuntimeUiLogicalRecordId.PauseMenu] = ["title", "continue", "quit"],
+                [RuntimeUiLogicalRecordId.ConfirmGeneric] = ["prompt", "yes", "no"],
+                [RuntimeUiLogicalRecordId.SavePrompt] = ["message", "input"],
+                [RuntimeUiLogicalRecordId.SaveFailure] = ["message"],
+                [RuntimeUiLogicalRecordId.LoadFailure] = ["message"],
+                [RuntimeUiLogicalRecordId.FileNotFound] = ["message"],
+                [RuntimeUiLogicalRecordId.TryAnotherDisk] = ["message"],
+                [RuntimeUiLogicalRecordId.SaveOverwrite] = ["message", "question", "yes", "no"],
+            };
+            var expectedFields = new Dictionary<RuntimeUiLogicalRecordId, string>
+            {
+                [RuntimeUiLogicalRecordId.PauseMenu] = "Game Paused",
+                [RuntimeUiLogicalRecordId.ConfirmGeneric] = "Are you sure ?",
+                [RuntimeUiLogicalRecordId.SavePrompt] = "Insert savegame data disk & enter filename:",
+                [RuntimeUiLogicalRecordId.SaveFailure] = "Save failed.",
+                [RuntimeUiLogicalRecordId.LoadFailure] = "Load failed.",
+                [RuntimeUiLogicalRecordId.FileNotFound] = "File not found.",
+                [RuntimeUiLogicalRecordId.TryAnotherDisk] = "Try another disk.",
+                [RuntimeUiLogicalRecordId.SaveOverwrite] = "File already exists.",
+            };
+            foreach ((RuntimeUiLogicalRecordId id, string full) in originals)
+            {
+                if (!RunEgaUiService.TryDecodeOriginalFromGameRoot(e1.GameRoot, id, out string? decoded, out _) || !decoded!.Equals(full, StringComparison.Ordinal))
+                    throw new InvalidDataException("Authoritative RUNEGA original diverged: " + id);
+                IReadOnlyList<RunEgaUiSemanticField> rows = RunEgaUiService.Decompose(full, id);
+                if (!rows.Select(row => row.Key).SequenceEqual(expectedKeys[id]))
+                    throw new InvalidDataException("Semantic subfield matrix diverged: " + id);
+                RunEgaUiSemanticField editable = rows.Single(row => row.Role == RunEgaUiSemanticRole.EditableSafe);
+                if (!editable.Value.Equals(expectedFields[id], StringComparison.Ordinal))
+                    throw new InvalidDataException("Semantic editable field diverged: " + id);
+                // V4 hotspot-label contract: button labels are editable
+                // fixed-width slots (width hint carried as the reason);
+                // questions/input geometry stay read-only with reasons.
+                foreach (RunEgaUiSemanticField button in rows.Where(row => row.Role == RunEgaUiSemanticRole.EditableFixedWidth))
+                {
+                    RunEgaUiService.RunEgaUiButtonSlot slot = RunEgaUiService.RunEgaUiButtons.Slots(id).Single(item => item.Key.Equals(button.Key, StringComparison.Ordinal));
+                    if (string.IsNullOrWhiteSpace(button.ReadOnlyReason) || !button.ReadOnlyReason.Contains(slot.Width.ToString(), StringComparison.Ordinal))
+                        throw new InvalidDataException("Fixed-width button row lacks its width hint: " + id + "/" + button.Key);
+                }
+                string[] buttonKeys = rows.Where(row => row.Role == RunEgaUiSemanticRole.EditableFixedWidth).Select(row => row.Key).Order().ToArray();
+                string[] expectedButtons = id switch
+                {
+                    RuntimeUiLogicalRecordId.PauseMenu => ["continue", "quit"],
+                    RuntimeUiLogicalRecordId.ConfirmGeneric => ["no", "yes"],
+                    RuntimeUiLogicalRecordId.SaveOverwrite => ["no", "yes"],
+                    _ => []
+                };
+                if (!buttonKeys.SequenceEqual(expectedButtons))
+                    throw new InvalidDataException("Semantic button matrix diverged: " + id);
+                foreach (RunEgaUiSemanticField frozen in rows.Where(row => row.Role != RunEgaUiSemanticRole.EditableSafe && row.Role != RunEgaUiSemanticRole.EditableFixedWidth))
+                {
+                    if (string.IsNullOrWhiteSpace(frozen.ReadOnlyReason))
+                        throw new InvalidDataException("Read-only subfield has no reason: " + id + "/" + frozen.Key);
+                    if (frozen.Role != RunEgaUiSemanticRole.ReadOnlyGeometryUnproven && frozen.Role != RunEgaUiSemanticRole.ReadOnlyOther)
+                        throw new InvalidDataException("Non-button frozen subfield has the wrong role: " + id + "/" + frozen.Key);
+                }
+                // Compose/decompose round-trip is exact for the original field.
+                if (!RuntimeUiSemanticEditorForm.TryComposeSemanticField(VariantRuntimeKind.Elvira1Ega, id, editable.Value, out string recomposed, out _) ||
+                    !recomposed.Equals(full, StringComparison.Ordinal))
+                    throw new InvalidDataException("Semantic compose round-trip diverged: " + id);
+            }
+            // Slovak boundary pins (fixed English envelopes stay authoritative
+            // while bank relocation is unproven): exact-boundary success,
+            // boundary+1 failure, and the failure-A shape (fits the 19-byte
+            // span, rejected by the 15-byte field/line rule).
+            if (!RunEgaUiService.TryComposeField(RuntimeUiLogicalRecordId.SaveFailure, "Neuložené!XY", out _, out _, out _))
+                throw new InvalidDataException("Exact-boundary Slovak Save.failed field was rejected.");
+            if (RunEgaUiService.TryComposeField(RuntimeUiLogicalRecordId.SaveFailure, "Neuložené!XYZ", out _, out _, out _))
+                throw new InvalidDataException("Boundary+1 Slovak Save.failed field was accepted.");
+            if (RunEgaUiService.TryComposeField(RuntimeUiLogicalRecordId.FileNotFound, "Súbor sa nenašiel.", out _, out _, out string fieldDetail))
+                throw new InvalidDataException("Failure-A probe composition unexpectedly changed; audit premise broken.");
+            if (!fieldDetail.Contains("22", StringComparison.Ordinal) || !fieldDetail.Contains("19", StringComparison.Ordinal))
+                throw new InvalidDataException("Failure-A rejection did not report composed vs envelope capacity: " + fieldDetail);
+            // The modal semantic editor constructs headlessly over the same
+            // contracts: valid field submits a composed record, overlong
+            // field is refused with a validation message and no composition.
+            IReadOnlyList<RunEgaUiSemanticField> pauseRows = RunEgaUiService.Decompose(originals[RuntimeUiLogicalRecordId.PauseMenu], RuntimeUiLogicalRecordId.PauseMenu);
+            using (var editor = new RuntimeUiSemanticEditorForm("Pause.menu", RuntimeUiLogicalRecordId.PauseMenu, VariantRuntimeKind.Elvira1Ega, pauseRows, pauseRows))
+            {
+                editor.EditTextForTest = "Pozastavené";
+                if (!editor.SubmitForTest() || editor.ComposedFullRecord is null ||
+                    !editor.ComposedFullRecord.Equals("     Pozastavené\r\r\r Continue      Quit", StringComparison.Ordinal))
+                    throw new InvalidDataException("Semantic editor did not compose the edited field.");
+            }
+            using (var rejected = new RuntimeUiSemanticEditorForm("Pause.menu", RuntimeUiLogicalRecordId.PauseMenu, VariantRuntimeKind.Elvira1Ega, pauseRows, pauseRows))
+            {
+                rejected.EditTextForTest = "This title is far too long for the envelope";
+                if (rejected.SubmitForTest() || rejected.ComposedFullRecord is not null || string.IsNullOrWhiteSpace(rejected.ValidationForTest))
+                    throw new InvalidDataException("Semantic editor accepted an overlong field.");
+            }
+            // V4 hotspot-label contract: TEXT MAY CHANGE, HOTSPOT GEOMETRY
+            // MUST NOT. Exact-width labels compose; shorter labels pad with
+            // spaces so following columns never move; overlong labels are
+            // rejected, never truncated. Payload length is invariant.
+            System.Text.Encoding cp852 = GamePcTextEditor.GetEncoding("CP852");
+            string pauseOriginal = originals[RuntimeUiLogicalRecordId.PauseMenu];
+            byte[] pauseOriginalPayload = cp852.GetBytes(pauseOriginal);
+            if (!RunEgaUiService.TryComposeRecord(RuntimeUiLogicalRecordId.PauseMenu, "Game Paused",
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["continue"] = "Pokračuj", ["quit"] = "Quit" },
+                out string pauseTranslated, out _, out _))
+                throw new InvalidDataException("Exact-width hotspot labels were rejected.");
+            if (!pauseTranslated.Equals("     Game Paused\r\r\r Pokračuj      Quit", StringComparison.Ordinal))
+                throw new InvalidDataException("Hotspot label composition broke frozen formatting.");
+            byte[] pauseTranslatedPayload = cp852.GetBytes(pauseTranslated);
+            if (pauseTranslatedPayload.Length != pauseOriginalPayload.Length)
+                throw new InvalidDataException("Translated hotspot labels changed the record length.");
+            if (!RunEgaUiService.TryComposeRecord(RuntimeUiLogicalRecordId.PauseMenu, "Game Paused",
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["continue"] = "Hraj", ["quit"] = "Quit" },
+                out string pausePadded, out _, out _))
+                throw new InvalidDataException("Shorter hotspot label was rejected.");
+            if (!pausePadded.Contains("Hraj    ", StringComparison.Ordinal))
+                throw new InvalidDataException("Shorter hotspot label was not space-padded.");
+            int quitOriginal = pauseOriginal.IndexOf("Quit", StringComparison.Ordinal);
+            int quitTranslated = pausePadded.IndexOf("Quit", StringComparison.Ordinal);
+            if (quitOriginal != quitTranslated || quitOriginal != 5 + 11 + 3 + 1 + 8 + 6)
+                throw new InvalidDataException("Following hotspot field moved after padding.");
+            for (int i = 0; i < pauseOriginalPayload.Length; i++)
+            {
+                bool inContinueSlot = i >= 20 && i < 28;
+                if (!inContinueSlot && pauseOriginalPayload[i] != pauseTranslatedPayload[i])
+                    throw new InvalidDataException($"Neighboring byte moved at 0x{i:X}.");
+            }
+            if (!RunEgaUiService.TryComposeRecord(RuntimeUiLogicalRecordId.ConfirmGeneric, "Are you sure ?",
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["yes"] = "Áno", ["no"] = "Ne" },
+                out string confirmTranslated, out _, out _))
+                throw new InvalidDataException("Exact-width Yes/No labels were rejected.");
+            if (!confirmTranslated.Equals("    Are you sure ?\r\r\r     Áno       Ne", StringComparison.Ordinal))
+                throw new InvalidDataException("Yes/No composition broke frozen columns.");
+            // Overlong labels are rejected with the slot width, never cut.
+            if (RunEgaUiService.TryComposeRecord(RuntimeUiLogicalRecordId.PauseMenu, "Game Paused",
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["quit"] = "Koniec" },
+                out string quitCut, out RunEgaUiFailureKind quitFailure, out string quitDetail) || !string.IsNullOrEmpty(quitCut))
+                throw new InvalidDataException("Overlong Quit label was accepted or truncated.");
+            if (quitFailure != RunEgaUiFailureKind.FixedColumn || !quitDetail.Contains("Koniec", StringComparison.Ordinal) || !quitDetail.Contains("4", StringComparison.Ordinal))
+                throw new InvalidDataException("Overlong Quit rejection lacks its fixed-column reason: " + quitDetail);
+            if (RunEgaUiService.TryComposeRecord(RuntimeUiLogicalRecordId.ConfirmGeneric, "Are you sure ?",
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["no"] = "Nie" },
+                out _, out _, out _))
+                throw new InvalidDataException("Overlong No label was accepted.");
+            if (RunEgaUiService.TryComposeRecord(RuntimeUiLogicalRecordId.PauseMenu, "Game Paused",
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["continue"] = "123456789" },
+                out _, out _, out _))
+                throw new InvalidDataException("Overlong Continue label was accepted.");
+            // Round-trip: decomposition returns the translated labels; the
+            // translated record validates, materializes and decodes back.
+            if (!RunEgaUiService.TryExtractButtons(pauseTranslated, RuntimeUiLogicalRecordId.PauseMenu, out IReadOnlyDictionary<string, string>? back) ||
+                !back!["continue"].Equals("Pokračuj", StringComparison.Ordinal) || !back["quit"].Equals("Quit", StringComparison.Ordinal))
+                throw new InvalidDataException("Translated button round-trip diverged.");
+            if (!RunEgaUiService.TryValidateStored(pauseTranslated, RuntimeUiLogicalRecordId.PauseMenu, out _, out string storedDetail))
+                throw new InvalidDataException("Translated hotspot record did not validate: " + storedDetail);
+            if (!RunEgaUiService.TryBuildSpan(RuntimeUiLogicalRecordId.PauseMenu, pauseTranslated, out byte[] span) || span.Length != 42)
+                throw new InvalidDataException("Translated hotspot span did not materialize.");
+            // In-cell field edits preserve already-translated buttons.
+            if (!RunEgaUiService.TryExtractButtons(pauseTranslated, RuntimeUiLogicalRecordId.PauseMenu, out IReadOnlyDictionary<string, string>? kept) ||
+                !RunEgaUiService.TryComposeRecord(RuntimeUiLogicalRecordId.PauseMenu, "Prestávka", kept, out string reframed, out _, out _) ||
+                !reframed.Contains("Pokračuj", StringComparison.Ordinal))
+                throw new InvalidDataException("Field recomposition reset translated buttons.");
+            // The modal editor edits buttons through their own boxes.
+            using (var buttonEditor = new RuntimeUiSemanticEditorForm("Pause.menu", RuntimeUiLogicalRecordId.PauseMenu, VariantRuntimeKind.Elvira1Ega, pauseRows, pauseRows))
+            {
+                buttonEditor.SetSemanticFieldForTest("continue", "Pokračuj");
+                if (!buttonEditor.SubmitForTest() || buttonEditor.ComposedFullRecord is null ||
+                    !buttonEditor.ComposedFullRecord.Equals("     Game Paused\r\r\r Pokračuj      Quit", StringComparison.Ordinal))
+                    throw new InvalidDataException("Semantic editor did not compose the button label.");
+            }
+            // V5 VGA rule: Pause buttons are editable variable-width rows
+            // with geometry hints (anchors frozen, lengths variable).
+            IReadOnlyList<RunEgaUiSemanticField> vgaPause = RunVgaVariableUiService.TryDecompose(RuntimeUiLogicalRecordId.PauseMenu, originals[RuntimeUiLogicalRecordId.PauseMenu], out IReadOnlyList<RunEgaUiSemanticField>? vgaRows) && vgaRows is not null
+                ? vgaRows
+                : throw new InvalidDataException("VGA Pause decomposition failed.");
+            if (vgaPause.Any(row => row.Key is "continue" or "quit" && row.Role != RunEgaUiSemanticRole.EditableSafe))
+                throw new InvalidDataException("VGA Pause buttons are not editable variable-width rows.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRuntimeUiMigrationSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V3 §11: deterministic schema v1 -> v2 migration. Unambiguous
+        // records are assigned to their only qualifying runtime; ambiguous
+        // residue is preserved unassigned (surfaced, never built, never
+        // silently duplicated); v1 bytes are backed up before the first
+        // validated v2 write replaces them.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RuntimeUiMigrationSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var texts = new RuntimeUiTextService();
+            string gameId = RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1).GameId;
+            Directory.CreateDirectory(e1.ProjectRoot);
+            string legacyJson = "{\"schemaVersion\":1,\"gameId\":\"" + gameId + "\",\"records\":["
+                + "{\"logicalRecordId\":\"SaveFailure\",\"text\":\"\\r    Save failed.\"},"
+                + "{\"logicalRecordId\":\"PauseMenu\",\"text\":\"     Hra\\r\\r\\r Continue      Quit\"},"
+                + "{\"logicalRecordId\":\"ConfirmGeneric\",\"text\":\"raw unstructured legacy\"}]}";
+            File.WriteAllText(texts.GetPath(e1), legacyJson);
+            RuntimeUiTextLoadResult migrated = texts.Load(e1);
+            if (!migrated.IsSuccess || migrated.State is null)
+                throw new InvalidDataException("Legacy v1 state did not migrate: " + migrated.Status);
+            if (migrated.State.Overrides.Count != 1 ||
+                migrated.State.Overrides.Single() is not { Runtime: VariantRuntimeKind.Elvira1Ega, LogicalRecordId: RuntimeUiLogicalRecordId.SaveFailure })
+                throw new InvalidDataException("Unambiguous v1 record was not assigned to its only runtime.");
+            if (migrated.State.UnassignedLegacy.Count != 2 ||
+                !migrated.State.UnassignedLegacy.Any(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu && value.ReasonCode == RuntimeUiTextService.ReasonAmbiguous && value.CandidateRuntimes.Count == 2) ||
+                !migrated.State.UnassignedLegacy.Any(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.ConfirmGeneric && value.ReasonCode == RuntimeUiTextService.ReasonInvalidForAll))
+                throw new InvalidDataException("Ambiguous v1 residue was not preserved unassigned with reasons.");
+            if (string.IsNullOrWhiteSpace(migrated.Detail))
+                throw new InvalidDataException("Migration did not surface a notice.");
+            // Save writes validated v2 and preserves v1 bytes in the backup.
+            RuntimeUiTextSaveResult saved = texts.Save(e1, migrated.State);
+            if (!saved.Succeeded)
+                throw new InvalidDataException("Migrated state did not save: " + saved.Detail);
+            string backup = Path.Combine(e1.ProjectRoot, RuntimeUiTextService.LegacyBackupFileName);
+            if (!File.Exists(backup) || File.ReadAllText(backup) != legacyJson)
+                throw new InvalidDataException("Legacy v1 bytes were not backed up before the v2 write.");
+            RuntimeUiTextLoadResult reloaded = texts.Load(e1);
+            if (!reloaded.IsSuccess || reloaded.State!.Overrides.Count != 1 || reloaded.State.UnassignedLegacy.Count != 2)
+                throw new InvalidDataException("Migrated v2 state did not reload deterministically.");
+            // Explicit assignment moves residue to exactly one runtime: the
+            // EGA view still shows no Pause override afterwards (no silent
+            // duplication into both runtimes).
+            VariantContext ega = VariantContextCatalog.CreateBuiltIns(e1).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(e1).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            RuntimeUiTextState assigned = texts.AssignUnassigned(e1, reloaded.State!, RuntimeUiLogicalRecordId.PauseMenu, VariantRuntimeKind.Elvira1Vga);
+            if (assigned.UnassignedLegacy.Count != 1 || !texts.GetEffectiveRecords(vga, assigned).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu).IsOverridden ||
+                texts.GetEffectiveRecords(ega, assigned).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu).IsOverridden)
+                throw new InvalidDataException("Legacy assignment duplicated or misattributed the override.");
+            RuntimeUiTextState discarded = texts.DiscardUnassigned(e1, assigned, RuntimeUiLogicalRecordId.ConfirmGeneric);
+            if (discarded.UnassignedLegacy.Count != 0 || !texts.Save(e1, discarded).Succeeded)
+                throw new InvalidDataException("Legacy discard regressed.");
+            if (File.ReadAllText(backup) != legacyJson)
+                throw new InvalidDataException("Legacy backup was overwritten.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRuntimeUiIsolationSmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V3 §§10,19: the 11-step cross-runtime isolation sequence at
+        // the grid level, ending with a project reload that preserves both
+        // runtime-specific values independently.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RuntimeUiIsolationSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant skCreated = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            translations.Save(fixture, translations.Add(text, skCreated));
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? e1) || e1 is null)
+                throw new InvalidDataException("Isolation fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(e1);
+            form.SelectTranslationForTest("SK");
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
+            // 1. Save EGA Save.failed override via the semantic editor.
+            // (Variant switches reload project state from disk, so each phase
+            // is saved explicitly.)
+            form.ApplySemanticEditForTest(RuntimeUiLogicalRecordId.SaveFailure, "Neuložené!");
+            form.SaveRuntimeUiForTest();
+            // 2. Switch VGA. 3. VGA Save.failed Project override is blank and
+            // read-only. 4. No EGA override enables a VGA Reset.
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            if (!form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.SaveFailure).Equals(string.Empty, StringComparison.Ordinal))
+                throw new InvalidDataException("EGA Save.failed leaked into the VGA Project override column.");
+            if (!form.SelectRuntimeUiRowForTest(RuntimeUiLogicalRecordId.SaveFailure) || form.RuntimeUiResetEnabledForTest)
+                throw new InvalidDataException("VGA Save.failed row carries EGA override state.");
+            if (form.RuntimeUiOverrideCountForTest != 1)
+                throw new InvalidDataException("EGA override was lost or duplicated by the runtime switch.");
+            // 5. Switch back EGA. 6. EGA override remains.
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
+            if (!form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.SaveFailure).Equals("Neuložené!", StringComparison.Ordinal))
+                throw new InvalidDataException("EGA Save.failed override did not survive the runtime switch.");
+            // 7. Save VGA Pause title. 8. Switch EGA. 9. EGA Pause independent.
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            form.ApplySemanticEditForTest(RuntimeUiLogicalRecordId.PauseMenu, "Prestávka");
+            form.SaveRuntimeUiForTest();
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
+            if (!form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals(string.Empty, StringComparison.Ordinal))
+                throw new InvalidDataException("VGA Pause title leaked into the EGA view.");
+            // 10. Reload project. 11. Both runtime-specific values survive.
+            form.ReloadRuntimeUiForTest();
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
+            if (!form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.SaveFailure).Equals("Neuložené!", StringComparison.Ordinal) ||
+                !form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals(string.Empty, StringComparison.Ordinal))
+                throw new InvalidDataException("EGA values did not survive the project reload independently.");
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            if (!form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.PauseMenu).Equals("Prestávka", StringComparison.Ordinal) ||
+                !form.RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.SaveFailure).Equals(string.Empty, StringComparison.Ordinal))
+                throw new InvalidDataException("VGA values did not survive the project reload independently.");
+            _ = elvira2Source;
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyLegacyEditionSafetySmoke(string elvira1Source, string elvira2Source)
+    {
+        // R9F V3 §14 (option A): legacy flat owned outputs are detected,
+        // never reinterpreted, never silently deleted. New edition builds
+        // coexist beside them; explicit removal is a deliberate action.
+        string root = Path.Combine(Path.GetTempPath(), "Pi1LegacyEditionSafetySmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState text = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant skCreated = translations.Create(fixture, text, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            text = translations.Add(text, skCreated);
+            translations.Save(fixture, text);
+            TranslationProjectVariant sk = translations.Load(fixture).State!.Variants.Single(item => item.Code == "SK");
+            var graphics = new GraphicsVariantService();
+            var directories = new VariantDirectoryService();
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(fixture).Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
+            // Build SK once, then mirror its outputs into the runtime root to
+            // simulate a pre-R9F flat owned output (manifest included).
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(fixture, vga, sk.Code), VariantDirectoryOperationStatus.Created, "legacy fixture edition directory");
+            CompositeBuildService skBuild = new(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1), RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1))),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            if (skBuild.Build(fixture, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("Legacy fixture SK build failed.");
+            string editionRoot = directories.GetVariantEditionDirectoryPath(fixture, vga, sk.Code);
+            string runtimeRoot = directories.GetVariantDirectoryPath(fixture, vga);
+            foreach (string file in Directory.EnumerateFiles(editionRoot, "*", SearchOption.TopDirectoryOnly))
+            {
+                string name = Path.GetFileName(file);
+                if (name.Equals(VariantDirectoryService.OwnershipMarkerFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                File.Copy(file, Path.Combine(runtimeRoot, name), overwrite: false);
+            }
+            // The legacy marker must be a runtime-level (schema 1) marker for
+            // the simulation to be faithful: rewrite it without the edition binding.
+            File.WriteAllText(Path.Combine(runtimeRoot, VariantDirectoryService.OwnershipMarkerFileName),
+                "{\"SchemaVersion\":1,\"Product\":\"Pi1ElviraVariantDirectory\",\"GameId\":\"" + RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1).GameId + "\",\"VariantId\":\"Elvira1Vga\",\"DirectoryKey\":\"E1VGA\",\"BaselineFingerprint\":\"" + fixture.BaselineFingerprint + "\"}");
+            var legacy = directories.DetectLegacyFlatVariant(fixture, vga);
+            if (!legacy.HasLegacyFiles || !legacy.HasMatchingMarker || legacy.ManifestProjectCode != "SK" || !legacy.FileNames.Contains("GAMEPCSK"))
+                throw new InvalidDataException("Legacy flat owned output was not detected with its manifest identity.");
+            if (!directories.Enumerate(fixture, [vga]).Any(item => item.Classification == VariantDirectoryClassification.LegacyFlatOwned))
+                throw new InvalidDataException("Legacy flat output was not enumerated as legacy.");
+            // Rebuilding SK leaves every legacy byte untouched and resolves
+            // the launcher at the edition output, never at the legacy copy.
+            var beforeLegacy = legacy.FileNames.ToDictionary(name => name, name => HashFile(Path.Combine(runtimeRoot, name)), StringComparer.OrdinalIgnoreCase);
+            if (skBuild.Build(fixture, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("SK rebuild beside legacy output failed.");
+            foreach ((string name, string hash) in beforeLegacy)
+            {
+                if (!File.Exists(Path.Combine(runtimeRoot, name)) || !HashFile(Path.Combine(runtimeRoot, name)).Equals(hash, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Rebuild touched legacy flat output: " + name);
+            }
+            var launcher = new VariantLauncherService(directories, skBuild);
+            VariantLaunchTarget target = launcher.Resolve(fixture, vga);
+            if (target.Readiness != VariantLaunchReadiness.LaunchReady || !target.WorkingDirectory.Equals(editionRoot, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Launcher did not resolve the edition output: " + target.Detail);
+            var recovery = new RecoverySafetyService(directories, skBuild);
+            RestorePlan plan = recovery.CreateRestorePlan(fixture);
+            if (plan.Items.Any(item => item.Kind == RestorePlanItemKind.RemoveOwnedVariant && item.RelativePath.EndsWith("E1VGA", StringComparison.OrdinalIgnoreCase) && item.ProjectCode is null) ||
+                !plan.Items.Any(item => item.Kind == RestorePlanItemKind.ExternalDifferencePreserved && item.RelativePath.EndsWith("E1VGA", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("Restore plan reinterpreted legacy output as a removable owned variant.");
+            if (!plan.Items.Any(item => item.Kind == RestorePlanItemKind.RemoveOwnedVariant && item.ProjectCode == "SK"))
+                throw new InvalidDataException("Restore plan lost the edition output entry.");
+            // Explicit edition removal keeps legacy files; explicit legacy
+            // removal then clears the root. Foreign contents stay untouched.
+            RecoverySafetyOperationResult removedEdition = recovery.RemoveOwnedVariant(fixture, vga, sk.Code);
+            if (!removedEdition.Succeeded || Directory.Exists(editionRoot))
+                throw new InvalidDataException("Edition removal failed: " + removedEdition.Detail);
+            foreach (string name in beforeLegacy.Keys)
+            {
+                if (!File.Exists(Path.Combine(runtimeRoot, name)))
+                    throw new InvalidDataException("Edition removal touched legacy output: " + name);
+            }
+            RecoverySafetyOperationResult removedLegacy = recovery.RemoveOwnedVariant(fixture, vga, sk.Code);
+            if (!removedLegacy.Succeeded || Directory.Exists(runtimeRoot))
+                throw new InvalidDataException("Explicit legacy removal failed: " + removedLegacy.Detail);
+            _ = elvira2Source;
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
@@ -3437,16 +6695,20 @@ internal static class Program
                 throw new InvalidDataException("Existing GAMEPC text loading regressed.");
 
             var texts = new RuntimeUiTextService(); var layouts = new RuntimeUiLayoutValidationService(texts);
-            RuntimeUiTextState e1State = texts.SetOverride(e1, texts.Load(e1).State!, RuntimeUiLogicalRecordId.SaveFailure, "Save failed");
+            // R9F V3 isolation: an EGA-scoped override projects only into the
+            // EGA view. The VGA view of the same logical record stays blank
+            // (MappingIncomplete); it never inherits EGA project text.
+            RuntimeUiTextState e1State = texts.SetOverride(e1, texts.Load(e1).State!, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "\r    Save failed.");
             VariantContext[] e1Variants = VariantContextCatalog.CreateBuiltIns(e1).ToArray();
-            if (texts.GetEffectiveRecords(e1Variants[0], e1State).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.SaveFailure).EffectiveText !=
-                texts.GetEffectiveRecords(e1Variants[1], e1State).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.SaveFailure).EffectiveText)
-                throw new InvalidDataException("E1 runtime views did not share one logical project override.");
+            string? vgaText = texts.GetEffectiveRecords(e1Variants[0], e1State).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.SaveFailure).EffectiveText;
+            RuntimeUiRuntimeProjection egaView = texts.GetEffectiveRecords(e1Variants[1], e1State).Single(value => value.LogicalRecordId == RuntimeUiLogicalRecordId.SaveFailure);
+            if (vgaText is not null || egaView is not { IsOverridden: true, EffectiveText: "\r    Save failed." })
+                throw new InvalidDataException("EGA Runtime UI state leaked across runtime views.");
             if (layouts.Validate(e1Variants.Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Vga), e1State, RuntimeUiLogicalRecordId.SaveFailure).Status != RuntimeUiLayoutValidationStatus.MappingIncomplete ||
                 layouts.Validate(e1Variants.Single(value => value.RuntimeKind == VariantRuntimeKind.Elvira1Ega), e1State, RuntimeUiLogicalRecordId.SaveFailure).Status != RuntimeUiLayoutValidationStatus.Valid)
                 throw new InvalidDataException("E1 runtime status presentation diverged.");
             VariantContext runit = VariantContextCatalog.CreateBuiltIns(e2).Single();
-            RuntimeUiTextState e2State = texts.SetOverride(e2, texts.Load(e2).State!, RuntimeUiLogicalRecordId.SaveFailure, "Save failed");
+            RuntimeUiTextState e2State = texts.SetOverride(e2, texts.Load(e2).State!, VariantRuntimeKind.Elvira2Vga, RuntimeUiLogicalRecordId.SaveFailure, "Save failed");
             if (layouts.Validate(runit, e2State, RuntimeUiLogicalRecordId.SaveFailure).Status != RuntimeUiLayoutValidationStatus.Valid ||
                 new[] { RuntimeUiLogicalRecordId.LoadFailure, RuntimeUiLogicalRecordId.FileNotFound, RuntimeUiLogicalRecordId.TryAnotherDisk }
                     .Any(id => layouts.Validate(runit, e2State, id).Status != RuntimeUiLayoutValidationStatus.MappingIncomplete))
@@ -3466,7 +6728,7 @@ internal static class Program
             if (!File.Exists(saved.Path) || !File.ReadAllText(saved.Path).Contains(nameof(RuntimeUiLogicalRecordId.SaveFailure), StringComparison.Ordinal))
                 throw new InvalidDataException("Runtime UI save did not update runtime-ui.json.");
             Console.WriteLine($"Runtime UI fixture GAMEPC: before={gamePcHash} length={gamePcLength} writeUtc={gamePcWriteTime:O}; after={HashFile(gamePcPath)} length={afterInfo.Length} writeUtc={afterInfo.LastWriteTimeUtc:O}");
-            RuntimeUiTextState reset = texts.RemoveOverride(e1, e1State, RuntimeUiLogicalRecordId.SaveFailure);
+            RuntimeUiTextState reset = texts.RemoveOverride(e1, e1State, VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure);
             if (!texts.Save(e1, reset).Succeeded || texts.Load(e1).State!.Overrides.Count != 0)
                 throw new InvalidDataException("Runtime UI reset did not use sparse project override removal.");
         }
@@ -3581,17 +6843,18 @@ internal static class Program
 
             var directories = new VariantDirectoryService();
             VariantContext vga = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
-            RequireDirectoryStatus(directories.EnsureVariantDirectory(project, vga), VariantDirectoryOperationStatus.Created, "translation build fixture directory");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project, vga, "SK"), VariantDirectoryOperationStatus.Created, "translation build fixture directory");
             ICompositeBuildStep[] buildSteps =
             [
                 new TranslationProjectBuildStep(translations, directories, "SK"),
                 new FixtureCompositeStep(CompositeBuildStage.ApplyGraphicsTransformations, "graphics", _ => true, _ => null, _ => null),
                 new FixtureCompositeStep(CompositeBuildStage.ApplyFontTransformations, "font", _ => true, _ => null, _ => null),
                 new FixtureCompositeStep(CompositeBuildStage.ApplyRuntimeUiTransformations, "runtime-ui", _ => true, _ => null, _ => null),
-                new RunVgaCompositeBuildStep(directories)
+                new RunVgaCompositeBuildStep(directories, "SK")
             ];
-            CompositeBuildResult built = new CompositeBuildService(new DisposableVariantBuildService(directories), directories, buildSteps).Build(project, vga, CompositeBuildMode.Full);
-            string output = directories.GetVariantDirectoryPath(project, vga);
+            CompositeBuildResult built = new CompositeBuildService(new DisposableVariantBuildService(directories), directories, buildSteps,
+                projectVariantProvider: (_, _) => "SK").Build(project, vga, CompositeBuildMode.Full);
+            string output = directories.GetVariantEditionDirectoryPath(project, vga, "SK");
             if (built.Status != CompositeBuildStatus.Success || !File.Exists(Path.Combine(output, "GAMEPCSK")) || !File.Exists(Path.Combine(output, "RUNVGASK.EXE")))
                 throw new InvalidDataException("Authorized full variant build did not create GAMEPCSK/RUNVGASK.EXE only in the owned output.");
             if (!PristineTopLevelSnapshot(project).SequenceEqual(before, StringComparer.Ordinal))
@@ -3738,33 +7001,40 @@ internal static class Program
             if (!graphics.Save(project, graphicsState).Succeeded) throw new InvalidDataException("Fixture graphics project did not save.");
             RuntimeUiTextState runtimeUi = RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1);
             var directories = new VariantDirectoryService();
-            RequireDirectoryStatus(directories.EnsureVariantDirectory(project, vga), VariantDirectoryOperationStatus.Created, "active project variant directory");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project, vga, "S1"), VariantDirectoryOperationStatus.Created, "active project variant directory");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project, vga, "SK"), VariantDirectoryOperationStatus.Created, "active project SK edition directory");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project, vga, "EN"), VariantDirectoryOperationStatus.Created, "active project EN edition directory");
 
             CompositeBuildService Create(TranslationProjectVariant selected) => new(new DisposableVariantBuildService(directories), directories,
                 stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics, new ActiveProjectBuildInput(selected, graphicsState, runtimeUi)),
-                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, selected), selected.DataFile]);
-            string output = directories.GetVariantDirectoryPath(project, vga);
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, selected), selected.DataFile],
+                projectVariantProvider: (_, _) => selected.Code);
+            string s1Root = directories.GetVariantEditionDirectoryPath(project, vga, "S1");
+            string skRoot = directories.GetVariantEditionDirectoryPath(project, vga, "SK");
+            string enRoot = directories.GetVariantEditionDirectoryPath(project, vga, "EN");
             CompositeBuildService s1Build = Create(s1);
             CompositeBuildResult s1Result = s1Build.Build(project, vga, CompositeBuildMode.Full);
             if (s1Result.Status != CompositeBuildStatus.Success) throw new InvalidDataException("S1 composite build failed: " + s1Result.Status + " / " + s1Result.Stages.Last().Detail);
-            string s1Data = Path.Combine(output, "GAMEPCS1"), s1Exe = Path.Combine(output, "RUNVGAS1.EXE"), built382 = Path.Combine(output, "382.VGA");
+            string s1Data = Path.Combine(s1Root, "GAMEPCS1"), s1Exe = Path.Combine(s1Root, "RUNVGAS1.EXE"), built382 = Path.Combine(s1Root, "382.VGA");
             VariantLaunchTarget s1Target = new VariantLauncherService(directories, s1Build).Resolve(project, vga);
             ParsedTable rebuiltTable = new VgaImageTableParser(File.ReadAllBytes(built382)).Parse();
             byte[] rebuiltPixels = ElviraImageDecoder.Decode(File.ReadAllBytes(built382), rebuiltTable.Entries.Single(entry => entry.ImageId == 1));
             if (!File.Exists(s1Data) || !File.Exists(s1Exe) || !GamePcTextEditor.GetEncoding("CP852").GetString(GamePcTextEditor.LoadEntries(s1Data, ElviraGameProfile.Elvira1).Single(entry => entry.Index == 393).OriginalBytes).Contains("Prirucna", StringComparison.Ordinal) ||
                 HashFile(built382) == HashFile(source382) || rebuiltPixels[0] != ((pixels[0] + 1) & 0x0F) || s1Target is not { Readiness: VariantLaunchReadiness.LaunchReady, ExecutableFile: "RUNVGAS1.EXE", DataFile: "GAMEPCS1" })
                 throw new InvalidDataException("S1 build did not materialize its selected text, executable, graphics, and Ready state.");
-            string[] first = Snapshot(output);
-            if (s1Build.Build(project, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success || !first.SequenceEqual(Snapshot(output), StringComparer.Ordinal))
+            string[] first = Snapshot(s1Root);
+            if (s1Build.Build(project, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success || !first.SequenceEqual(Snapshot(s1Root), StringComparer.Ordinal))
                 throw new InvalidDataException("Selected S1 composite rebuild was not reproducible.");
 
+            // R9F V3 coexistence: the SK build owns its independent edition
+            // directory and never deletes or replaces the S1 output.
             CompositeBuildService skBuild = Create(sk);
-            if (skBuild.Build(project, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success || !File.Exists(Path.Combine(output, "GAMEPCSK")) || !File.Exists(Path.Combine(output, "RUNVGASK.EXE")) || File.Exists(s1Data) || File.Exists(s1Exe))
-                throw new InvalidDataException("SK build did not replace stale S1 output with the selected SK output.");
+            if (skBuild.Build(project, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success || !File.Exists(Path.Combine(skRoot, "GAMEPCSK")) || !File.Exists(Path.Combine(skRoot, "RUNVGASK.EXE")) || !File.Exists(s1Data) || !File.Exists(s1Exe))
+                throw new InvalidDataException("SK build did not coexist with the S1 output in its independent edition directory.");
 
             TranslationProjectVariant english = new("English", "EN", "GAMEPC", vga.SourceExecutableName, new Dictionary<int, string>());
             CompositeBuildService enBuild = Create(english);
-            if (enBuild.Build(project, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success || !File.Exists(Path.Combine(output, "GAMEPC")) || !File.Exists(Path.Combine(output, "RUNVGA.EXE")))
+            if (enBuild.Build(project, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success || !File.Exists(Path.Combine(enRoot, "GAMEPC")) || !File.Exists(Path.Combine(enRoot, "RUNVGA.EXE")))
                 throw new InvalidDataException("English build did not retain baseline runtime semantics.");
             string[] after = SnapshotPristine(project);
             if (!pristine.SequenceEqual(after, StringComparer.Ordinal) || File.Exists(Path.Combine(project.GameRoot, "GAMEPCS1")) || File.Exists(Path.Combine(project.GameRoot, "RUNVGAS1.EXE")))
@@ -4292,7 +7562,7 @@ internal static class Program
                 throw new InvalidDataException("Font state leaked between Original, SK, and S1.");
 
             var runtime = new RuntimeUiTextService();
-            RuntimeUiTextState s1Runtime = runtime.SetOverride(project, RuntimeUiTextState.Empty(project.GameProfile), RuntimeUiLogicalRecordId.SaveFailure, "S1 only");
+            RuntimeUiTextState s1Runtime = runtime.SetOverride(project, RuntimeUiTextState.Empty(project.GameProfile), VariantRuntimeKind.Elvira1Ega, RuntimeUiLogicalRecordId.SaveFailure, "\r    S1 only.");
             if (!runtime.Save(project, "S1", s1Runtime).Succeeded) throw new InvalidDataException("S1 runtime UI state was not saved.");
             if (runtime.Load(project, "EN").State!.Overrides.Count != 0 || runtime.Load(project, "SK").State!.Overrides.Count != 0 || runtime.Load(project, "S1").State!.Overrides.Count != 1)
                 throw new InvalidDataException("Runtime UI state leaked between Original, SK, and S1.");
@@ -4469,9 +7739,10 @@ internal static class Program
                 service.Resolve(e2, e2Vga).VariantId != BuiltInVariantId.Elvira2Vga)
                 throw new InvalidDataException("Semantic variant routing did not use the supplied VariantContext.");
             RequireDirectoryStatus(directories.EnsureVariantDirectory(e1, e1Vga), VariantDirectoryOperationStatus.Created, "E1VGA ownership");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "EN"), VariantDirectoryOperationStatus.Created, "E1VGA baseline edition");
             if (service.Resolve(e1, e1Vga) is not { Readiness: VariantLaunchReadiness.BuildIncomplete, Ownership: VariantDirectoryOperationStatus.AlreadyValid })
                 throw new InvalidDataException("Owned pristine E1VGA variant was falsely launch-ready.");
-            string foreign = directories.GetVariantDirectoryPath(e1, e1Ega); Directory.CreateDirectory(foreign);
+            string foreign = directories.GetVariantDirectoryPath(e1, e1Ega); Directory.CreateDirectory(foreign); File.WriteAllBytes(Path.Combine(foreign, "FOREIGN.DAT"), new byte[] { 0x46 });
             if (service.Resolve(e1, e1Ega).Readiness != VariantLaunchReadiness.ForeignOrInvalidVariant)
                 throw new InvalidDataException("Missing ownership marker was not rejected.");
             try { _ = VariantContext.ValidateDirectoryKey("..\\FOREIGN"); throw new InvalidDataException("Traversal directory key was accepted."); }
@@ -4517,9 +7788,10 @@ internal static class Program
             VariantContext e2Vga = VariantContextCatalog.CreateBuiltIns(e2).Single();
             AssertBlocked(execution.Execute(launcher.Resolve(e1, e1Vga), VariantExecutionMode.Run), runner, runner.Starts.Count, "Missing variant");
             RequireDirectoryStatus(directories.EnsureVariantDirectory(e1, e1Vga), VariantDirectoryOperationStatus.Created, "E1VGA owned directory");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "EN"), VariantDirectoryOperationStatus.Created, "E1VGA baseline edition");
             AssertBlocked(execution.Execute(launcher.Resolve(e1, e1Vga), VariantExecutionMode.Run), runner, runner.Starts.Count, "Incomplete variant");
 
-            string foreign = directories.GetVariantDirectoryPath(e1, e1Ega); Directory.CreateDirectory(foreign);
+            string foreign = directories.GetVariantDirectoryPath(e1, e1Ega); Directory.CreateDirectory(foreign); File.WriteAllBytes(Path.Combine(foreign, "FOREIGN.DAT"), new byte[] { 0x46 });
             AssertBlocked(execution.Execute(launcher.Resolve(e1, e1Ega), VariantExecutionMode.Run), runner, runner.Starts.Count, "Foreign E1EGA directory");
             Directory.Delete(foreign, true);
             try { _ = VariantContextCatalog.Create(e2, BuiltInVariantId.Elvira1Ega); throw new InvalidDataException("Elvira II EGA was accepted."); }
@@ -4536,7 +7808,7 @@ internal static class Program
             VariantLaunchTarget returnedE1 = launcher.Resolve(e1, e1Vga);
             if (staleE1.GameId != "Elvira1" || switchedE2.GameId != "Elvira2" || returnedE1.VariantRoot != staleE1.VariantRoot)
                 throw new InvalidDataException("E1 -> E2 -> E1 target resolution leaked stale state.");
-            string e1Root = directories.GetVariantDirectoryPath(e1, e1Vga);
+            string e1Root = directories.GetVariantEditionDirectoryPath(e1, e1Vga, "EN");
             string output = Path.Combine(e1Root, e1Vga.GeneratedExecutableName); File.Delete(output);
             AssertBlocked(execution.Execute(launcher.Resolve(e1, e1Vga), VariantExecutionMode.Run), runner, runner.Starts.Count, "Missing generated executable");
             File.WriteAllBytes(output, [0x4D, 0x5A]);
@@ -4585,17 +7857,17 @@ internal static class Program
             VariantContext e1Ega = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
             RequireDirectoryStatus(directories.EnsureVariantDirectory(e1, e1Vga), VariantDirectoryOperationStatus.Created, "owned recovery fixture");
             File.WriteAllBytes(Path.Combine(directories.GetVariantDirectoryPath(e1, e1Vga), "TEMP.DAT"), [0x50, 0x49, 0x31]);
-            if (recovery.RemoveOwnedVariant(e1, e1Vga) is not { Succeeded: true, VariantResult.Status: VariantDirectoryOperationStatus.Deleted } || Directory.Exists(directories.GetVariantDirectoryPath(e1, e1Vga)))
+            if (recovery.RemoveOwnedVariant(e1, e1Vga, "EN") is not { Succeeded: true, VariantResult.Status: VariantDirectoryOperationStatus.Deleted } || Directory.Exists(directories.GetVariantDirectoryPath(e1, e1Vga)))
                 throw new InvalidDataException("Owned variant was not safely removed.");
-            string foreign = directories.GetVariantDirectoryPath(e1, e1Ega); Directory.CreateDirectory(foreign);
-            RecoverySafetyOperationResult foreignResult = recovery.RemoveOwnedVariant(e1, e1Ega);
+            string foreign = directories.GetVariantDirectoryPath(e1, e1Ega); Directory.CreateDirectory(foreign); File.WriteAllBytes(Path.Combine(foreign, "FOREIGN.DAT"), new byte[] { 0x46 });
+            RecoverySafetyOperationResult foreignResult = recovery.RemoveOwnedVariant(e1, e1Ega, "EN");
             if (foreignResult.Succeeded || foreignResult.VariantResult?.Status != VariantDirectoryOperationStatus.ForeignDirectoryConflict || !Directory.Exists(foreign))
                 throw new InvalidDataException("Foreign variant was removed or accepted.");
             Directory.Delete(foreign, true);
 
             VariantContext e2Vga = VariantContextCatalog.CreateBuiltIns(e2).Single();
-            RequireDirectoryStatus(directories.EnsureVariantDirectory(e2, e2Vga), VariantDirectoryOperationStatus.Created, "owned rebuild fixture");
-            RecoverySafetyOperationResult rebuilt = recovery.RebuildOwnedVariant(e2, e2Vga);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e2, e2Vga, "EN"), VariantDirectoryOperationStatus.Created, "owned rebuild fixture");
+            RecoverySafetyOperationResult rebuilt = recovery.RebuildOwnedVariant(e2, e2Vga, "EN");
             if (!rebuilt.Succeeded || rebuilt.BuildResult?.Status != CompositeBuildStatus.Success || stages.Sum(step => step.ExecuteCount) != 5)
                 throw new InvalidDataException("Explicit rebuild did not execute only the owned configured fixture variant.");
             if (HashFile(e1Manifest) != e1ManifestHash || HashFile(e2Manifest) != e2ManifestHash)
@@ -4635,14 +7907,14 @@ internal static class Program
             string immutable = Path.Combine(e1.GameRoot, "GAMEPC"); byte[] originalImmutable = File.ReadAllBytes(immutable); File.WriteAllBytes(immutable, [0x45, 0x58, 0x54]);
             VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
             VariantContext e1Ega = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
-            RequireDirectoryStatus(directories.EnsureVariantDirectory(e1, e1Vga), VariantDirectoryOperationStatus.Created, "owned restore fixture");
-            File.WriteAllBytes(Path.Combine(directories.GetVariantDirectoryPath(e1, e1Vga), "PAYLOAD.DAT"), [0x50, 0x49, 0x31]);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "EN"), VariantDirectoryOperationStatus.Created, "owned restore fixture");
+            File.WriteAllBytes(Path.Combine(directories.GetVariantEditionDirectoryPath(e1, e1Vga, "EN"), "PAYLOAD.DAT"), [0x50, 0x49, 0x31]);
             string foreign = directories.GetVariantDirectoryPath(e1, e1Ega); Directory.CreateDirectory(foreign); File.WriteAllBytes(Path.Combine(foreign, "FOREIGN.DAT"), [0x46]);
 
             RestorePlan preview = recovery.CreateRestorePlan(e1);
             if (preview.IsBlocked || RestorePlanSignature(preview) != RestorePlanSignature(recovery.CreateRestorePlan(e1)) ||
                 !preview.Items.Any(item => item.Kind == RestorePlanItemKind.RestoreMutable && item.RelativePath == "ELVIRA.BAT") ||
-                !preview.Items.Any(item => item.Kind == RestorePlanItemKind.RemoveOwnedVariant && item.VariantId == e1Vga.VariantId) ||
+                !preview.Items.Any(item => item.Kind == RestorePlanItemKind.RemoveOwnedVariant && item.VariantId == e1Vga.VariantId && item.ProjectCode == "EN") ||
                 !preview.Items.Any(item => item.Kind == RestorePlanItemKind.RemoveKnownEditorArtifact && item.RelativePath == "PI1MENU.COM") ||
                 !preview.Items.Any(item => item.Kind == RestorePlanItemKind.ExternalDifferencePreserved && item.RelativePath == "EXTERNAL.DAT") ||
                 !preview.Items.Any(item => item.Kind == RestorePlanItemKind.ExternalDifferencePreserved && item.RelativePath == "GAMEPC") ||
@@ -4650,7 +7922,7 @@ internal static class Program
                 !preview.Items.Any(item => item.Kind == RestorePlanItemKind.NoAction && item.RelativePath == "GAMEPCO"))
                 throw new InvalidDataException("Restore preview classifications were not exact/narrow.");
             RestorePlanExecutionResult executed = recovery.ExecuteRestorePlan(e1, preview);
-            if (!executed.Succeeded || File.ReadAllBytes(launcher).AsSpan().SequenceEqual(originalLauncher) is false || File.Exists(artifact) || Directory.Exists(directories.GetVariantDirectoryPath(e1, e1Vga)) ||
+            if (!executed.Succeeded || File.ReadAllBytes(launcher).AsSpan().SequenceEqual(originalLauncher) is false || File.Exists(artifact) || Directory.Exists(directories.GetVariantEditionDirectoryPath(e1, e1Vga, "EN")) ||
                 !Directory.Exists(foreign) || !File.Exists(unexpected) || !File.Exists(legacy) || !File.ReadAllBytes(immutable).AsSpan().SequenceEqual(new byte[] { 0x45, 0x58, 0x54 }))
                 throw new InvalidDataException("Restore execution diverged from the approved plan.");
             RestorePlan idempotent = recovery.CreateRestorePlan(e1);
@@ -4680,12 +7952,17 @@ internal static class Program
     private static void VerifyReadyVariant(ProjectContext project, VariantContext variant, VariantDirectoryService directories,
         VariantLauncherService launcher, VariantExecutionService execution, RecordingVariantProcessRunner runner)
     {
-        VariantDirectoryOperationResult ensured = directories.EnsureVariantDirectory(project, variant);
+        VariantDirectoryOperationResult ensured = directories.EnsureVariantEditionDirectory(project, variant, "EN");
         if (ensured.Status is not (VariantDirectoryOperationStatus.Created or VariantDirectoryOperationStatus.AlreadyValid))
             throw new InvalidDataException("Unable to prepare owned fixture variant: " + ensured.Status);
-        string root = directories.GetVariantDirectoryPath(project, variant);
-        File.WriteAllBytes(Path.Combine(root, variant.GeneratedExecutableName), [0x4D, 0x5A]);
-        File.WriteAllBytes(Path.Combine(root, variant.LogicalDataFileName), [0x50, 0x49, 0x31]);
+        string root = directories.GetVariantEditionDirectoryPath(project, variant, "EN");
+        // R9D-honest fixture identity: pristine packed bytes under the
+        // generated/data names plus a matching manifest, so the launcher
+        // verifies a supported binary that is byte-identical to its record.
+        File.Copy(Path.Combine(project.GameRoot, variant.SourceExecutableName), Path.Combine(root, variant.GeneratedExecutableName), overwrite: true);
+        File.Copy(Path.Combine(project.GameRoot, variant.LogicalDataFileName), Path.Combine(root, variant.LogicalDataFileName), overwrite: true);
+        VariantManifestService.Write(project, variant, directories, CompositeBuildMode.PristineOnly,
+            [variant.GeneratedExecutableName, variant.LogicalDataFileName], "EN");
         VariantLaunchTarget target = launcher.Resolve(project, variant);
         if (target.Readiness != VariantLaunchReadiness.LaunchReady || !execution.IsAvailable(target, VariantExecutionMode.Run) || !execution.IsAvailable(target, VariantExecutionMode.Debug))
             throw new InvalidDataException("Ready fixture variant was not launch-ready: " + target.Detail);
@@ -5569,14 +8846,20 @@ internal static class Program
             if (status.Inspect(e1, e1Vga).Status != VariantBuildStatus.Incomplete)
                 throw new InvalidDataException("Owned but output-less E1 VGA directory was not reported Incomplete.");
 
-            string readyRoot = directories.GetVariantDirectoryPath(e1, e1Vga);
-            File.WriteAllBytes(Path.Combine(readyRoot, e1Vga.GeneratedExecutableName), [0x4D, 0x5A]);
-            File.WriteAllBytes(Path.Combine(readyRoot, e1Vga.LogicalDataFileName), [0x00]);
+            string readyRoot = directories.GetVariantEditionDirectoryPath(e1, e1Vga, "EN");
+            // R9D-honest Ready fixture: pristine packed bytes under the
+            // generated/data names plus a matching manifest.
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "EN"), VariantDirectoryOperationStatus.Created, "E1 VGA ready edition");
+            File.Copy(Path.Combine(e1.GameRoot, e1Vga.SourceExecutableName), Path.Combine(readyRoot, e1Vga.GeneratedExecutableName), overwrite: true);
+            File.Copy(Path.Combine(e1.GameRoot, e1Vga.LogicalDataFileName), Path.Combine(readyRoot, e1Vga.LogicalDataFileName), overwrite: true);
+            VariantManifestService.Write(e1, e1Vga, directories, CompositeBuildMode.PristineOnly,
+                [e1Vga.GeneratedExecutableName, e1Vga.LogicalDataFileName], "EN");
             VariantBuildStatusProjection ready = status.Inspect(e1, e1Vga);
             if (ready.Status != VariantBuildStatus.Ready || ready.ConfiguredCapabilities != ready.CapabilityCount || ready.CapabilityCount == 0)
                 throw new InvalidDataException("Owned E1 VGA output with configured plan was not reported Ready.");
             File.Delete(Path.Combine(readyRoot, e1Vga.GeneratedExecutableName));
             File.Delete(Path.Combine(readyRoot, e1Vga.LogicalDataFileName));
+            File.Delete(Path.Combine(readyRoot, VariantManifestService.FileName));
             if (status.Inspect(e2, e2Vga).Status != VariantBuildStatus.Missing ||
                 VariantContextCatalog.CreateBuiltIns(e2).Any(item => item.RuntimeKind == VariantRuntimeKind.Elvira1Ega))
                 throw new InvalidDataException("Elvira II variant-specific status exposed an invalid EGA variant.");
@@ -5602,16 +8885,18 @@ internal static class Program
                 new FixtureCompositeStep(CompositeBuildStage.ApplyExecutableTransformation, "fixture-executable", _ => true, _ => null,
                     // R9D: readiness requires a supported executable identity, so the
                     // fixture materializes the genuine pristine source executable under
-                    // the generated name instead of arbitrary fake bytes.
-                    variant => { File.Copy(Path.Combine(variant.FutureVariantRoot, variant.SourceExecutableName), Path.Combine(variant.FutureVariantRoot, variant.GeneratedExecutableName), true); return null; })).ToArray();
-            var composite = new CompositeBuildService(new DisposableVariantBuildService(directories), directories, steps);
+                    // the generated name inside the owned runtime+edition output
+                    // instead of arbitrary fake bytes.
+                    variant => { string editionRoot = directories.GetVariantEditionDirectoryPath(variant.Project, variant, "EN"); File.Copy(Path.Combine(editionRoot, variant.SourceExecutableName), Path.Combine(editionRoot, variant.GeneratedExecutableName), true); return null; })).ToArray();
+            var composite = new CompositeBuildService(new DisposableVariantBuildService(directories), directories, steps,
+                projectVariantProvider: (_, _) => "EN");
             var launcher = new VariantLauncherService(directories, composite);
             var status = new VariantBuildStatusService(composite, launcher);
             VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
             VariantContext e2Vga = VariantContextCatalog.CreateBuiltIns(e2).Single(item => item.VariantId == BuiltInVariantId.Elvira2Vga);
 
-            RequireDirectoryStatus(directories.EnsureVariantDirectory(e1, e1Vga), VariantDirectoryOperationStatus.Created, "E1 manifest fixture directory");
-            string e1Root = directories.GetVariantDirectoryPath(e1, e1Vga);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "EN"), VariantDirectoryOperationStatus.Created, "E1 manifest fixture directory");
+            string e1Root = directories.GetVariantEditionDirectoryPath(e1, e1Vga, "EN");
             VariantManifestService.Write(e1, e1Vga, directories, CompositeBuildMode.PristineOnly);
             if (status.Inspect(e1, e1Vga).Status != VariantBuildStatus.Incomplete)
                 throw new InvalidDataException("Manifest presence incorrectly implied readiness.");
@@ -5627,10 +8912,10 @@ internal static class Program
                 firstBytes != File.ReadAllText(Path.Combine(e1Root, VariantManifestService.FileName)))
                 throw new InvalidDataException("E1 manifest content was not deterministic across identical builds.");
 
-            RequireDirectoryStatus(directories.EnsureVariantDirectory(e2, e2Vga), VariantDirectoryOperationStatus.Created, "E2 manifest fixture directory");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e2, e2Vga, "EN"), VariantDirectoryOperationStatus.Created, "E2 manifest fixture directory");
             if (composite.Build(e2, e2Vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
                 throw new InvalidDataException("E2 manifest fixture build failed.");
-            VerifyVariantManifest(VariantManifestService.Read(directories.GetVariantDirectoryPath(e2, e2Vga)), e2, e2Vga, "Full");
+            VerifyVariantManifest(VariantManifestService.Read(directories.GetVariantEditionDirectoryPath(e2, e2Vga, "EN")), e2, e2Vga, "Full");
             if (HashFile(Path.Combine(e1.GameRoot, "GAMEPC")) != e1GamePc || HashFile(Path.Combine(e2.GameRoot, "GAMEPC")) != e2GamePc ||
                 Directory.EnumerateFiles(e1.GameRoot, "*SK.EXE", SearchOption.TopDirectoryOnly).Any() ||
                 Directory.EnumerateFiles(e2.GameRoot, "*SK.EXE", SearchOption.TopDirectoryOnly).Any())
@@ -5655,9 +8940,9 @@ internal static class Program
             VariantContext e1Ega = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Ega);
             VariantContext e2Vga = VariantContextCatalog.CreateBuiltIns(e2).Single(item => item.VariantId == BuiltInVariantId.Elvira2Vga);
 
-            VerifyRepeatedBuild(e1, e1Vga, new RunVgaCompositeBuildStep(directories));
-            VerifyRepeatedBuild(e1, e1Ega, new RunEgaCompositeBuildStep(directories));
-            VerifyRepeatedBuild(e2, e2Vga, new RunItCompositeBuildStep(directories));
+            VerifyRepeatedBuild(e1, e1Vga, new RunVgaCompositeBuildStep(directories, "EN"));
+            VerifyRepeatedBuild(e1, e1Ega, new RunEgaCompositeBuildStep(directories, "EN"));
+            VerifyRepeatedBuild(e2, e2Vga, new RunItCompositeBuildStep(directories, "EN"));
 
             if (HashFile(Path.Combine(e1.GameRoot, "GAMEPC")) != e1GamePc ||
                 HashFile(Path.Combine(e2.GameRoot, "GAMEPC")) != e2GamePc ||
@@ -5670,15 +8955,16 @@ internal static class Program
             void VerifyRepeatedBuild(ProjectContext project, VariantContext variant, ICompositeBuildStep executableStep)
             {
                 ICompositeBuildStep[] steps = CompleteFixtureStages(null, null).Take(4).Append(executableStep).ToArray();
-                var builds = new CompositeBuildService(new DisposableVariantBuildService(directories), directories, steps);
-                VariantDirectoryOperationResult prepared = directories.EnsureVariantDirectory(project, variant);
+                var builds = new CompositeBuildService(new DisposableVariantBuildService(directories), directories, steps,
+                    projectVariantProvider: (_, _) => "EN");
+                VariantDirectoryOperationResult prepared = directories.EnsureVariantEditionDirectory(project, variant, "EN");
                 if (prepared.Status is not (VariantDirectoryOperationStatus.Created or VariantDirectoryOperationStatus.AlreadyValid))
                     throw new InvalidDataException($"{variant.VariantId} fixture directory could not be prepared: {prepared.Status}.");
                 CompositeBuildResult firstBuild = builds.Build(project, variant, CompositeBuildMode.Full);
                 if (firstBuild.Status != CompositeBuildStatus.Success)
                     throw new InvalidDataException($"First {variant.VariantId} build failed: {firstBuild.Status} / {firstBuild.Stages.Last().Detail}");
 
-                string variantRoot = directories.GetVariantDirectoryPath(project, variant);
+                string variantRoot = directories.GetVariantEditionDirectoryPath(project, variant, "EN");
                 string firstManifest = File.ReadAllText(Path.Combine(variantRoot, VariantManifestService.FileName));
                 string[] firstArtifacts = Snapshot(variantRoot);
                 VerifyVariantManifest(VariantManifestService.Read(variantRoot), project, variant, "Full");
@@ -5828,21 +9114,21 @@ internal static class Program
             ProjectContext e2 = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
             var directories = new VariantDirectoryService();
             var disposable = new DisposableVariantBuildService(directories);
-            VerifyCompositeRejection(e1, BuiltInVariantId.Elvira1Vga, new RunVgaCompositeBuildStep(directories), "RUNVGA.EXE", "RUNVGASK.EXE", "Elvira I VGA", directories, disposable);
-            VerifyCompositeRejection(e1, BuiltInVariantId.Elvira1Ega, new RunEgaCompositeBuildStep(directories), "RUNEGA.EXE", "RUNEGASK.EXE", "Elvira I EGA", directories, disposable);
-            VerifyCompositeRejection(e2, BuiltInVariantId.Elvira2Vga, new RunItCompositeBuildStep(directories), "RUNIT.EXE", "RUNITSK.EXE", "Elvira II VGA", directories, disposable);
+            VerifyCompositeRejection(e1, BuiltInVariantId.Elvira1Vga, new RunVgaCompositeBuildStep(directories, "EN"), "RUNVGA.EXE", "RUNVGASK.EXE", "Elvira I VGA", directories, disposable);
+            VerifyCompositeRejection(e1, BuiltInVariantId.Elvira1Ega, new RunEgaCompositeBuildStep(directories, "EN"), "RUNEGA.EXE", "RUNEGASK.EXE", "Elvira I EGA", directories, disposable);
+            VerifyCompositeRejection(e2, BuiltInVariantId.Elvira2Vga, new RunItCompositeBuildStep(directories, "EN"), "RUNIT.EXE", "RUNITSK.EXE", "Elvira II VGA", directories, disposable);
 
             // Run/Debug readiness: supported full-build output stays LaunchReady; a mutated output does not.
             VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
-            ICompositeBuildStep[] stages = CompleteFixtureStages(null, null).Take(4).Append(new RunVgaCompositeBuildStep(directories)).ToArray();
-            var builds = new CompositeBuildService(disposable, directories, stages);
+            ICompositeBuildStep[] stages = CompleteFixtureStages(null, null).Take(4).Append(new RunVgaCompositeBuildStep(directories, "EN")).ToArray();
+            var builds = new CompositeBuildService(disposable, directories, stages, projectVariantProvider: (_, _) => "EN");
             if (builds.Build(e1, e1Vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.Success)
                 throw new InvalidDataException("Supported RUNVGA full build failed; the acceptance path regressed.");
             var launcher = new VariantLauncherService(directories, builds);
             VariantLaunchTarget ready = launcher.Resolve(e1, e1Vga);
             if (ready.Readiness != VariantLaunchReadiness.LaunchReady)
                 throw new InvalidDataException("Supported RUNVGA output was not launch-ready: " + ready.Detail);
-            string generated = Path.Combine(directories.GetVariantDirectoryPath(e1, e1Vga), e1Vga.GeneratedExecutableName);
+            string generated = Path.Combine(directories.GetVariantEditionDirectoryPath(e1, e1Vga, "EN"), e1Vga.GeneratedExecutableName);
             byte[] generatedBytes = File.ReadAllBytes(generated);
             byte[] corrupted = (byte[])generatedBytes.Clone();
             corrupted[corrupted.Length / 2] ^= 0x01;
@@ -5858,7 +9144,7 @@ internal static class Program
             File.WriteAllBytes(generated, generatedBytes);
 
             // Review: a changed DATA artifact must name the data file, never the executable.
-            string variantData = Path.Combine(directories.GetVariantDirectoryPath(e1, e1Vga), e1Vga.LogicalDataFileName);
+            string variantData = Path.Combine(directories.GetVariantEditionDirectoryPath(e1, e1Vga, "EN"), e1Vga.LogicalDataFileName);
             byte[] dataBytes = File.ReadAllBytes(variantData);
             byte[] dataCorrupted = (byte[])dataBytes.Clone();
             dataCorrupted[dataCorrupted.Length / 2] ^= 0x01;
@@ -5936,9 +9222,9 @@ internal static class Program
             void VerifyCompositeRejection(ProjectContext project, BuiltInVariantId variantId, ICompositeBuildStep executableStep, string sourceName, string outputName, string runtimeDisplay, VariantDirectoryService directories, DisposableVariantBuildService disposable)
             {
                 VariantContext variant = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.VariantId == variantId);
-                RequireDirectoryStatus(directories.EnsureVariantDirectory(project, variant), VariantDirectoryOperationStatus.Created, runtimeDisplay + " fixture directory");
-                RequireBuildStatus(disposable.Build(project, variant), DisposableVariantBuildStatus.Success, runtimeDisplay + " pristine build");
-                string variantRoot = directories.GetVariantDirectoryPath(project, variant);
+                RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project, variant, "EN"), VariantDirectoryOperationStatus.Created, runtimeDisplay + " fixture directory");
+                RequireBuildStatus(disposable.Build(project, variant, "EN"), DisposableVariantBuildStatus.Success, runtimeDisplay + " pristine build");
+                string variantRoot = directories.GetVariantEditionDirectoryPath(project, variant, "EN");
                 string source = Path.Combine(variantRoot, sourceName);
                 string output = Path.Combine(variantRoot, outputName);
                 byte[] pristine = File.ReadAllBytes(source);
@@ -5993,6 +9279,8 @@ internal static class Program
             CompositeBuildPlan first = composite.CreatePlan(variant.Project, variant, CompositeBuildMode.PristineOnly);
             CompositeBuildPlan second = composite.CreatePlan(variant.Project, variant, CompositeBuildMode.PristineOnly);
             if (!first.Stages.SequenceEqual(second.Stages) || !first.Stages.SequenceEqual(Enum.GetValues<CompositeBuildStage>())) throw new InvalidDataException("Composite plan order is not deterministic.");
+            VariantDirectoryOperationResult prepared = directories.EnsureVariantEditionDirectory(variant.Project, variant, "EN");
+            if (prepared.Status is not (VariantDirectoryOperationStatus.Created or VariantDirectoryOperationStatus.AlreadyValid)) throw new InvalidDataException("Real pristine edition directory could not be prepared.");
             if (composite.Build(variant.Project, variant, CompositeBuildMode.PristineOnly).Status != CompositeBuildStatus.Success) throw new InvalidDataException("Pristine composite build failed.");
             if (composite.Build(variant.Project, variant, CompositeBuildMode.Full).Status != CompositeBuildStatus.NotFullyConfigured) throw new InvalidDataException("Full composite build falsely reported readiness.");
         }
@@ -6008,8 +9296,8 @@ internal static class Program
             ProjectContext project = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
             var directories = new VariantDirectoryService(); var disposable = new DisposableVariantBuildService(directories);
             VariantContext variant = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
-            RequireDirectoryStatus(directories.EnsureVariantDirectory(project, variant), VariantDirectoryOperationStatus.Created, "composite fixture directory");
-            string variantRoot = directories.GetVariantDirectoryPath(project, variant);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project, variant, "EN"), VariantDirectoryOperationStatus.Created, "composite fixture directory");
+            string variantRoot = directories.GetVariantEditionDirectoryPath(project, variant, "EN");
             string prior = Path.Combine(variantRoot, "PRIOR.TXT"); File.WriteAllText(prior, "retain me");
 
             var preflightFailure = new FixtureCompositeStep(CompositeBuildStage.ApplyDataTransformations, "preflight-failure", _ => true, _ => "intentional preflight failure", _ => null);
@@ -6061,9 +9349,9 @@ internal static class Program
             var directories = new VariantDirectoryService(); var disposable = new DisposableVariantBuildService(directories);
             VariantContext vga = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
             VariantContext ega = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
-            var step = new RunVgaCompositeBuildStep(directories);
+            var step = new RunVgaCompositeBuildStep(directories, "EN");
             if (!step.AppliesTo(vga) || step.AppliesTo(ega)) throw new InvalidDataException("RUNVGA applicability is not runtime-specific.");
-            RequireDirectoryStatus(directories.EnsureVariantDirectory(project, vga), VariantDirectoryOperationStatus.Created, "RUNVGA fixture directory");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project, vga, "EN"), VariantDirectoryOperationStatus.Created, "RUNVGA fixture directory");
             if (File.Exists(Path.Combine(project.GameRoot, "GAMEPCO")) || File.Exists(Path.Combine(project.GameRoot, "RUNVGASK.EXE")))
                 throw new InvalidDataException("Fixture root unexpectedly contains a builder artifact before execution.");
             var capabilityOnly = new CompositeBuildService(disposable, directories, [step]);
@@ -6071,7 +9359,7 @@ internal static class Program
                 throw new InvalidDataException("RUNVGA patch capability was not reported as configured.");
             if (capabilityOnly.Build(project, vga, CompositeBuildMode.PristineOnly).Status != CompositeBuildStatus.Success)
                 throw new InvalidDataException("Pristine-only capability inspection/rebuild failed.");
-            string variantRoot = directories.GetVariantDirectoryPath(project, vga), source = Path.Combine(variantRoot, "RUNVGA.EXE"), output = Path.Combine(variantRoot, "RUNVGASK.EXE");
+            string variantRoot = directories.GetVariantEditionDirectoryPath(project, vga, "EN"), source = Path.Combine(variantRoot, "RUNVGA.EXE"), output = Path.Combine(variantRoot, "RUNVGASK.EXE");
             if (File.Exists(output) || capabilityOnly.Build(project, vga, CompositeBuildMode.Full).Status != CompositeBuildStatus.NotFullyConfigured || File.Exists(output))
                 throw new InvalidDataException("Incomplete full build executed the RUNVGA capability.");
 
@@ -6098,7 +9386,7 @@ internal static class Program
             if (File.Exists(Path.Combine(project.GameRoot, "GAMEPCO")) || File.Exists(Path.Combine(project.GameRoot, "RUNVGASK.EXE")))
                 throw new InvalidDataException("RUNVGA adapter created a root-side artifact.");
 
-            var corruptSource = new FixtureCompositeStep(CompositeBuildStage.ApplyDataTransformations, "corrupt-after-copy", _ => true, _ => null, variant => { File.WriteAllBytes(Path.Combine(variant.FutureVariantRoot, "RUNVGA.EXE"), [0]); return null; });
+            var corruptSource = new FixtureCompositeStep(CompositeBuildStage.ApplyDataTransformations, "corrupt-after-copy", _ => true, _ => null, variant => { File.WriteAllBytes(Path.Combine(directories.GetVariantEditionDirectoryPath(variant.Project, variant, "EN"), "RUNVGA.EXE"), [0]); return null; });
             ICompositeBuildStep[] failureSteps = [corruptSource,
                 new FixtureCompositeStep(CompositeBuildStage.ApplyGraphicsTransformations, "graphics", _ => true, _ => null, _ => null),
                 new FixtureCompositeStep(CompositeBuildStage.ApplyFontTransformations, "font", _ => true, _ => null, _ => null),
@@ -6148,11 +9436,11 @@ internal static class Program
         try
         {
             Directory.CreateDirectory(root); ProjectContext project=CreateBuildFixtureProjectContext(root,"e1",elvira1Source,ElviraGameProfile.Elvira1);
-            var directories=new VariantDirectoryService();var disposable=new DisposableVariantBuildService(directories);VariantContext ega=VariantContextCatalog.CreateBuiltIns(project).Single(x=>x.RuntimeKind==VariantRuntimeKind.Elvira1Ega);var step=new RunEgaCompositeBuildStep(directories);
+            var directories=new VariantDirectoryService();var disposable=new DisposableVariantBuildService(directories);VariantContext ega=VariantContextCatalog.CreateBuiltIns(project).Single(x=>x.RuntimeKind==VariantRuntimeKind.Elvira1Ega);var step=new RunEgaCompositeBuildStep(directories, "EN");
             if(!step.AppliesTo(ega)||step.AppliesTo(VariantContextCatalog.CreateBuiltIns(project).Single(x=>x.RuntimeKind==VariantRuntimeKind.Elvira1Vga)))throw new InvalidDataException("RUNEGA applicability is not runtime-specific.");
-            RequireDirectoryStatus(directories.EnsureVariantDirectory(project,ega),VariantDirectoryOperationStatus.Created,"RUNEGA fixture directory");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project,ega,"EN"),VariantDirectoryOperationStatus.Created,"RUNEGA fixture directory");
             var capability=new CompositeBuildService(disposable,directories,[step]);if(!capability.CreatePlan(project,ega,CompositeBuildMode.PristineOnly).Capabilities.Single().Configured)throw new InvalidDataException("RUNEGA capability is not configured.");
-            CompositeBuildResult pristine=capability.Build(project,ega,CompositeBuildMode.PristineOnly);if(pristine.Status!=CompositeBuildStatus.Success)throw new InvalidDataException("RUNEGA pristine-only failed: "+pristine.Status+" / "+pristine.Stages.Last().Detail);string vr=directories.GetVariantDirectoryPath(project,ega),outp=Path.Combine(vr,"RUNEGASK.EXE");
+            CompositeBuildResult pristine=capability.Build(project,ega,CompositeBuildMode.PristineOnly);if(pristine.Status!=CompositeBuildStatus.Success)throw new InvalidDataException("RUNEGA pristine-only failed: "+pristine.Status+" / "+pristine.Stages.Last().Detail);string vr=directories.GetVariantEditionDirectoryPath(project,ega,"EN"),outp=Path.Combine(vr,"RUNEGASK.EXE");
             if(File.Exists(outp)||capability.Build(project,ega,CompositeBuildMode.Full).Status!=CompositeBuildStatus.NotFullyConfigured||File.Exists(outp))throw new InvalidDataException("Incomplete build executed RUNEGA.");
             ICompositeBuildStep[] all=[new FixtureCompositeStep(CompositeBuildStage.ApplyDataTransformations,"data",_=>true,_=>null,_=>null),new FixtureCompositeStep(CompositeBuildStage.ApplyGraphicsTransformations,"graphics",_=>true,_=>null,_=>null),new FixtureCompositeStep(CompositeBuildStage.ApplyFontTransformations,"font",_=>true,_=>null,_=>null),new FixtureCompositeStep(CompositeBuildStage.ApplyRuntimeUiTransformations,"ui",_=>true,_=>null,_=>null),step];
             var full=new CompositeBuildService(disposable,directories,all);if(full.Build(project,ega,CompositeBuildMode.Full).Status!=CompositeBuildStatus.Success||HashFile(outp)!="C4028BAB9A35B247008197A5753C5C5185F2DEBFF54DCB099178E318830F90EE"||new FileInfo(outp).Length!=RunEgaBootstrapService.OutputSize)throw new InvalidDataException("RUNEGA fixture output diverged.");
@@ -6163,37 +9451,40 @@ internal static class Program
 
     private static void VerifyRealRunEgaCompositeBuild(string elvira1Root)
     {
-        ProjectContext project=RequireSuccess(new ProjectContextLoader().Open(elvira1Root),"real RUNEGA project");VariantContext ega=VariantContextCatalog.CreateBuiltIns(project).Single(x=>x.RuntimeKind==VariantRuntimeKind.Elvira1Ega);var directories=new VariantDirectoryService();var composite=new CompositeBuildService(new DisposableVariantBuildService(directories),directories,[new RunEgaCompositeBuildStep(directories)]);
+        ProjectContext project=RequireSuccess(new ProjectContextLoader().Open(elvira1Root),"real RUNEGA project");VariantContext ega=VariantContextCatalog.CreateBuiltIns(project).Single(x=>x.RuntimeKind==VariantRuntimeKind.Elvira1Ega);var directories=new VariantDirectoryService();var composite=new CompositeBuildService(new DisposableVariantBuildService(directories),directories,[new RunEgaCompositeBuildStep(directories, "EN")]);
         CompositeBuildPlan plan=composite.CreatePlan(project,ega,CompositeBuildMode.PristineOnly);if(plan.Capabilities is not [{Stage:CompositeBuildStage.ApplyExecutableTransformation,Configured:true}])throw new InvalidDataException("Real RUNEGA capability not configured.");
-        if(composite.Build(project,ega,CompositeBuildMode.PristineOnly).Status!=CompositeBuildStatus.Success)throw new InvalidDataException("Real RUNEGA pristine-only failed.");string vr=directories.GetVariantDirectoryPath(project,ega),output=Path.Combine(vr,"RUNEGASK.EXE");
+        VariantDirectoryOperationResult prepared=directories.EnsureVariantEditionDirectory(project,ega,"EN");if(prepared.Status is not (VariantDirectoryOperationStatus.Created or VariantDirectoryOperationStatus.AlreadyValid))throw new InvalidDataException("Real RUNEGA edition directory could not be prepared.");
+        if(composite.Build(project,ega,CompositeBuildMode.PristineOnly).Status!=CompositeBuildStatus.Success)throw new InvalidDataException("Real RUNEGA pristine-only failed.");string vr=directories.GetVariantEditionDirectoryPath(project,ega,"EN"),output=Path.Combine(vr,"RUNEGASK.EXE");
         if(File.Exists(output)||composite.Build(project,ega,CompositeBuildMode.Full).Status!=CompositeBuildStatus.NotFullyConfigured||File.Exists(output)||new PristineManifestService(project.StorageLayout,project.GameProfile).ValidateBaseline().Status!=BaselineValidationStatus.MatchesBaseline)throw new InvalidDataException("Real RUNEGA capability changed its pristine state.");
     }
 
     private static void VerifyRunItCompositeFixture(string elvira2Source)
     {
         string root=Path.Combine(Path.GetTempPath(),"Pi1RunItCompositeSmoke",Guid.NewGuid().ToString("N"));
-        try{Directory.CreateDirectory(root);ProjectContext project=CreateBuildFixtureProjectContext(root,"e2",elvira2Source,ElviraGameProfile.Elvira2);var directories=new VariantDirectoryService();var disposable=new DisposableVariantBuildService(directories);VariantContext runit=VariantContextCatalog.CreateBuiltIns(project).Single();var step=new RunItCompositeBuildStep(directories);if(!step.AppliesTo(runit))throw new InvalidDataException("RUNIT applicability failed.");RequireDirectoryStatus(directories.EnsureVariantDirectory(project,runit),VariantDirectoryOperationStatus.Created,"RUNIT fixture directory");var cap=new CompositeBuildService(disposable,directories,[step]);if(!cap.CreatePlan(project,runit,CompositeBuildMode.PristineOnly).Capabilities.Single().Configured)throw new InvalidDataException("RUNIT capability not configured.");if(cap.Build(project,runit,CompositeBuildMode.PristineOnly).Status!=CompositeBuildStatus.Success)throw new InvalidDataException("RUNIT pristine-only failed.");string vr=directories.GetVariantDirectoryPath(project,runit),outp=Path.Combine(vr,"RUNITSK.EXE");if(File.Exists(outp)||cap.Build(project,runit,CompositeBuildMode.Full).Status!=CompositeBuildStatus.NotFullyConfigured||File.Exists(outp))throw new InvalidDataException("Incomplete RUNIT build executed.");ICompositeBuildStep[] all=[new FixtureCompositeStep(CompositeBuildStage.ApplyDataTransformations,"data",_=>true,_=>null,_=>null),new FixtureCompositeStep(CompositeBuildStage.ApplyGraphicsTransformations,"graphics",_=>true,_=>null,_=>null),new FixtureCompositeStep(CompositeBuildStage.ApplyFontTransformations,"font",_=>true,_=>null,_=>null),new FixtureCompositeStep(CompositeBuildStage.ApplyRuntimeUiTransformations,"ui",_=>true,_=>null,_=>null),step];var full=new CompositeBuildService(disposable,directories,all);if(full.Build(project,runit,CompositeBuildMode.Full).Status!=CompositeBuildStatus.Success||HashFile(outp)!=Elvira2ProductionProfile.DeterministicFontEnabled.Sha256||new FileInfo(outp).Length!=RunItBootstrapService.ExtendedSize)throw new InvalidDataException("RUNIT fixture output diverged.");File.WriteAllBytes(outp,[0]);if(full.Build(project,runit,CompositeBuildMode.Full).Status!=CompositeBuildStatus.Success||HashFile(outp)!=Elvira2ProductionProfile.DeterministicFontEnabled.Sha256)throw new InvalidDataException("RUNIT fixture rebuild nondeterministic.");}
+        try{Directory.CreateDirectory(root);ProjectContext project=CreateBuildFixtureProjectContext(root,"e2",elvira2Source,ElviraGameProfile.Elvira2);var directories=new VariantDirectoryService();var disposable=new DisposableVariantBuildService(directories);VariantContext runit=VariantContextCatalog.CreateBuiltIns(project).Single();var step=new RunItCompositeBuildStep(directories, "EN");if(!step.AppliesTo(runit))throw new InvalidDataException("RUNIT applicability failed.");RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project,runit,"EN"),VariantDirectoryOperationStatus.Created,"RUNIT fixture directory");var cap=new CompositeBuildService(disposable,directories,[step]);if(!cap.CreatePlan(project,runit,CompositeBuildMode.PristineOnly).Capabilities.Single().Configured)throw new InvalidDataException("RUNIT capability not configured.");if(cap.Build(project,runit,CompositeBuildMode.PristineOnly).Status!=CompositeBuildStatus.Success)throw new InvalidDataException("RUNIT pristine-only failed.");string vr=directories.GetVariantEditionDirectoryPath(project,runit,"EN"),outp=Path.Combine(vr,"RUNITSK.EXE");if(File.Exists(outp)||cap.Build(project,runit,CompositeBuildMode.Full).Status!=CompositeBuildStatus.NotFullyConfigured||File.Exists(outp))throw new InvalidDataException("Incomplete RUNIT build executed.");ICompositeBuildStep[] all=[new FixtureCompositeStep(CompositeBuildStage.ApplyDataTransformations,"data",_=>true,_=>null,_=>null),new FixtureCompositeStep(CompositeBuildStage.ApplyGraphicsTransformations,"graphics",_=>true,_=>null,_=>null),new FixtureCompositeStep(CompositeBuildStage.ApplyFontTransformations,"font",_=>true,_=>null,_=>null),new FixtureCompositeStep(CompositeBuildStage.ApplyRuntimeUiTransformations,"ui",_=>true,_=>null,_=>null),step];var full=new CompositeBuildService(disposable,directories,all);if(full.Build(project,runit,CompositeBuildMode.Full).Status!=CompositeBuildStatus.Success||HashFile(outp)!=Elvira2ProductionProfile.DeterministicFontEnabled.Sha256||new FileInfo(outp).Length!=RunItBootstrapService.ExtendedSize)throw new InvalidDataException("RUNIT fixture output diverged.");File.WriteAllBytes(outp,[0]);if(full.Build(project,runit,CompositeBuildMode.Full).Status!=CompositeBuildStatus.Success||HashFile(outp)!=Elvira2ProductionProfile.DeterministicFontEnabled.Sha256)throw new InvalidDataException("RUNIT fixture rebuild nondeterministic.");}
         finally{if(Directory.Exists(root))Directory.Delete(root,true);}
     }
 
     private static void VerifyRealRunItCompositeBuild(string elvira2Root)
     {
-        ProjectContext project=RequireSuccess(new ProjectContextLoader().Open(elvira2Root),"real RUNIT project");VariantContext runit=VariantContextCatalog.CreateBuiltIns(project).Single();var directories=new VariantDirectoryService();var composite=new CompositeBuildService(new DisposableVariantBuildService(directories),directories,[new RunItCompositeBuildStep(directories)]);if(composite.CreatePlan(project,runit,CompositeBuildMode.PristineOnly).Capabilities is not [{Configured:true}])throw new InvalidDataException("Real RUNIT capability not configured.");if(composite.Build(project,runit,CompositeBuildMode.PristineOnly).Status!=CompositeBuildStatus.Success)throw new InvalidDataException("Real RUNIT pristine-only failed.");string output=Path.Combine(directories.GetVariantDirectoryPath(project,runit),"RUNITSK.EXE");if(File.Exists(output)||composite.Build(project,runit,CompositeBuildMode.Full).Status!=CompositeBuildStatus.NotFullyConfigured||File.Exists(output)||new PristineManifestService(project.StorageLayout,project.GameProfile).ValidateBaseline().Status!=BaselineValidationStatus.MatchesBaseline)throw new InvalidDataException("Real RUNIT capability changed pristine state.");
+        ProjectContext project=RequireSuccess(new ProjectContextLoader().Open(elvira2Root),"real RUNIT project");VariantContext runit=VariantContextCatalog.CreateBuiltIns(project).Single();var directories=new VariantDirectoryService();var composite=new CompositeBuildService(new DisposableVariantBuildService(directories),directories,[new RunItCompositeBuildStep(directories, "EN")]);if(composite.CreatePlan(project,runit,CompositeBuildMode.PristineOnly).Capabilities is not [{Configured:true}])throw new InvalidDataException("Real RUNIT capability not configured.");VariantDirectoryOperationResult prepared=directories.EnsureVariantEditionDirectory(project,runit,"EN");if(prepared.Status is not (VariantDirectoryOperationStatus.Created or VariantDirectoryOperationStatus.AlreadyValid))throw new InvalidDataException("Real RUNIT edition directory could not be prepared.");if(composite.Build(project,runit,CompositeBuildMode.PristineOnly).Status!=CompositeBuildStatus.Success)throw new InvalidDataException("Real RUNIT pristine-only failed.");string output=Path.Combine(directories.GetVariantEditionDirectoryPath(project,runit,"EN"),"RUNITSK.EXE");if(File.Exists(output)||composite.Build(project,runit,CompositeBuildMode.Full).Status!=CompositeBuildStatus.NotFullyConfigured||File.Exists(output)||new PristineManifestService(project.StorageLayout,project.GameProfile).ValidateBaseline().Status!=BaselineValidationStatus.MatchesBaseline)throw new InvalidDataException("Real RUNIT capability changed pristine state.");
     }
 
     private static void VerifyRealRunVgaCompositeBuild(string elvira1Root)
     {
         ProjectContext project = RequireSuccess(new ProjectContextLoader().Open(elvira1Root), "real RUNVGA project");
         VariantContext variant = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
-        var directories = new VariantDirectoryService(); var composite = new CompositeBuildService(new DisposableVariantBuildService(directories), directories, [new RunVgaCompositeBuildStep(directories)]);
+        var directories = new VariantDirectoryService(); var composite = new CompositeBuildService(new DisposableVariantBuildService(directories), directories, [new RunVgaCompositeBuildStep(directories, "EN")]);
         if (File.Exists(Path.Combine(project.GameRoot, "GAMEPCO")) || File.Exists(Path.Combine(project.GameRoot, "RUNVGASK.EXE")) || File.Exists(Path.Combine(project.GameRoot, "RUNVGAO.EXE")))
             throw new InvalidDataException("Real pristine root already contains a forbidden RUNVGA builder artifact.");
         CompositeBuildPlan plan = composite.CreatePlan(project, variant, CompositeBuildMode.PristineOnly);
         if (plan.Capabilities is not [{ Stage: CompositeBuildStage.ApplyExecutableTransformation, Configured: true }])
             throw new InvalidDataException("Real RUNVGA capability is not read-only configured.");
+        VariantDirectoryOperationResult prepared = directories.EnsureVariantEditionDirectory(project, variant, "EN");
+        if (prepared.Status is not (VariantDirectoryOperationStatus.Created or VariantDirectoryOperationStatus.AlreadyValid)) throw new InvalidDataException("Real RUNVGA edition directory could not be prepared.");
         CompositeBuildResult first = composite.Build(project, variant, CompositeBuildMode.PristineOnly);
         if (first.Status != CompositeBuildStatus.Success) throw new InvalidDataException("Real pristine-only rebuild failed: " + first.Status);
-        string variantRoot = directories.GetVariantDirectoryPath(project, variant), source = Path.Combine(variantRoot, "RUNVGA.EXE"), output = Path.Combine(variantRoot, "RUNVGASK.EXE");
+        string variantRoot = directories.GetVariantEditionDirectoryPath(project, variant, "EN"), source = Path.Combine(variantRoot, "RUNVGA.EXE"), output = Path.Combine(variantRoot, "RUNVGASK.EXE");
         if (RunVgaBootstrapService.DetectState(source) != RunVgaBootstrapState.OriginalPacked || File.Exists(output))
             throw new InvalidDataException("Real pristine-only build did not restore the clean RUNVGA source tree.");
         CompositeBuildResult full = composite.Build(project, variant, CompositeBuildMode.Full);

@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ClosedXML.Excel;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed record TranslationExchangeMetadata(string Game, int StringCount, string OriginalSha256, string VariantName, string VariantCode, string TranslationFile)
 {

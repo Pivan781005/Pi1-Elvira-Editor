@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum FontEditScope { Shared, RuntimeSpecific }
 internal enum FontApplicabilityStatus { Shared, RuntimeSpecific, Unsupported, Protected }

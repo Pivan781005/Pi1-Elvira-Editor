@@ -1,10 +1,11 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Variant-local adapter for the frozen RUNEGA production image builder.</summary>
 internal sealed class RunEgaCompositeBuildStep : ICompositeBuildStep
 {
     private readonly VariantDirectoryService _directories;
-    public RunEgaCompositeBuildStep(VariantDirectoryService directories) => _directories = directories ?? throw new ArgumentNullException(nameof(directories));
+    private readonly string _projectCode;
+    public RunEgaCompositeBuildStep(VariantDirectoryService directories, string projectCode = "EN") => (_directories, _projectCode) = (directories ?? throw new ArgumentNullException(nameof(directories)), projectCode);
     public CompositeBuildStage Stage => CompositeBuildStage.ApplyExecutableTransformation;
     public string Name => "RUNEGA frozen CP852 bootstrap";
     public bool AppliesTo(VariantContext variant) => variant is not null && variant.RuntimeKind == VariantRuntimeKind.Elvira1Ega;
@@ -24,7 +25,7 @@ internal sealed class RunEgaCompositeBuildStep : ICompositeBuildStep
     {
         try
         {
-            string root = _directories.GetVariantDirectoryPath(project, variant), source = Path.Combine(root, Elvira1ProductionProfile.ActiveEgaExecutable), output = Path.Combine(root, Elvira1ProductionProfile.GeneratedSlovakEgaExecutable);
+            string root = _directories.GetVariantEditionDirectoryPath(project, variant, _projectCode), source = Path.Combine(root, Elvira1ProductionProfile.ActiveEgaExecutable), output = Path.Combine(root, Elvira1ProductionProfile.GeneratedSlovakEgaExecutable);
             // R9D: fail closed with a Missing vs Unsupported distinction; never patch an unknown binary.
             SupportedExecutableClassification identity = SupportedExecutableIdentityService.ClassifyRunEga(source);
             if (identity.Identity != SupportedExecutableIdentity.SupportedPacked) return SupportedExecutableIdentityService.DescribeBlocked(identity, "RUNEGA bootstrap");

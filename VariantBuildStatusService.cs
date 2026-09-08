@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Read-only build-status projection for one semantic variant. It
 /// deliberately creates plans only; it never invokes CompositeBuildService.Build.
@@ -25,6 +25,22 @@ internal sealed class VariantBuildStatusService
     public VariantBuildStatusProjection Inspect(ProjectContext? project, VariantContext? variant)
     {
         VariantLaunchTarget target = _launcher.Resolve(project, variant);
+        if (project is null || variant is null || !ReferenceEquals(project, variant.Project) ||
+            target.Ownership != VariantDirectoryOperationStatus.AlreadyValid)
+            return new(Map(target.Readiness), target, 0, 0);
+
+        CompositeBuildPlan plan = _composite.CreatePlan(project, variant, CompositeBuildMode.Full);
+        int configured = plan.Capabilities.Count(capability => capability.Configured);
+        return new(Map(target.Readiness), target, configured, plan.Capabilities.Count);
+    }
+
+    /// <summary>R9F V7 authoritative per-edition inspection. Every Mods &amp;
+    /// Launcher row (manager, top summary, rebuild gating) uses the same
+    /// explicit (runtime, edition) identity; the runtime parent alone is
+    /// never a runnable output.</summary>
+    public VariantBuildStatusProjection InspectEdition(ProjectContext? project, VariantContext? variant, string editionCode)
+    {
+        VariantLaunchTarget target = _launcher.ResolveEdition(project, variant, editionCode);
         if (project is null || variant is null || !ReferenceEquals(project, variant.Project) ||
             target.Ownership != VariantDirectoryOperationStatus.AlreadyValid)
             return new(Map(target.Readiness), target, 0, 0);

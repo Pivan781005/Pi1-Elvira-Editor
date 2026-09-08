@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>
 /// Frozen R4 RUNEGA image builder.  It is deliberately path-only: callers own
@@ -11,7 +11,10 @@ internal static class RunEgaBootstrapService
     internal const int PackedSize = 0x198EF, CanonicalSize = 0x25CD0, OutputSize = 0x33C00;
     internal const string PackedSha256 = "FE596D7DB1CEFB643F2C2BEC1EC5342CC1F7DBA2F47AFE3512B6C6FF8DE05EA1";
     internal const string CanonicalSha256 = "A15243583A1774BAF8F77DF599063675ED9EF36A573A35CF6F2504705B3BAB56";
-    private const int Header = 0x2400, Font = 0x32400, Ui = 0x33400;
+    /// <summary>Authoritative generated-bank origin reused by font loading:
+    /// 256 glyphs x 8 bytes at physical 0x32400 (0x800 bytes).</summary>
+    internal const int FontBankPhysicalOffset = 0x32400;
+    private const int Header = 0x2400, Ui = 0x33400;
 
     internal static bool IsPacked(byte[] image) => image.Length == PackedSize && Hash(image) == PackedSha256;
     internal static bool IsCanonical(byte[] image) => image.Length == CanonicalSize && Hash(image) == CanonicalSha256;
@@ -55,13 +58,13 @@ internal static class RunEgaBootstrapService
         // R4 preserves the original BSS/workspace through module 2481F; the rejected
         // 30800 bank stays zero and is never used.  Font/UI banks are fixed profile data.
         byte[] native = canonical[0x1AE4A..0x1B15A];
-        for (int code = 0x20; code <= 0x81; code++) Array.Copy(native, (code - 0x20) * 8, image, Font + code * 8, 8);
+        for (int code = 0x20; code <= 0x81; code++) Array.Copy(native, (code - 0x20) * 8, image, FontBankPhysicalOffset + code * 8, 8);
         foreach (GlyphModel g in glyphs)
         {
             if (g.ByteValue <= 0x1F || g.ByteValue == FontSlotMetadata.HudEraseGlyph || (!g.HasEdited && !g.HasKnownFallbackBitmap)) continue;
-            Array.Copy(g.HasEdited ? g.Edited : g.Original, 0, image, Font + g.ByteValue * 8, 8);
+            Array.Copy(g.HasEdited ? g.Edited : g.Original, 0, image, FontBankPhysicalOffset + g.ByteValue * 8, 8);
         }
-        Array.Copy(FontSlotMetadata.OriginalHudEraseGlyphBytes, 0, image, Font + FontSlotMetadata.HudEraseGlyph * 8, 8);
+        Array.Copy(FontSlotMetadata.OriginalHudEraseGlyphBytes, 0, image, FontBankPhysicalOffset + FontSlotMetadata.HudEraseGlyph * 8, 8);
         // R4 moves the initial stack beyond the retained font image.
         W16(image, 0x0E, 0x2502);
         // The accepted persistent-font patch is only the relocated segment operand.
@@ -113,7 +116,7 @@ internal static class RunEgaBootstrapService
         FrozenExecutableDescriptor p=Elvira1ProductionProfile.RunEga; FrozenRuntimeUiDescriptor ui=p.RuntimeUi;
         if (image.Length!=OutputSize || !IsMz(image) || U16(image,2)!=0 || U16(image,4)!=OutputSize/512 || U16(image,0xFA51)!=0x3000)
             throw new InvalidDataException("RUNEGA output MZ/font layout failed.");
-        if (!image.AsSpan(Font+FontSlotMetadata.HudEraseGlyph*8,8).SequenceEqual(p.Font.HudBytes!) ||
+        if (!image.AsSpan(FontBankPhysicalOffset+FontSlotMetadata.HudEraseGlyph*8,8).SequenceEqual(p.Font.HudBytes!) ||
             !image.AsSpan(Ui+ui.BridgeOffset,9).SequenceEqual(Convert.FromHexString("BBBE0253EABF02290D")) ||
             !HasRelocation(image, Ui+ui.BridgeRelocationOffset)) throw new InvalidDataException("RUNEGA output frozen bank/bridge validation failed.");
         foreach(FrozenRuntimeUiRecord r in ui.RuntimeRecords)

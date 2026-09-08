@@ -1,13 +1,14 @@
 using System.Security.Cryptography;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Variant-local adapter for the frozen RUNVGA V5 bootstrap; it owns no patch logic.</summary>
 internal sealed class RunVgaCompositeBuildStep : ICompositeBuildStep
 {
     private readonly VariantDirectoryService _directories;
+    private readonly string _projectCode;
 
-    public RunVgaCompositeBuildStep(VariantDirectoryService directories) => _directories = directories ?? throw new ArgumentNullException(nameof(directories));
+    public RunVgaCompositeBuildStep(VariantDirectoryService directories, string projectCode = "EN") => (_directories, _projectCode) = (directories ?? throw new ArgumentNullException(nameof(directories)), projectCode);
 
     public CompositeBuildStage Stage => CompositeBuildStage.ApplyExecutableTransformation;
     public string Name => "RUNVGA V5 bootstrap";
@@ -36,7 +37,7 @@ internal sealed class RunVgaCompositeBuildStep : ICompositeBuildStep
     {
         try
         {
-            string root = _directories.GetVariantDirectoryPath(project, variant);
+            string root = _directories.GetVariantEditionDirectoryPath(project, variant, _projectCode);
             string source = Path.Combine(root, Elvira1ProductionProfile.ActiveVgaExecutable);
             string output = Path.Combine(root, Elvira1ProductionProfile.GeneratedSlovakVgaExecutable);
             // R9D: fail closed with a Missing vs Unsupported distinction; never patch an unknown binary.

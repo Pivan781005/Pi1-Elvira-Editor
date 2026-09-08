@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed record DialogueLimitResult(string VisibleText, string TruncatedText, int VisibleBytes, int TotalBytes);
 

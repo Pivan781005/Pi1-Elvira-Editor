@@ -5,11 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>Pi1ElviraVgaEditor</AssemblyName>
-    <RootNamespace>ElviraVgaEditor</RootNamespace>
-    <Product>π1 Elvira I &amp; II Editor v1.0</Product>
-    <Title>π1 Elvira I &amp; II Editor v1.0</Title>
-    <Description>π1 Elvira I &amp; II Editor v1.0</Description>
+    <AssemblyName>Pi1ElviraEditor</AssemblyName>
+    <RootNamespace>Pi1ElviraEditor</RootNamespace>
+    <Product>π1 Elvira Editor</Product>
+    <Title>π1 Elvira Editor</Title>
+    <Description>π1 Elvira Editor</Description>
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>

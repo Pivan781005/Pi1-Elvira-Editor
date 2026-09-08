@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum TextDiagnosticKind
 {

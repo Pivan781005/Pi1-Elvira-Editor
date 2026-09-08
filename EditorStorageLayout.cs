@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>
 /// Installation-local, editor-owned storage paths. Construction is pure: it

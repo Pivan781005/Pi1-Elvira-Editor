@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>
 /// Identifies the editable project/mod selection independently from the DOS

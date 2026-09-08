@@ -3,7 +3,7 @@ using System.Drawing.Drawing2D;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed class MainForm : Form
 {
@@ -87,8 +87,11 @@ internal sealed class MainForm : Form
     private readonly CenteredCaptionButton btnReloadRuntimeUi = new();
     private readonly CenteredCaptionButton btnSaveRuntimeUi = new();
     private readonly CenteredCaptionButton btnResetRuntimeUi = new();
+    private readonly CenteredCaptionButton btnDiscardLegacyRuntimeUi = new();
     private readonly Label lblRuntimeUiStatus = new();
     private readonly Label lblRuntimeUiRuntime = new();
+    private readonly Label lblRuntimeUiLegacyNotice = new();
+    private readonly ComboBox cmbRuntimeUiLegacy = new();
     private readonly RuntimeUiTextService _runtimeUiTexts = new();
     private readonly RuntimeUiLayoutValidationService _runtimeUiLayouts;
     private ProjectContext? _runtimeUiProject;
@@ -96,7 +99,14 @@ internal sealed class MainForm : Form
     private RuntimeUiTextState? _runtimeUiState;
     private bool _applyingUiLanguage;
     private bool _runtimeUiRefreshing;
+    private bool _runtimeUiRefreshQueued;
+    private int _runtimeUiGridRefreshCount;
     private bool _runtimeUiDirty;
+    /// <summary>One-shot title-validation notice shown by the next grid
+    /// refresh instead of the default status line. Set when a Pause.menu
+    /// title edit is refused at Apply time (nothing is stored); consumed and
+    /// cleared by the deferred worker so the message survives the revert.</summary>
+    private string? _runtimeUiNotice;
     private bool _refreshingTextGrid;
     private bool _textGridRefreshQueued;
     private string? _currentDataFilePath;
@@ -139,10 +149,16 @@ internal sealed class MainForm : Form
     private readonly CenteredCaptionButton btnRestoreBaselineLauncher = new();
     private readonly CenteredCaptionButton btnRebuildOwnedVariant = new();
     private readonly CenteredCaptionButton btnRemoveOwnedVariant = new();
+    private readonly CenteredCaptionButton btnAdoptLegacyVariant = new();
     private readonly CenteredCaptionButton btnReverseAllPreview = new();
     private readonly ComboBox cmbDefaultVariant = new();
     private VariantCatalog? _variantCatalog;
     private VariantContext? _modsVariant;
+    /// <summary>V8.2: last resolved Mods launcher target/plan. Locale
+    /// switches reformat the readiness label from this cached projection
+    /// instead of re-hashing variant outputs.</summary>
+    private VariantLaunchTarget? _lastLauncherTarget;
+    private LauncherRedirectionPlan? _lastLauncherPlan;
     private readonly VariantDirectoryService _variantDirectories = new();
     private readonly CompositeBuildService _compositeBuilds;
     private readonly VariantLauncherService _variantLauncher;
@@ -327,6 +343,234 @@ internal sealed class MainForm : Form
     internal int GraphicsProjectStateEditCountForTest => _graphicsProjectState?.Edits.Count ?? 0;
     internal int AppliedGraphicsEditCountForTest => _edits.Count;
     internal int RuntimeUiOverrideCountForTest => _runtimeUiState?.Overrides.Count ?? 0;
+    internal int RuntimeUiGridRefreshCountForTest => _runtimeUiGridRefreshCount;
+    internal int RuntimeUiGridRowCountForTest => runtimeUiGrid.Rows.Count;
+    internal int RuntimeUiGridPauseRowCountForTest => runtimeUiGrid.Rows.Cast<DataGridViewRow>()
+        .Count(row => row.Tag is RuntimeUiLogicalRecordId.PauseMenu);
+    internal string RuntimeUiGridPauseOverrideForTest => RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId.PauseMenu);
+    internal string RuntimeUiGridOverrideForTest(RuntimeUiLogicalRecordId id) => runtimeUiGrid.Rows.Cast<DataGridViewRow>()
+        .Where(row => row.Tag is RuntimeUiLogicalRecordId rowId && rowId == id)
+        .Select(row => row.Cells["Override"].Value?.ToString() ?? string.Empty).FirstOrDefault() ?? string.Empty;
+    internal string RuntimeUiGridPauseOriginalForTest => RuntimeUiGridOriginalForTest(RuntimeUiLogicalRecordId.PauseMenu);
+    internal string RuntimeUiGridOriginalForTest(RuntimeUiLogicalRecordId id) => runtimeUiGrid.Rows.Cast<DataGridViewRow>()
+        .Where(row => row.Tag is RuntimeUiLogicalRecordId rowId && rowId == id)
+        .Select(row => row.Cells["Original"].Value?.ToString() ?? string.Empty).FirstOrDefault() ?? string.Empty;
+    internal string RuntimeUiGridStatusForTest(RuntimeUiLogicalRecordId id) => runtimeUiGrid.Rows.Cast<DataGridViewRow>()
+        .Where(row => row.Tag is RuntimeUiLogicalRecordId rowId && rowId == id)
+        .Select(row => row.Cells["Status"].Value?.ToString() ?? string.Empty).FirstOrDefault() ?? string.Empty;
+    internal string RuntimeUiGridDetailForTest(RuntimeUiLogicalRecordId id) => runtimeUiGrid.Rows.Cast<DataGridViewRow>()
+        .Where(row => row.Tag is RuntimeUiLogicalRecordId rowId && rowId == id)
+        .Select(row => row.Cells["Detail"].Value?.ToString() ?? string.Empty).FirstOrDefault() ?? string.Empty;
+    internal string RuntimeUiGridLogicalNameForTest(RuntimeUiLogicalRecordId id) => runtimeUiGrid.Rows.Cast<DataGridViewRow>()
+        .Where(row => row.Tag is RuntimeUiLogicalRecordId rowId && rowId == id)
+        .Select(row => row.Cells["LogicalId"].Value?.ToString() ?? string.Empty).FirstOrDefault() ?? string.Empty;
+    internal object? RuntimeUiGridCurrentIdForTest => runtimeUiGrid.CurrentRow?.Tag;
+    internal bool RuntimeUiDirtyForTest => _runtimeUiDirty;
+    internal bool RuntimeUiSaveEnabledForTest => btnSaveRuntimeUi.Enabled;
+    internal string RuntimeUiStatusLabelForTest => lblRuntimeUiStatus.Text ?? string.Empty;
+    internal bool RuntimeUiGridColumnsResizableForTest => runtimeUiGrid.AllowUserToResizeColumns &&
+        runtimeUiGrid.Columns.Cast<DataGridViewColumn>().Where(column => column.Visible).All(column => column.Resizable == DataGridViewTriState.True);
+    internal int RuntimeUiGridColumnWidthForTest(string columnName) => runtimeUiGrid.Columns[columnName].Width;
+    internal void SetRuntimeUiGridColumnWidthForTest(string columnName, int width) => runtimeUiGrid.Columns[columnName].Width = width;
+    internal string RuntimeUiGridPauseDetailTooltipForTest => runtimeUiGrid.Rows.Cast<DataGridViewRow>()
+        .Where(row => row.Tag is RuntimeUiLogicalRecordId.PauseMenu)
+        .Select(row => row.Cells["Detail"].ToolTipText ?? string.Empty).FirstOrDefault() ?? string.Empty;
+    internal bool SelectRuntimeUiRowForTest(RuntimeUiLogicalRecordId id)
+    {
+        foreach (DataGridViewRow row in runtimeUiGrid.Rows)
+        {
+            if (row.Tag is RuntimeUiLogicalRecordId rowId && rowId == id)
+            {
+                runtimeUiGrid.CurrentCell = row.Cells["Override"];
+                // Headless programmatic selection does not raise
+                // SelectionChanged; perform the same post-selection sync the
+                // subscribed handler performs for interactive clicks.
+                UpdateRuntimeUiActions();
+                return true;
+            }
+        }
+        return false;
+    }
+    internal bool RuntimeUiResetEnabledForTest => btnResetRuntimeUi.Enabled;
+    internal void ResetRuntimeUiOverrideForTest() => ResetSelectedRuntimeUiOverride();
+    internal bool AdoptLegacyEnabledForTest => btnAdoptLegacyVariant.Enabled;
+    internal string RecoveryStatusForTest => lblRecoveryStatus.Text ?? string.Empty;
+    internal IReadOnlyList<string> DefaultVariantLabelsForTest => cmbDefaultVariant.Items.Cast<object?>().Select(item => cmbDefaultVariant.GetItemText(item) ?? string.Empty).ToArray();
+    internal int DefaultVariantComboWidthForTest => cmbDefaultVariant.Width;
+    internal int DefaultVariantDropDownWidthForTest => cmbDefaultVariant.DropDownWidth;
+    internal int DefaultVariantFlowWidthForTest => cmbDefaultVariant.Parent is Control flow ? flow.ClientSize.Width : 0;
+    internal int DefaultVariantComboRightForTest => cmbDefaultVariant.Right + cmbDefaultVariant.Margin.Right;
+    internal int HeaderInstallationComboWidthForTest => cmbInstallations.Width;
+    internal int HeaderActiveVariantComboWidthForTest => cmbActiveVariant.Width;
+    internal int HeaderEditionComboWidthForTest => cmbActiveProject.Width;
+    internal int SharedSelectorVisibleWidthForTest => SharedSelectorVisibleWidth;
+    internal bool RebuildEnabledForTest => btnRebuildOwnedVariant.Enabled;
+    internal bool RunEnabledForTest => btnRunVariant.Enabled;
+    internal bool DebugEnabledForTest => btnDebugVariant.Enabled;
+    internal string DefaultVariantSelectedDataFileForTest => (cmbDefaultVariant.SelectedItem as VariantEntry)?.DataFile ?? string.Empty;
+    internal bool SelectDefaultVariantForTest(string dataFile)
+    {
+        foreach (object? item in cmbDefaultVariant.Items)
+        {
+            if ((item as VariantEntry)?.DataFile.Equals(dataFile, StringComparison.OrdinalIgnoreCase) == true)
+            {
+                cmbDefaultVariant.SelectedItem = item;
+                return true;
+            }
+        }
+        return false;
+    }
+    internal void SimulateDefaultVariantLayoutForTest(int flowWidth)
+    {
+        if (cmbDefaultVariant.Parent is not Control flow) return;
+        flow.Width = flowWidth;
+        flow.PerformLayout();
+        FitDefaultVariantCombo();
+    }
+    internal void SaveRuntimeUiForTest() => SaveRuntimeUiText();
+    internal void ReloadRuntimeUiForTest() => LoadRuntimeUiText();
+    internal bool IsVariantEntryAvailableForTest(string dataFile)
+    {
+        VariantEntry? entry = GetVariantGridEntries(EnsureVariantCatalog())
+            .FirstOrDefault(item => item.DataFile.Equals(dataFile, StringComparison.OrdinalIgnoreCase));
+        return entry is not null && IsVariantEntryAvailable(entry);
+    }
+    internal string VariantEntryResolvedPathForTest(string dataFile)
+    {
+        VariantEntry? entry = GetVariantGridEntries(EnsureVariantCatalog())
+            .FirstOrDefault(item => item.DataFile.Equals(dataFile, StringComparison.OrdinalIgnoreCase));
+        return entry is not null && TryResolveVariantEntryPath(entry, out string fullPath) ? fullPath : string.Empty;
+    }
+    internal string VariantLaunchDataPathForTest()
+    {
+        VariantLaunchTarget target = _activeProject is null || _activeVariant is null
+            ? _variantLauncher.Resolve(null, null)
+            : _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
+        return string.IsNullOrWhiteSpace(target.WorkingDirectory) || string.IsNullOrWhiteSpace(target.DataFile)
+            ? string.Empty : Path.Combine(target.WorkingDirectory, target.DataFile);
+    }
+    internal string VariantLaunchExecutablePathForTest()
+    {
+        VariantLaunchTarget target = _activeProject is null || _activeVariant is null
+            ? _variantLauncher.Resolve(null, null)
+            : _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
+        return string.IsNullOrWhiteSpace(target.WorkingDirectory) || string.IsNullOrWhiteSpace(target.ExecutableFile)
+            ? string.Empty : Path.Combine(target.WorkingDirectory, target.ExecutableFile);
+    }
+    internal string VariantLaunchReadinessForTest() =>
+        (_activeProject is null || _activeVariant is null
+            ? _variantLauncher.Resolve(null, null)
+            : _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode)).Readiness.ToString();
+    internal string VariantLaunchOwnershipForTest() =>
+        (_activeProject is null || _activeVariant is null
+            ? _variantLauncher.Resolve(null, null)
+            : _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode)).Ownership.ToString();
+    internal void RefreshVariantGridForTest() => RefreshVariantGrid(CurrentTranslationDataFileForPresentation());
+    internal string VariantGridRowStatusForTest(string dataFile) => variantGrid.Rows.Cast<DataGridViewRow>()
+        .Where(row => (row.Tag as VariantEntry)?.DataFile.Equals(dataFile, StringComparison.OrdinalIgnoreCase) == true)
+        .Select(row => row.Cells["Status"].Value?.ToString() ?? string.Empty).FirstOrDefault() ?? string.Empty;
+    /// <summary>R9F V8: the grid is a VIEW/SELECTION surface. Every Override
+    /// cell (structured, unsupported, legacy) is read-only; mutation goes
+    /// only through the semantic editor / explicit actions.</summary>
+    internal bool RuntimeUiGridAllOverrideCellsReadOnlyForTest =>
+        runtimeUiGrid.Columns.Contains("Override") && runtimeUiGrid.Columns["Override"].ReadOnly &&
+        runtimeUiGrid.Rows.Cast<DataGridViewRow>().All(row => row.Cells["Override"].ReadOnly);
+    internal bool RuntimeUiGridVgaStructuredEditableForTest => RuntimeUiGridAllOverrideCellsReadOnlyForTest;
+    internal bool RuntimeUiGridCellEditableForTest(RuntimeUiLogicalRecordId id) => false;
+    internal bool RuntimeUiGridCellReadOnlyForTest(RuntimeUiLogicalRecordId id) => runtimeUiGrid.Rows.Cast<DataGridViewRow>()
+        .Where(row => row.Tag is RuntimeUiLogicalRecordId rowId && rowId == id)
+        .Select(row => row.Cells["Override"].ReadOnly).FirstOrDefault(true);
+    internal string RuntimeVariantBuildStatusForTest(BuiltInVariantId variantId)
+    {
+        if (_activeProject is null) return "NoProject";
+        VariantContext? variant = _availableActiveVariants.SingleOrDefault(item => item.VariantId == variantId);
+        if (variant is null) return "NoVariant";
+        return _variantBuildStatus.InspectEdition(_activeProject, variant, _activeTranslationCode).Status.ToString();
+    }
+    internal void QueueRuntimeUiGridRefreshForTest() => QueueRuntimeUiGridRefresh();
+    /// <summary>
+    /// R9F V8: reproduces a blocked inline-grid commit. Writes the text into
+    /// the Override cell programmatically (UI editing itself is cancelled by
+    /// CellBeginEdit), then runs the defensive Apply handler, which must
+    /// revert without storing anything. Semantic edits go via
+    /// ApplySemanticEditForTest instead.
+    /// </summary>
+    internal void ApplyRuntimeUiGridEditForTest(RuntimeUiLogicalRecordId id, string text)
+    {
+        foreach (DataGridViewRow row in runtimeUiGrid.Rows)
+        {
+            if (row.Tag is RuntimeUiLogicalRecordId rowId && rowId == id)
+            {
+                row.Cells["Override"].Value = text;
+                ApplyRuntimeUiGridEdit(row.Index, runtimeUiGrid.Columns["Override"].Index);
+                return;
+            }
+        }
+        throw new InvalidOperationException("Runtime UI record is not present in the grid.");
+    }
+    internal int RuntimeUiUnassignedCountForTest => _runtimeUiState?.UnassignedLegacy.Count ?? 0;
+    internal int RuntimeUiLegacyRowCountForTest => 0;
+    // An unshown WinForms parent reports child Visible=false even when the
+    // notice is configured for display; expose presentation state instead.
+    internal bool RuntimeUiLegacyNoticeVisibleForTest => !string.IsNullOrWhiteSpace(lblRuntimeUiLegacyNotice.Text);
+    internal string RuntimeUiLegacyNoticeForTest => lblRuntimeUiLegacyNotice.Text ?? string.Empty;
+    internal bool RuntimeUiLegacyDiscardEnabledForTest => btnDiscardLegacyRuntimeUi.Enabled;
+    internal bool SelectRuntimeUiLegacyOverrideForTest(RuntimeUiLogicalRecordId id)
+    {
+        foreach (object? item in cmbRuntimeUiLegacy.Items)
+        {
+            if (item is RuntimeUiLegacyChoice choice && choice.Id == id)
+            {
+                cmbRuntimeUiLegacy.SelectedItem = choice;
+                UpdateRuntimeUiActions();
+                return true;
+            }
+        }
+        return false;
+    }
+    internal void DiscardSelectedRuntimeUiLegacyOverrideForTest() => DiscardSelectedRuntimeUiLegacyOverride(confirm: false);
+    /// <summary>Headless semantic-field edit: composes one edited field and
+    /// stores it for the VIEWED runtime, preserving already-translated
+    /// hotspot button labels. Mirrors the modal editor OK path.</summary>
+    internal void ApplySemanticEditForTest(RuntimeUiLogicalRecordId id, string editedField)
+    {
+        if (_runtimeUiProject is null || _runtimeUiState is null || _runtimeUiVariant is null)
+            throw new InvalidOperationException("Runtime UI project is unavailable.");
+        IReadOnlyDictionary<string, string>? keptButtons = null;
+        if (_runtimeUiVariant.RuntimeKind == VariantRuntimeKind.Elvira1Ega)
+        {
+            string? stored = _runtimeUiState.Overrides
+                .SingleOrDefault(value => value.Runtime == _runtimeUiVariant.RuntimeKind && value.LogicalRecordId == id)?.Text;
+            if (stored is not null && RunEgaUiService.TryExtractButtons(stored, id, out IReadOnlyDictionary<string, string>? extracted))
+                keptButtons = extracted;
+        }
+        if (!RuntimeUiSemanticEditorForm.TryComposeSemanticField(_runtimeUiVariant.RuntimeKind, id, editedField, keptButtons, out string full, out string detail))
+            throw new InvalidOperationException("Semantic field was rejected: " + detail);
+        _runtimeUiState = _runtimeUiTexts.SetOverride(_runtimeUiProject, _runtimeUiState, _runtimeUiVariant.RuntimeKind, id, full);
+        _runtimeUiDirty = true;
+        QueueRuntimeUiGridRefresh();
+    }
+    /// <summary>
+    /// Test-only proof that refresh requests are safe inside a grid
+    /// transition: queues a rebuild from within SelectionChanged (which fires
+    /// inside SetCurrentCellAddressCore on programmatic CurrentCell changes)
+    /// and reports whether the handler ran. A synchronous structural rebuild
+    /// from this context throws InvalidOperationException.
+    /// </summary>
+    internal bool QueueRefreshFromGridTransitionForTest()
+    {
+        bool queued = false;
+        void handler(object? s, EventArgs e) { queued = true; QueueRuntimeUiGridRefresh(); }
+        runtimeUiGrid.SelectionChanged += handler;
+        try
+        {
+            if (runtimeUiGrid.Rows.Count == 0) return false;
+            int target = runtimeUiGrid.CurrentCell?.RowIndex == 0 && runtimeUiGrid.Rows.Count > 1 ? 1 : 0;
+            runtimeUiGrid.CurrentCell = runtimeUiGrid.Rows[target].Cells["Override"];
+        }
+        finally { runtimeUiGrid.SelectionChanged -= handler; }
+        return queued;
+    }
     internal int EmbeddedFontProjectEditCountForTest => _embeddedFontEditor?.ProjectEditCountForTest ?? 0;
     internal IReadOnlyList<VariantEntry> TranslationCatalogEntriesForTest => variantGrid.Rows.Cast<DataGridViewRow>()
         .Select(row => row.Tag as VariantEntry).Where(entry => entry is not null).Cast<VariantEntry>().ToArray();
@@ -791,8 +1035,18 @@ internal sealed class MainForm : Form
         btnResetRuntimeUi.Size = new Size(140, 30);
         btnResetRuntimeUi.Margin = new Padding(0, 4, 0, 0);
         btnResetRuntimeUi.Click += (_, _) => ResetSelectedRuntimeUiOverride();
-        foreach (Button button in new[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi }) ConfigureCenteredButton(button, allowWidthGrowth: true);
-        runtimeButtonFlow.Controls.AddRange(new Control[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi });
+        btnDiscardLegacyRuntimeUi.Text = UiText.Get("RuntimeUi.DiscardLegacyOverride");
+        btnDiscardLegacyRuntimeUi.Size = new Size(190, 30);
+        btnDiscardLegacyRuntimeUi.Margin = new Padding(0, 4, 6, 0);
+        btnDiscardLegacyRuntimeUi.Click += (_, _) => DiscardSelectedRuntimeUiLegacyOverride(confirm: true);
+        cmbRuntimeUiLegacy.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbRuntimeUiLegacy.Width = 190;
+        cmbRuntimeUiLegacy.Margin = new Padding(0, 4, 6, 0);
+        lblRuntimeUiLegacyNotice.AutoSize = true;
+        lblRuntimeUiLegacyNotice.MaximumSize = new Size(850, 0);
+        lblRuntimeUiLegacyNotice.Margin = new Padding(0, 8, 6, 0);
+        foreach (Button button in new[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi, btnDiscardLegacyRuntimeUi }) ConfigureCenteredButton(button, allowWidthGrowth: true);
+        runtimeButtonFlow.Controls.AddRange(new Control[] { btnReloadRuntimeUi, btnSaveRuntimeUi, btnResetRuntimeUi, lblRuntimeUiLegacyNotice, cmbRuntimeUiLegacy, btnDiscardLegacyRuntimeUi });
         toolbar.Controls.Add(runtimeButtonFlow);
         toolbar.Controls.Add(lblRuntimeUiRuntime);
 
@@ -802,23 +1056,38 @@ internal sealed class MainForm : Form
         runtimeUiGrid.RowHeadersVisible = false;
         runtimeUiGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         runtimeUiGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        // R9F grid UX: every column stays manually resizable; Details is the
+        // fill column (largest share) so Project override no longer consumes
+        // most of the screen. Widths are assigned once here: refreshes and
+        // language switches only retitle headers, never resize.
+        runtimeUiGrid.AllowUserToResizeColumns = true;
+        runtimeUiGrid.ShowCellToolTips = true;
         runtimeUiGrid.Columns.Add("LogicalId", UiText.Get("RuntimeUi.Record"));
         runtimeUiGrid.Columns.Add("Original", UiText.Get("RuntimeUi.OriginalText"));
         runtimeUiGrid.Columns.Add("Override", UiText.Get("RuntimeUi.ProjectOverride"));
         runtimeUiGrid.Columns.Add("Status", UiText.Get("RuntimeUi.Validation"));
         runtimeUiGrid.Columns.Add("Detail", UiText.Get("RuntimeUi.Details"));
-        runtimeUiGrid.Columns["LogicalId"].Width = 155;
-        runtimeUiGrid.Columns["Original"].Width = 190;
-        runtimeUiGrid.Columns["Override"].MinimumWidth = 260;
-        runtimeUiGrid.Columns["Override"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-        runtimeUiGrid.Columns["Status"].Width = 150;
-        runtimeUiGrid.Columns["Detail"].Width = 360;
+        runtimeUiGrid.Columns["LogicalId"].Width = 150;
+        runtimeUiGrid.Columns["Original"].Width = 200;
+        runtimeUiGrid.Columns["Override"].Width = 300;
+        runtimeUiGrid.Columns["Override"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+        runtimeUiGrid.Columns["Status"].Width = 200;
+        runtimeUiGrid.Columns["Detail"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        foreach (string columnName in new[] { "LogicalId", "Original", "Override", "Status", "Detail" })
+            runtimeUiGrid.Columns[columnName].Resizable = DataGridViewTriState.True;
+        // R9F V8 grid safety: every cell is read-only at column level. The
+        // grid is a VIEW/SELECTION surface, never a raw text editor. All
+        // mutation goes through the semantic editor / explicit actions.
+        // A CellBeginEdit guard below stays as defense in depth.
         runtimeUiGrid.Columns["LogicalId"].ReadOnly = true;
         runtimeUiGrid.Columns["Original"].ReadOnly = true;
+        runtimeUiGrid.Columns["Override"].ReadOnly = true;
         runtimeUiGrid.Columns["Status"].ReadOnly = true;
         runtimeUiGrid.Columns["Detail"].ReadOnly = true;
+        runtimeUiGrid.CellBeginEdit += (_, e) => e.Cancel = true;
         runtimeUiGrid.CellEndEdit += (_, e) => ApplyRuntimeUiGridEdit(e.RowIndex, e.ColumnIndex);
         runtimeUiGrid.SelectionChanged += (_, _) => UpdateRuntimeUiActions();
+        runtimeUiGrid.CellDoubleClick += (s, e) => OpenSemanticEditorForRow(e.RowIndex);
 
         lblRuntimeUiStatus.Dock = DockStyle.Bottom;
         lblRuntimeUiStatus.AutoSize = true;
@@ -877,7 +1146,9 @@ internal sealed class MainForm : Form
         lblDefaultVariant.Margin = new Padding(0, 7, 6, 0);
         cmbDefaultVariant.Size = new Size(175, 26);
         cmbDefaultVariant.Margin = new Padding(0, 4, 0, 0);
+        cmbDefaultVariant.DisplayMember = nameof(VariantEntry.DisplayLabel);
         defaultFlow.Controls.AddRange(new Control[] { lblDefaultVariant, cmbDefaultVariant });
+        defaultFlow.Layout += (_, _) => FitDefaultVariantCombo();
         var launcherFlow = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -939,16 +1210,19 @@ internal sealed class MainForm : Form
         btnRebuildOwnedVariant.Margin = new Padding(0, 4, 6, 0);
         btnRemoveOwnedVariant.Size = new Size(165, 30);
         btnRemoveOwnedVariant.Margin = new Padding(0, 4, 6, 0);
+        btnAdoptLegacyVariant.Size = new Size(165, 30);
+        btnAdoptLegacyVariant.Margin = new Padding(0, 4, 6, 0);
         btnReverseAllPreview.Size = new Size(155, 30);
         btnReverseAllPreview.Margin = new Padding(0, 4, 0, 0);
-        recoveryFlow.Controls.AddRange(new Control[] { btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview });
+        recoveryFlow.Controls.AddRange(new Control[] { btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnAdoptLegacyVariant, btnReverseAllPreview });
         btnVerifyPristine.Text = UiText.Get("Recovery.VerifyPristine"); btnRestoreBaselineLauncher.Text = UiText.Get("Recovery.RestoreLauncher");
-        btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
+        btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnAdoptLegacyVariant.Text = UiText.Get("Recovery.AdoptLegacy"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
         btnSaveGraphicsProject.Text = UiText.Get("SaveToProject");
         btnVerifyPristine.Click += (_, _) => VerifyPristineInstallation();
         btnRestoreBaselineLauncher.Click += (_, _) => RestoreBaselineLauncher();
         btnRebuildOwnedVariant.Click += (_, _) => RebuildOwnedVariant();
         btnRemoveOwnedVariant.Click += (_, _) => RemoveOwnedVariantDirectory();
+        btnAdoptLegacyVariant.Click += (_, _) => AdoptLegacyFlatVariant();
         btnReverseAllPreview.Click += (_, _) => PreviewReverseAllChanges();
         lblRecoveryStatus.AutoSize = true;
         lblRecoveryStatus.Dock = DockStyle.Top;
@@ -996,7 +1270,7 @@ internal sealed class MainForm : Form
         variantManagerGrid.SelectionChanged += (_, _) => SelectVariantManagerRow();
         // One shared configuration: EN widths stay minima, longer SK/CZ
         // captions grow in width only; wrapping flows reflow the extra width.
-        foreach (Button button in new[] { btnSelectLauncherFile, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher, btnRunVariant, btnDebugVariant, btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview })
+        foreach (Button button in new[] { btnSelectLauncherFile, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher, btnRunVariant, btnDebugVariant, btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnAdoptLegacyVariant, btnReverseAllPreview })
             ConfigureCenteredButton(button, allowWidthGrowth: true);
         btnSelectLauncherFile.Click += (_, _) => SelectLauncherFile();
         btnPreviewLauncher.Click += (_, _) => PreviewLauncher();
@@ -1111,6 +1385,81 @@ internal sealed class MainForm : Form
         return selected?.DataFile ?? Path.GetFileName(CurrentDataFilePath);
     }
 
+    /// <summary>
+    /// R9F V7 authoritative availability: the pristine English baseline GAMEPC
+    /// lives in GameRoot, but translated editions are CompositeBuild outputs
+    /// in the owned variant directory of the active runtime (R10 removed
+    /// GameRoot writes). A translated entry is Available exactly when the
+    /// SAME explicit runtime+edition target the top summary and launcher use
+    /// is LaunchReady (owned, manifest-valid, both artifacts present and
+    /// hash-verified) — never from a bare filename in the runtime parent,
+    /// never from GameRoot, and never from metadata alone. The runtime
+    /// parent (VARIANTS\E1VGA) is a container, never the selected edition
+    /// output. Legacy entries without project state keep the GameRoot check.
+    /// </summary>
+    private bool TryResolveVariantEntryPath(VariantEntry entry, out string fullPath)
+    {
+        fullPath = string.Empty;
+        VariantCatalog catalog = EnsureVariantCatalog();
+        if (_activeProject is not null && _activeVariant is not null &&
+            TryGetProjectTranslation(entry, out TranslationProjectVariant translation) &&
+            !translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase))
+        {
+            // Each edition resolves inside the ACTIVE runtime's own
+            // runtime+edition output (VARIANTS\E1VGA\SK): SK and S1 coexist.
+            // This is the same explicit identity VariantLauncherService
+            // resolves; the parent runtime directory is never probed.
+            string variantRoot;
+            try { variantRoot = _variantDirectories.GetVariantEditionDirectoryPath(_activeProject, _activeVariant, translation.Code); }
+            catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException) { return false; }
+            fullPath = Path.Combine(variantRoot, entry.DataFile);
+            return true;
+        }
+        fullPath = Path.Combine(catalog.InstallationDirectory, entry.DataFile);
+        return true;
+    }
+
+    private bool IsVariantEntryAvailable(VariantEntry entry)
+    {
+        // Translated project editions resolve to the same explicit
+        // runtime+edition directory the launcher uses. For the SELECTED
+        // edition, Available means the top summary is also Ready (owned,
+        // manifest-valid, both artifacts hash-verified). For coexistence
+        // rows (non-selected editions such as S1 while SK is active),
+        // Available means that edition's own owned output exists with its
+        // data file present and manifest code matching — never a bare
+        // filename in the runtime parent or GameRoot, never foreign/corrupt.
+        if (_activeProject is not null && _activeVariant is not null &&
+            TryGetProjectTranslation(entry, out TranslationProjectVariant translation) &&
+            !translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase))
+        {
+            if (translation.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase))
+            {
+                VariantLaunchTarget target = _variantLauncher.ResolveEdition(_activeProject, _activeVariant, translation.Code);
+                if (target.Readiness != VariantLaunchReadiness.LaunchReady)
+                    return false;
+                return TryResolveVariantEntryPath(entry, out string fullPath) && File.Exists(fullPath);
+            }
+            if (_variantDirectories.ValidateOwnedVariantEditionDirectory(_activeProject, _activeVariant, translation.Code).Status != VariantDirectoryOperationStatus.AlreadyValid)
+                return false;
+            if (!TryResolveVariantEntryPath(entry, out string editionPath) || !File.Exists(editionPath))
+                return false;
+            try
+            {
+                string editionRoot = _variantDirectories.GetVariantEditionDirectoryPath(_activeProject, _activeVariant, translation.Code);
+                VariantManifest manifest = VariantManifestService.Read(editionRoot);
+                if (!manifest.ProjectCode.Equals(translation.Code, StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
+            {
+                return false;
+            }
+            return true;
+        }
+        return TryResolveVariantEntryPath(entry, out string legacyPath) && File.Exists(legacyPath);
+    }
+
     private void RefreshVariantGrid(string? selectDataFile = null)
     {
         VariantCatalog catalog = EnsureVariantCatalog();
@@ -1119,12 +1468,15 @@ internal sealed class MainForm : Form
         DataGridViewRow? selectedRow = null;
         foreach (VariantEntry entry in GetVariantGridEntries(catalog))
         {
-            VariantEntryStatus status = catalog.GetStatus(entry);
+            VariantEntryStatus status = catalog.GetStatus(entry) with { IsAvailable = IsVariantEntryAvailable(entry) };
             int rowIndex = variantGrid.Rows.Add(entry.Order, entry.DisplayName, entry.DataFile,
                 status.IsAvailable ? UiText.Get("VariantAvailable") : UiText.Get("VariantMissing"),
                 entry.Enabled ? UiText.Get("VariantYes") : UiText.Get("VariantNo"));
             DataGridViewRow row = variantGrid.Rows[rowIndex];
             row.Tag = entry;
+            // V8.2: cache the computed availability so locale switches can
+            // relocalize the Status cell without re-hashing variant outputs.
+            row.Cells["Status"].Tag = status.IsAvailable;
             if (!status.IsAvailable)
             {
                 row.DefaultCellStyle.BackColor = Color.LemonChiffon;
@@ -1151,6 +1503,8 @@ internal sealed class MainForm : Form
         if (_activeProject is null || _activeVariant is null)
         {
             _modsVariant = null;
+            _lastLauncherTarget = null;
+            _lastLauncherPlan = null;
             RefreshVariantManager();
             variantGrid.Rows.Clear();
             cmbDefaultVariant.Items.Clear();
@@ -1172,9 +1526,16 @@ internal sealed class MainForm : Form
         foreach (VariantEntry entry in catalog.Entries) cmbDefaultVariant.Items.Add(entry);
         VariantEntry? defaultEntry = catalog.FindByDataFile(catalog.LauncherAuthoring.DefaultVariant);
         if (defaultEntry is not null) cmbDefaultVariant.SelectedItem = defaultEntry;
+        FitDefaultVariantCombo();
         RefreshVariantGrid(CurrentTranslationDataFileForPresentation());
-        VariantLaunchTarget target = _variantLauncher.Resolve(_activeProject, _activeVariant);
-        LauncherRedirectionPlan plan = _variantLauncher.CreateRedirectionPlan(_activeProject, _activeVariant);
+        // R9F V7: one authoritative runtime+edition target. The top summary,
+        // launcher plan, Run/Debug gating and Variant Manager all resolve
+        // VARIANTS\<RuntimeKey>\<EditionCode> for the SAME explicit
+        // (_activeVariant, _activeTranslationCode) pair.
+        VariantLaunchTarget target = _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
+        LauncherRedirectionPlan plan = _variantLauncher.CreateRedirectionPlan(_activeProject, _activeVariant, _activeTranslationCode);
+        _lastLauncherTarget = target;
+        _lastLauncherPlan = plan;
         lblLauncherReadiness.Text = string.Format(UiText.Get("Launcher.Readiness"), target.GameId, target.VariantId, target.Ownership,
             target.BuildConfigured ? UiText.Get("Launcher.Configured") : UiText.Get("Launcher.Incomplete"), target.Readiness, plan.Detail);
         // Root launcher replacement remains a future authorized operation;
@@ -1184,6 +1545,31 @@ internal sealed class MainForm : Form
         btnRunVariant.Enabled = _variantExecution.IsAvailable(target, VariantExecutionMode.Run);
         btnDebugVariant.Enabled = _variantExecution.IsAvailable(target, VariantExecutionMode.Debug);
         UpdateRecoverySafetyPresentation();
+    }
+
+    /// <summary>R9F V7: the visible Default-variant control shares the exact
+    /// right edge of the three upper main ComboBoxes (Installation, Active
+    /// variant, Edition). Those live in a shared 628 px selector column with
+    /// 620 px visible width; this control is capped to the same 620 px so it
+    /// never stretches across the Mods panel. The dropdown alone may grow
+    /// wider to fit the longest human label. Runs on layout (resize/DPI),
+    /// item changes and language switches.</summary>
+    private const int SharedSelectorVisibleWidth = 620;
+    private void FitDefaultVariantCombo()
+    {
+        if (cmbDefaultVariant.Parent is not Control flow) return;
+        int rest = flow.ClientSize.Width - lblDefaultVariant.Width - lblDefaultVariant.Margin.Horizontal - cmbDefaultVariant.Margin.Horizontal - flow.Padding.Horizontal;
+        int width = Math.Max(175, Math.Min(SharedSelectorVisibleWidth, rest));
+        if (cmbDefaultVariant.Width != width) cmbDefaultVariant.Width = width;
+        int longest = 0;
+        foreach (object? item in cmbDefaultVariant.Items)
+        {
+            string text = cmbDefaultVariant.GetItemText(item) ?? string.Empty;
+            if (string.IsNullOrEmpty(text)) continue;
+            longest = Math.Max(longest, TextRenderer.MeasureText(text, cmbDefaultVariant.Font).Width);
+        }
+        int drop = Math.Max(width, longest + SystemInformation.VerticalScrollBarWidth + 12);
+        if (cmbDefaultVariant.DropDownWidth != drop) cmbDefaultVariant.DropDownWidth = drop;
     }
 
     private void RefreshVariantManager()
@@ -1201,7 +1587,10 @@ internal sealed class MainForm : Form
             variantManagerGrid.Enabled = true;
             foreach (VariantContext variant in _availableActiveVariants)
             {
-                VariantBuildStatusProjection status = _variantBuildStatus.Inspect(_activeProject, variant);
+                // R9F V7: every row is the same explicit edition applied to a
+                // different runtime (VARIANTS\E1VGA\SK vs VARIANTS\E1EGA\SK).
+                // Selection never flips another runtime's stored status.
+                VariantBuildStatusProjection status = _variantBuildStatus.InspectEdition(_activeProject, variant, _activeTranslationCode);
                 VariantLaunchTarget target = status.Target;
                 var row = new VariantManagerRow(variant, target.Ownership, target.Readiness, target.VariantRoot,
                     status.Status, status.ConfiguredCapabilities, status.CapabilityCount);
@@ -1209,7 +1598,9 @@ internal sealed class MainForm : Form
                     ReferenceEquals(variant, _activeVariant) ? "✓" : string.Empty,
                     variant.DisplayName,
                     UiText.Get("VariantManager.Runtime." + variant.RuntimeKind),
-                    variant.DirectoryKey,
+                    // Runnable identity is runtime+edition: the status row
+                    // names the inspected edition explicitly.
+                    variant.DirectoryKey + "\\" + _activeTranslationCode,
                     UiText.Get("VariantManager.Ownership." + target.Ownership),
                     UiText.Get("VariantManager.BuildStatus." + status.Status),
                     UiText.Get("VariantManager.Readiness." + target.Readiness));
@@ -1258,6 +1649,7 @@ internal sealed class MainForm : Form
         btnRestoreBaselineLauncher.Enabled = false;
         btnRebuildOwnedVariant.Enabled = false;
         btnRemoveOwnedVariant.Enabled = false;
+        btnAdoptLegacyVariant.Enabled = false;
         btnReverseAllPreview.Enabled = active;
         lblRecoveryStatus.Text = active ? string.Empty : UiText.Get(UiLocalizationKeys.NoGameSelected) + " " + UiText.Get(UiLocalizationKeys.RecoveryActionsUnavailable);
     }
@@ -1266,7 +1658,7 @@ internal sealed class MainForm : Form
     {
         if (_activeProject is null || _activeVariant is null) { SetRecoverySafetyControls(active: false); return; }
         RecoverySafetyInspection inspection = _recoverySafety.Inspect(_activeProject);
-        VariantDirectoryOperationResult ownership = _variantDirectories.ValidateOwnedVariantDirectory(_activeProject, _activeVariant);
+        VariantDirectoryOperationResult ownership = _variantDirectories.ValidateOwnedVariantEditionDirectory(_activeProject, _activeVariant, _activeTranslationCode);
         bool owned = ownership.Status == VariantDirectoryOperationStatus.AlreadyValid;
         lblRecoveryStatus.Text = string.Format(UiText.Get("Recovery.Status"), inspection.Baseline.Status,
             inspection.ReversePreview.OwnedVariants.Count, inspection.ReversePreview.ForeignOrInvalidVariants.Count, inspection.ReversePreview.Detail);
@@ -1274,7 +1666,32 @@ internal sealed class MainForm : Form
         btnRestoreBaselineLauncher.Enabled = inspection.ReversePreview.LauncherBackupAvailable;
         btnRebuildOwnedVariant.Enabled = owned && inspection.Baseline.Status == BaselineValidationStatus.MatchesBaseline;
         btnRemoveOwnedVariant.Enabled = owned;
+        // Adoptable legacy flat output (proven previous-era owned build for
+        // the SELECTED edition) gets an explicit action plus an explanation:
+        // without it, a disabled Rebuild looks like an ownership defect.
+        // Game-content subdirectories never count as sibling editions here.
+        VariantDirectoryService.VariantLegacyFlatInfo legacy = _variantDirectories.DetectLegacyFlatVariant(_activeProject, _activeVariant);
+        bool adoptable = IsAdoptableLegacy(_activeProject, legacy, _activeTranslationCode);
+        btnAdoptLegacyVariant.Enabled = adoptable;
+        if (adoptable)
+            lblRecoveryStatus.Text += " " + string.Format(UiText.Get("Recovery.LegacyDetected"), legacy.ManifestProjectCode ?? "?", _activeVariant.DirectoryKey);
         btnReverseAllPreview.Enabled = true;
+    }
+
+    /// <summary>Adoption-candidate rule (§4): legacy files + matching
+    /// schema-1 marker + no owned sibling editions + manifest code equal to
+    /// the explicitly selected edition. The normal edition path may report
+    /// ForeignDirectoryConflict at the same time; that never blocks this
+    /// independent, fully verified path.</summary>
+    private static bool IsAdoptableLegacy(ProjectContext project, VariantDirectoryService.VariantLegacyFlatInfo legacy, string projectCode)
+    {
+        if (!legacy.HasLegacyFiles || !legacy.HasMatchingMarker || legacy.HasOwnedEditions) return false;
+        if (string.IsNullOrWhiteSpace(legacy.ManifestProjectCode)) return false;
+        string expected;
+        try { expected = ProjectVariantOwnership.NormalizeCode(project, projectCode); }
+        catch (ArgumentException) { return false; }
+        catch (InvalidOperationException) { return false; }
+        return legacy.ManifestProjectCode.Equals(expected, StringComparison.OrdinalIgnoreCase);
     }
 
     private void VerifyPristineInstallation()
@@ -1295,20 +1712,49 @@ internal sealed class MainForm : Form
     private void RebuildOwnedVariant()
     {
         if (_activeProject is null || _activeVariant is null || MessageBox.Show(this, UiText.Get("Recovery.ConfirmRebuildVariant"), UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-        RecoverySafetyOperationResult result = _recoverySafety.RebuildOwnedVariant(_activeProject, _activeVariant);
-        if (result.Succeeded)
+        RecoverySafetyOperationResult result = _recoverySafety.RebuildOwnedVariant(_activeProject, _activeVariant, _activeTranslationCode);        if (result.Succeeded)
             SetWorkflowStatus(WorkflowStatusSeverity.Success, string.Format(UiText.Get("Workflow.BuiltEditionReady"), ActiveEditionDisplayName()));
         else
             SetStatus(result.Detail, error: true);
-        RefreshVariantManager();
-        UpdateRecoverySafetyPresentation();
+        // R9F V7: the resolver is already correct; still refresh every
+        // consumer so no SK -> EN -> SK dance is needed to see the result.
+        OpenModsLauncher();
+        RefreshWorkflowStatus();
+    }
+
+    /// <summary>Explicit, user-confirmed adoption of a proven legacy flat
+    /// owned output into its runtime+edition directory. The service verifies
+    /// marker provenance, manifest identity and every payload byte before
+    /// moving anything; anything unproven aborts untouched with its reason.</summary>
+    private void AdoptLegacyFlatVariant()
+    {
+        if (_activeProject is null || _activeVariant is null) return;
+        VariantDirectoryService.VariantLegacyFlatInfo legacy = _variantDirectories.DetectLegacyFlatVariant(_activeProject, _activeVariant);
+        if (!IsAdoptableLegacy(_activeProject, legacy, _activeTranslationCode)) return;
+        string editionDisplay = ActiveEditionDisplayName();
+        string confirm = string.Format(UiText.Get("Recovery.ConfirmAdoptLegacy"), _activeVariant.DirectoryKey, legacy.ManifestProjectCode, editionDisplay);
+        if (MessageBox.Show(this, confirm, UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        RecoverySafetyOperationResult result = _recoverySafety.AdoptLegacyFlatVariant(_activeProject, _activeVariant, _activeTranslationCode);
+        SetStatus(result.Detail, !result.Succeeded);
+        // R9F V7: adoption changes the authoritative runtime+edition target,
+        // so refresh ownership, build status, launch readiness, manager,
+        // edition availability, default-variant list, Run/Debug and text.
+        // The underlying resolver is fixed first; this refresh only reveals it.
+        OpenModsLauncher();
+        RefreshWorkflowStatus();
     }
 
     /// <summary>Build input is deliberately taken from the active project
-    /// editors, never from launcher-default selection or a DataFile-only row.</summary>
+    /// editors, never from launcher-default selection or a DataFile-only row.
+    /// Variant Manager status must be selection-independent: every row is
+    /// evaluated as (inspected variant + active translation + active editor
+    /// state + physical artifacts), so selecting another runtime never flips
+    /// a previously built row. Only the project identity is gated here;
+    /// variant association is enforced by CompositeBuildService.Validate and
+    /// by each step's own Preflight.</summary>
     private IReadOnlyList<ICompositeBuildStep> CreateActiveProjectBuildSteps(ProjectContext project, VariantContext variant)
     {
-        if (!ReferenceEquals(project, _activeProject) || !ReferenceEquals(variant, _activeVariant)) return [];
+        if (!ReferenceEquals(project, _activeProject)) return [];
         TranslationProjectVariant translation = GetActiveTranslationForBuild(project, variant);
         GraphicsProjectState graphics = ReferenceEquals(_graphicsProject, project) && _graphicsProjectState is not null
             ? _graphicsProjectState
@@ -1323,7 +1769,11 @@ internal sealed class MainForm : Form
 
     private IReadOnlyList<string> GetActiveProjectRuntimeArtifacts(ProjectContext project, VariantContext variant)
     {
-        if (!ReferenceEquals(project, _activeProject) || !ReferenceEquals(variant, _activeVariant))
+        // Selection-independent like the steps above: artifact names follow
+        // the inspected variant plus the active translation, never the active
+        // runtime. The launch path always passes the active variant, so its
+        // behavior is unchanged.
+        if (!ReferenceEquals(project, _activeProject))
             return [variant.GeneratedExecutableName, variant.LogicalDataFileName];
         TranslationProjectVariant translation = GetActiveTranslationForBuild(project, variant);
         return [ActiveProjectBuildIdentity.ExecutableName(variant, translation), translation.DataFile];
@@ -1369,8 +1819,10 @@ internal sealed class MainForm : Form
     private void RemoveOwnedVariantDirectory()
     {
         if (_activeProject is null || _activeVariant is null || MessageBox.Show(this, UiText.Get("Recovery.ConfirmRemoveVariant"), UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-        RecoverySafetyOperationResult result = _recoverySafety.RemoveOwnedVariant(_activeProject, _activeVariant);
-        SetStatus(result.Detail, !result.Succeeded); UpdateRecoverySafetyPresentation();
+        RecoverySafetyOperationResult result = _recoverySafety.RemoveOwnedVariant(_activeProject, _activeVariant, _activeTranslationCode);
+        SetStatus(result.Detail, !result.Succeeded);
+        OpenModsLauncher();
+        RefreshWorkflowStatus();
     }
 
     private void PreviewReverseAllChanges()
@@ -1390,12 +1842,21 @@ internal sealed class MainForm : Form
         }
         if (MessageBox.Show(this, summary + "\r\n\r\n" + UiText.Get("Recovery.ConfirmExecute"), UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
         RestorePlanExecutionResult result = _recoverySafety.ExecuteRestorePlan(_activeProject, plan);
-        SetStatus(result.Detail, !result.Succeeded); UpdateRecoverySafetyPresentation();
+        SetStatus(result.Detail, !result.Succeeded);
+        if (_activeVariant is not null)
+            OpenModsLauncher();
+        else
+            UpdateRecoverySafetyPresentation();
+        RefreshWorkflowStatus();
     }
 
     private void ExecuteActiveVariant(VariantExecutionMode mode)
     {
-        VariantLaunchTarget target = _variantLauncher.Resolve(_activeProject, _activeVariant);
+        // R9F V7: Run/Debug execute only the same explicit runtime+edition
+        // target the top summary reports; never a runtime-parent guess.
+        VariantLaunchTarget target = _activeProject is null || _activeVariant is null
+            ? _variantLauncher.Resolve(null, null)
+            : _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
         VariantExecutionResult result = _variantExecution.Execute(target, mode);
         if (!result.Started) SetStatus(result.Detail, true);
     }
@@ -1829,13 +2290,13 @@ internal sealed class MainForm : Form
         _runtimeUiVariant = null;
         _runtimeUiState = null;
         _runtimeUiDirty = false;
+        _runtimeUiNotice = null;
         if (_activeProject is null || _activeVariant is null) { ClearRuntimeUiText(); return; }
         if (!_activeProject.GameRoot.Equals(txtGameDir.Text, StringComparison.OrdinalIgnoreCase))
         {
             lblRuntimeUiRuntime.Text = UiText.Get("RuntimeUi.Title");
             lblRuntimeUiStatus.Text = UiText.Get("RuntimeUi.ProjectUnavailable");
-            runtimeUiGrid.Rows.Clear();
-            UpdateRuntimeUiActions();
+            QueueRuntimeUiGridRefresh();
             return;
         }
         _runtimeUiProject = _activeProject;
@@ -1845,12 +2306,14 @@ internal sealed class MainForm : Form
         {
             lblRuntimeUiRuntime.Text = _runtimeUiVariant.DisplayName + " — " + UiText.Get("RuntimeUi.Title");
             lblRuntimeUiStatus.Text = UiText.Get("RuntimeUi.ProjectDataError") + ": " + (loaded.Detail ?? loaded.Status.ToString());
-            runtimeUiGrid.Rows.Clear();
-            UpdateRuntimeUiActions();
+            QueueRuntimeUiGridRefresh();
             return;
         }
         _runtimeUiState = loaded.State;
-        RefreshRuntimeUiGrid();
+        // Schema v1 migration notices (assigned/unassigned counts) surface here;
+        // the grid additionally lists unassigned residue as assignable rows.
+        _runtimeUiNotice = string.IsNullOrWhiteSpace(loaded.Detail) ? null : loaded.Detail;
+        QueueRuntimeUiGridRefresh();
     }
 
     private VariantContext ResolveRuntimeUiVariant(ProjectContext project)
@@ -1863,58 +2326,371 @@ internal sealed class MainForm : Form
 
     private void ClearRuntimeUiText()
     {
-        _runtimeUiProject = null; _runtimeUiVariant = null; _runtimeUiState = null; _runtimeUiDirty = false;
-        runtimeUiGrid.Rows.Clear();
+        _runtimeUiProject = null; _runtimeUiVariant = null; _runtimeUiState = null; _runtimeUiDirty = false; _runtimeUiNotice = null;
         lblRuntimeUiRuntime.Text = UiText.Get("RuntimeUi.Title");
         lblRuntimeUiStatus.Text = UiText.Get("NoSupportedGameSelected");
-        UpdateRuntimeUiActions();
+        QueueRuntimeUiGridRefresh();
+    }
+
+    /// <summary>
+    /// Defers the structural Runtime UI grid rebuild past the active
+    /// DataGridView event. CellEndEdit/SelectionChanged handlers run inside
+    /// SetCurrentCellAddressCore; rebuilding rows synchronously from those
+    /// handlers throws InvalidOperationException (reentrant call). At most one
+    /// rebuild is queued; the flag reset + disposal checks mirror the text
+    /// grid's QueueTextGridRefresh. Headless contexts (no window handle) have
+    /// no live cell transition, so they rebuild synchronously.
+    /// </summary>
+    private void QueueRuntimeUiGridRefresh()
+    {
+        if (_runtimeUiRefreshQueued || IsDisposed || Disposing)
+            return;
+        if (!IsHandleCreated)
+        {
+            RefreshRuntimeUiGrid();
+            return;
+        }
+        _runtimeUiRefreshQueued = true;
+        try
+        {
+            BeginInvoke(new Action(() =>
+            {
+                _runtimeUiRefreshQueued = false;
+                if (IsDisposed || Disposing) return;
+                RefreshRuntimeUiGrid();
+            }));
+        }
+        catch (ObjectDisposedException)
+        {
+            // Form disposed between the guard above and the post: there is no
+            // grid left to refresh.
+            _runtimeUiRefreshQueued = false;
+        }
+        catch (InvalidOperationException)
+        {
+            // Tolerate handle destruction racing the post, but never hide a
+            // real defect: rethrow unless the form is going away or has no
+            // handle anymore.
+            _runtimeUiRefreshQueued = false;
+            if (!IsDisposed && !Disposing && IsHandleCreated)
+                throw;
+        }
     }
 
     private void RefreshRuntimeUiGrid()
     {
-        if (_runtimeUiProject is null || _runtimeUiVariant is null || _runtimeUiState is null) return;
+        if (_runtimeUiProject is null || _runtimeUiVariant is null || _runtimeUiState is null)
+        {
+            runtimeUiGrid.Rows.Clear();
+            UpdateRuntimeUiLegacyPresentation();
+            _runtimeUiGridRefreshCount++;
+            UpdateRuntimeUiActions();
+            return;
+        }
+        // Capture selection before the rebuild so the current record survives
+        // the deferred refresh. Restored only after the rebuild, outside any
+        // cell transition (guarded by handle + row existence, no swallowing).
+        RuntimeUiLogicalRecordId? selectedId =
+            runtimeUiGrid.CurrentRow?.Tag is RuntimeUiLogicalRecordId id ? id : null;
+        // V8.2: preserve the scroll position across presentation rebuilds
+        // (e.g. live locale switches) where practical.
+        int firstDisplayed = -1;
+        try { if (runtimeUiGrid.Rows.Count > 0) firstDisplayed = runtimeUiGrid.FirstDisplayedScrollingRowIndex; }
+        catch { firstDisplayed = -1; }
         _runtimeUiRefreshing = true;
         try
         {
-            runtimeUiGrid.Columns["Override"].ReadOnly = ProjectVariantOwnership.IsOriginal(_activeTranslationCode);
             runtimeUiGrid.Rows.Clear();
             lblRuntimeUiRuntime.Text = _runtimeUiVariant.DisplayName + " — " + UiText.Get("RuntimeUi.Title");
+            // R9F V8: the three proven-live VGA records keep field-only
+            // presentation (main field in the grid, full semantic editor on
+            // double-click) but are NO LONGER inline-editable; every Override
+            // cell is read-only. The other five VGA rows show known originals
+            // yet stay non-editable. Other runtimes keep their behavior.
+            bool isVga = _runtimeUiVariant.RuntimeKind == VariantRuntimeKind.Elvira1Vga;
+            // R9F EGA: one canonicalization feeds every row's original decode.
+            IReadOnlyDictionary<RuntimeUiLogicalRecordId, string?> egaOriginals =
+                _runtimeUiVariant.RuntimeKind == VariantRuntimeKind.Elvira1Ega && _runtimeUiProject is not null
+                ? RunEgaUiService.TryDecodeAllFromGameRoot(_runtimeUiProject.GameRoot)
+                : new Dictionary<RuntimeUiLogicalRecordId, string?>();
             foreach (RuntimeUiRuntimeProjection record in _runtimeUiTexts.GetEffectiveRecords(_runtimeUiVariant, _runtimeUiState))
             {
                 RuntimeUiLayoutValidationResult validation = _runtimeUiLayouts.Validate(_runtimeUiVariant, _runtimeUiState, record.LogicalRecordId);
-                string original = record.TextOrigin == RuntimeUiTextOrigin.FrozenDefaultUnavailable ? UiText.Get("RuntimeUi.OriginalUnavailable") : record.IsOverridden ? UiText.Get("RuntimeUi.OriginalUnavailable") : record.EffectiveText ?? UiText.Get("RuntimeUi.OriginalUnavailable");
-                string overrideText = record.IsOverridden ? record.EffectiveText ?? string.Empty : string.Empty;
+                string original;
+                string overrideText;
+                if (isVga && RunVgaVariableUiService.IsVariableRecord(record.LogicalRecordId))
+                {
+                    // Field-only presentation: frozen indents, separators and
+                    // anchors stay implementation details. Unparseable stored
+                    // values are shown raw so nothing is ever hidden.
+                    original = _runtimeUiProject is not null &&
+                        RunVgaOriginalTextService.TryGetShortOriginal(record.LogicalRecordId, _runtimeUiProject.GameRoot, out string? vgaOriginal) && vgaOriginal is not null
+                        ? vgaOriginal
+                        : UiText.Get("RuntimeUi.OriginalUnavailable");
+                    overrideText = record.IsOverridden &&
+                        RunVgaVariableUiService.TryParse(record.LogicalRecordId, record.EffectiveText ?? string.Empty, out IReadOnlyDictionary<string, string>? vgaOverride) && vgaOverride is not null
+                        ? VgaMainField(record.LogicalRecordId, vgaOverride)
+                        : record.IsOverridden ? record.EffectiveText ?? string.Empty : string.Empty;
+                }
+                else if (_runtimeUiVariant.RuntimeKind == VariantRuntimeKind.Elvira1Ega)
+                {
+                    // Same field-only presentation driven by the audited EGA
+                    // contracts: frozen affixes stay hidden, legacy raw values
+                    // stay visible. No RUNVGA information is used here.
+                    original = egaOriginals.TryGetValue(record.LogicalRecordId, out string? egaFull) && egaFull is not null &&
+                        RunEgaUiService.TryExtractField(egaFull, record.LogicalRecordId, out string? egaTitle)
+                        ? egaTitle!
+                        : UiText.Get("RuntimeUi.OriginalUnavailable");
+                    overrideText = record.IsOverridden &&
+                        RunEgaUiService.TryExtractField(record.EffectiveText, record.LogicalRecordId, out string? egaOverride)
+                        ? egaOverride!
+                        : record.IsOverridden ? record.EffectiveText ?? string.Empty : string.Empty;
+                }
+                else
+                {
+                    // R9F V8: known RUNVGA originals are binary evidence and
+                    // must be displayed even though safe editing is still
+                    // unsupported. Route proven does not imply editable.
+                    if (isVga && _runtimeUiProject is not null &&
+                        RunVgaOriginalTextService.TryGetShortOriginal(record.LogicalRecordId, _runtimeUiProject.GameRoot, out string? vgaKnown) && vgaKnown is not null)
+                        original = vgaKnown;
+                    else
+                        original = record.TextOrigin == RuntimeUiTextOrigin.FrozenDefaultUnavailable ? UiText.Get("RuntimeUi.OriginalUnavailable") : record.IsOverridden ? UiText.Get("RuntimeUi.OriginalUnavailable") : record.EffectiveText ?? UiText.Get("RuntimeUi.OriginalUnavailable");
+                    overrideText = record.IsOverridden ? record.EffectiveText ?? string.Empty : string.Empty;
+                }
                 int rowIndex = runtimeUiGrid.Rows.Add(record.DisplayName, original, overrideText, FriendlyRuntimeUiStatus(validation), validation.Detail);
                 DataGridViewRow row = runtimeUiGrid.Rows[rowIndex];
                 row.Tag = record.LogicalRecordId;
+                // Full diagnostic text stays reachable even when the Details
+                // column clips it; row heights are never stretched for wrapping.
+                row.Cells["Detail"].ToolTipText = validation.Detail;
                 if (record.IsOverridden) row.DefaultCellStyle.BackColor = Color.LightGoldenrodYellow;
                 if (validation.Status == RuntimeUiLayoutValidationStatus.MappingIncomplete) row.DefaultCellStyle.ForeColor = Color.DarkOrange;
+                // R9F V8 grid safety: the grid is a VIEW/SELECTION surface,
+                // never a raw text editor. Mutation goes only through the
+                // semantic editor / explicit actions.
+                row.Cells["Override"].ReadOnly = true;
+                if (record.LogicalRecordId == RuntimeUiLogicalRecordId.PauseMenu &&
+                    _runtimeUiVariant.RuntimeKind is VariantRuntimeKind.Elvira1Vga or VariantRuntimeKind.Elvira1Ega)
+                    row.Cells["Override"].ToolTipText = UiText.Get("RuntimeUi.PauseTitleHint");
             }
-            lblRuntimeUiStatus.Text = _runtimeUiDirty ? UiText.Get("RuntimeUi.ChangesNotSaved") : UiText.Get("RuntimeUi.ProjectStateLoaded");
+            // V8.1: unassigned v1 residue is migration metadata, not a row of
+            // the selected runtime. It remains separately visible and can only
+            // be explicitly discarded from project state.
+            UpdateRuntimeUiLegacyPresentation();
+            // Restore the pre-rebuild record selection. This runs outside any
+            // cell transition (the rebuild itself was deferred), and the
+            // _runtimeUiRefreshing guard above suppresses any commit handling
+            // if the grid raises events while restoring.
+            // Selection survives presentation rebuilds, including headless
+            // test contexts without a window handle. Deferred (handled)
+            // contexts run outside any cell transition; a synchronous call
+            // from inside a grid transition stays guarded by
+            // _runtimeUiRefreshing via the queue path.
+            if (selectedId.HasValue)
+            {
+                foreach (DataGridViewRow row in runtimeUiGrid.Rows)
+                {
+                    if (row.Tag is RuntimeUiLogicalRecordId rowId && rowId == selectedId.Value)
+                    {
+                        try { runtimeUiGrid.CurrentCell = row.Cells["Override"]; }
+                        catch (InvalidOperationException) { try { row.Selected = true; } catch { } }
+                        break;
+                    }
+                }
+            }
+            if (firstDisplayed >= 0 && firstDisplayed < runtimeUiGrid.Rows.Count)
+            {
+                try { runtimeUiGrid.FirstDisplayedScrollingRowIndex = firstDisplayed; }
+                catch { }
+            }
+            lblRuntimeUiStatus.Text = _runtimeUiNotice
+                ?? (_runtimeUiDirty ? UiText.Get("RuntimeUi.ChangesNotSaved") : UiText.Get("RuntimeUi.ProjectStateLoaded"));
+            _runtimeUiNotice = null;
         }
         finally { _runtimeUiRefreshing = false; }
+        _runtimeUiGridRefreshCount++;
         UpdateRuntimeUiActions();
     }
 
+    /// <summary>Grid-visible main field per VGA variable record (title /
+    /// prompt / message). Structural labels live in the semantic editor.</summary>
+    private static string VgaMainField(RuntimeUiLogicalRecordId id, IReadOnlyDictionary<string, string> fields) => id switch
+    {
+        RuntimeUiLogicalRecordId.PauseMenu => fields["title"],
+        RuntimeUiLogicalRecordId.ConfirmGeneric => fields["prompt"],
+        RuntimeUiLogicalRecordId.SaveOverwrite => fields["message"],
+        _ => throw new ArgumentOutOfRangeException(nameof(id))
+    };
+
+    /// <summary>English button/question defaults for in-cell composition
+    /// when no stored override exists to carry values from.</summary>
+    private static IReadOnlyDictionary<string, string> VgaEnglishDefaults(RuntimeUiLogicalRecordId id) =>
+        RuntimeUiSemanticEditorForm.VgaEnglishDefaults(id);
+
     private void ApplyRuntimeUiGridEdit(int rowIndex, int columnIndex)
     {
-        if (_runtimeUiRefreshing || columnIndex < 0 || rowIndex < 0 || _runtimeUiProject is null || _runtimeUiState is null) return;
-        if (runtimeUiGrid.Columns[columnIndex].Name != "Override" || runtimeUiGrid.Rows[rowIndex].Tag is not RuntimeUiLogicalRecordId id) return;
-        string text = runtimeUiGrid.Rows[rowIndex].Cells["Override"].Value?.ToString() ?? string.Empty;
-        if (ProjectVariantOwnership.IsOriginal(_activeTranslationCode)) return;
-        _runtimeUiState = _runtimeUiTexts.SetOverride(_runtimeUiProject, _runtimeUiState, id, text);
-        _runtimeUiDirty = true;
-        RefreshRuntimeUiGrid();
-        RefreshWorkflowStatus();
+        // R9F V8 grid safety: CellEndEdit never mutates project state. The
+        // grid is read-only (CellBeginEdit cancels); this is defense in depth
+        // for programmatic paths. Structured records edit only via the
+        // semantic editor; unsupported/legacy never via the grid. A raw value
+        // such as "asssss" can therefore never replace a structured record.
+        if (_runtimeUiRefreshing || columnIndex < 0 || rowIndex < 0 || _runtimeUiProject is null || _runtimeUiState is null || _runtimeUiVariant is null) return;
+        if (runtimeUiGrid.Columns[columnIndex].Name != "Override") return;
+        if (runtimeUiGrid.Rows[rowIndex].Tag is not RuntimeUiLogicalRecordId) return;
+        if (ProjectVariantOwnership.IsOriginal(_activeTranslationCode))
+        {
+            _runtimeUiNotice = UiText.Get("RuntimeUi.Detail.OriginalEditionReadOnly");
+            lblRuntimeUiStatus.Text = _runtimeUiNotice;
+            QueueRuntimeUiGridRefresh();
+            return;
+        }
+        QueueRuntimeUiGridRefresh();
     }
 
     private void ResetSelectedRuntimeUiOverride()
     {
-        if (_runtimeUiProject is null || _runtimeUiState is null || runtimeUiGrid.CurrentRow?.Tag is not RuntimeUiLogicalRecordId id) return;
-        _runtimeUiState = _runtimeUiTexts.RemoveOverride(_runtimeUiProject, _runtimeUiState, id);
+        if (_runtimeUiProject is null || _runtimeUiState is null || _runtimeUiVariant is null) return;
+        if (runtimeUiGrid.CurrentRow?.Tag is not RuntimeUiLogicalRecordId id) return;
+        _runtimeUiState = _runtimeUiTexts.RemoveOverride(_runtimeUiProject, _runtimeUiState, _runtimeUiVariant.RuntimeKind, id);
         _runtimeUiDirty = true;
-        RefreshRuntimeUiGrid();
+        _runtimeUiNotice = null;
+        QueueRuntimeUiGridRefresh();
         RefreshWorkflowStatus();
+    }
+
+    private void UpdateRuntimeUiLegacyPresentation()
+    {
+        RuntimeUiUnassignedLegacyRecord[] legacy = _runtimeUiState?.UnassignedLegacy.ToArray() ?? [];
+        bool visible = legacy.Length > 0;
+        lblRuntimeUiLegacyNotice.Visible = visible;
+        cmbRuntimeUiLegacy.Visible = visible;
+        btnDiscardLegacyRuntimeUi.Visible = visible;
+        if (!visible)
+        {
+            lblRuntimeUiLegacyNotice.Text = string.Empty;
+            cmbRuntimeUiLegacy.Items.Clear();
+            return;
+        }
+        RuntimeUiLogicalRecordId? selected = (cmbRuntimeUiLegacy.SelectedItem as RuntimeUiLegacyChoice)?.Id;
+        cmbRuntimeUiLegacy.Items.Clear();
+        foreach (RuntimeUiUnassignedLegacyRecord value in legacy)
+        {
+            string displayName = _runtimeUiProject is null
+                ? value.LogicalRecordId.ToString()
+                : _runtimeUiTexts.GetDefinitions(_runtimeUiProject).SingleOrDefault(definition => definition.LogicalRecordId == value.LogicalRecordId)?.DisplayName
+                    ?? value.LogicalRecordId.ToString();
+            cmbRuntimeUiLegacy.Items.Add(new RuntimeUiLegacyChoice(value.LogicalRecordId, displayName));
+        }
+        cmbRuntimeUiLegacy.SelectedItem = cmbRuntimeUiLegacy.Items.Cast<RuntimeUiLegacyChoice>()
+            .FirstOrDefault(choice => choice.Id == selected) ?? cmbRuntimeUiLegacy.Items[0];
+        lblRuntimeUiLegacyNotice.Text = string.Format(UiText.Get(legacy.Length == 1
+            ? "RuntimeUi.LegacyNotice.Single"
+            : "RuntimeUi.LegacyNotice.Plural"), legacy.Length);
+        btnDiscardLegacyRuntimeUi.Text = UiText.Get("RuntimeUi.DiscardLegacyOverride");
+    }
+
+    private void DiscardSelectedRuntimeUiLegacyOverride(bool confirm)
+    {
+        if (_runtimeUiProject is null || _runtimeUiState is null || ProjectVariantOwnership.IsOriginal(_activeTranslationCode)) return;
+        if (cmbRuntimeUiLegacy.SelectedItem is not RuntimeUiLegacyChoice choice) return;
+        if (confirm && MessageBox.Show(this, UiText.Get("RuntimeUi.DiscardLegacyConfirm"), UiText.Get("RuntimeUi.Title"),
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            return;
+        _runtimeUiState = _runtimeUiTexts.DiscardUnassigned(_runtimeUiProject, _runtimeUiState, choice.Id);
+        _runtimeUiDirty = true;
+        _runtimeUiNotice = null;
+        QueueRuntimeUiGridRefresh();
+        RefreshWorkflowStatus();
+    }
+
+    /// <summary>Structured semantic editor entry (double-click / Edit).
+    /// Read-only rows never open it. An explicit edit attempt on the
+    /// read-only Original edition explains itself instead of staying silent.</summary>
+    private void OpenSemanticEditorForRow(int rowIndex)
+    {
+        if (_runtimeUiRefreshing || rowIndex < 0 || rowIndex >= runtimeUiGrid.Rows.Count) return;
+        if (_runtimeUiProject is null || _runtimeUiVariant is null || _runtimeUiState is null) return;
+        if (ProjectVariantOwnership.IsOriginal(_activeTranslationCode))
+        {
+            string blocked = UiText.Get("RuntimeUi.Detail.OriginalEditionReadOnly");
+            _runtimeUiNotice = blocked;
+            lblRuntimeUiStatus.Text = blocked;
+            MessageBox.Show(this, blocked, UiText.Get("RuntimeUi.Title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        RuntimeUiLogicalRecordId id;
+        if (runtimeUiGrid.Rows[rowIndex].Tag is RuntimeUiLogicalRecordId normalId) id = normalId;
+        else return;
+        if (!RuntimeUiRowSupportsEdit(id)) return;
+        using RuntimeUiSemanticEditorForm? editor = BuildSemanticEditor(id);
+        if (editor is null) return;
+        if (editor.ShowDialog(this) != DialogResult.OK || editor.ComposedFullRecord is null) return;
+        _runtimeUiState = _runtimeUiTexts.SetOverride(_runtimeUiProject, _runtimeUiState, _runtimeUiVariant.RuntimeKind, id, editor.ComposedFullRecord);
+        _runtimeUiDirty = true;
+        _runtimeUiNotice = null;
+        QueueRuntimeUiGridRefresh();
+        RefreshWorkflowStatus();
+    }
+
+    /// <summary>Headless block-reason probe for the double-click path:
+    /// "Original" (read-only edition, user gets the localized message),
+    /// "ReadOnly" (unsupported row), "NoRecord", or null when the editor
+    /// would open. Never shows UI.</summary>
+    internal string? OpenSemanticEditorBlockedReasonForTest(int rowIndex)
+    {
+        if (_runtimeUiProject is null || _runtimeUiVariant is null || _runtimeUiState is null) return "NoRecord";
+        if (rowIndex < 0 || rowIndex >= runtimeUiGrid.Rows.Count) return "NoRecord";
+        if (ProjectVariantOwnership.IsOriginal(_activeTranslationCode)) return "Original";
+        RuntimeUiLogicalRecordId id;
+        if (runtimeUiGrid.Rows[rowIndex].Tag is RuntimeUiLogicalRecordId normalId) id = normalId;
+        else return "NoRecord";
+        if (!RuntimeUiRowSupportsEdit(id)) return "ReadOnly";
+        return BuildSemanticEditor(id) is null ? "NoRecord" : null;
+    }
+
+    /// <summary>Builds (but does not show) the semantic editor for tests and
+    /// the double-click path. Null when the record is not editable here.</summary>
+    internal RuntimeUiSemanticEditorForm? BuildSemanticEditorForTest(RuntimeUiLogicalRecordId id)
+    {
+        if (_runtimeUiProject is null || _runtimeUiVariant is null || _runtimeUiState is null) return null;
+        if (!RuntimeUiRowSupportsEdit(id)) return null;
+        return BuildSemanticEditor(id);
+    }
+
+    private RuntimeUiSemanticEditorForm? BuildSemanticEditor(RuntimeUiLogicalRecordId id)
+    {
+        if (_runtimeUiProject is null || _runtimeUiVariant is null || _runtimeUiState is null) return null;
+        ProjectContext project = _runtimeUiProject;
+        VariantContext variant = _runtimeUiVariant;
+        RuntimeUiTextState state = _runtimeUiState;
+        string displayName = _runtimeUiTexts.GetDefinitions(project)
+            .SingleOrDefault(definition => definition.LogicalRecordId == id)?.DisplayName ?? id.ToString();
+        string? originalFull = null;
+        string? currentFull = null;
+        if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Vga && RunVgaVariableUiService.IsVariableRecord(id))
+        {
+            if (!RunVgaVariableUiService.TryDecodeOriginalFromGameRoot(project.GameRoot, id, out string? decoded, out _)) return null;
+            originalFull = decoded;
+            currentFull = state.Overrides
+                .SingleOrDefault(value => value.Runtime == variant.RuntimeKind && value.LogicalRecordId == id)?.Text
+                ?? originalFull;
+            if (!RunVgaVariableUiService.TryDecompose(id, originalFull, out IReadOnlyList<RunEgaUiSemanticField>? originalRows) || originalRows is null) return null;
+            if (!RunVgaVariableUiService.TryDecompose(id, currentFull, out IReadOnlyList<RunEgaUiSemanticField>? currentRows) || currentRows is null) return null;
+            return new RuntimeUiSemanticEditorForm(displayName, id, variant.RuntimeKind, originalRows, currentRows);
+        }
+        if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Ega && RunEgaUiService.IsEditable(id))
+        {
+            if (!RunEgaUiService.TryDecodeOriginalFromGameRoot(project.GameRoot, id, out string? decoded, out _)) return null;
+            originalFull = decoded;
+            currentFull = state.Overrides
+                .SingleOrDefault(value => value.Runtime == variant.RuntimeKind && value.LogicalRecordId == id)?.Text
+                ?? originalFull;
+            return new RuntimeUiSemanticEditorForm(displayName, id, variant.RuntimeKind,
+                RunEgaUiService.Decompose(originalFull, id),
+                RunEgaUiService.Decompose(currentFull, id));
+        }
+        return null;
     }
 
     private void SaveRuntimeUiText()
@@ -1923,11 +2699,17 @@ internal sealed class MainForm : Form
         RuntimeUiTextSaveResult saved = _runtimeUiTexts.Save(_runtimeUiProject, _activeTranslationCode, _runtimeUiState);
         if (!saved.Succeeded)
         {
+            _runtimeUiNotice = null;
             lblRuntimeUiStatus.Text = UiText.Get("RuntimeUi.SaveFailed") + ": " + saved.Detail;
             return;
         }
         _runtimeUiDirty = false;
-        RefreshRuntimeUiGrid();
+        _runtimeUiNotice = null;
+        // No structural rebuild here: saving persists the already-displayed
+        // in-memory state, so only button/label state needs syncing. Rebuilding
+        // would both risk cell-transition reentrancy and overwrite the
+        // SavedProjectOnly notice below when the queued worker runs later.
+        UpdateRuntimeUiActions();
         lblRuntimeUiStatus.Text = UiText.Get("RuntimeUi.SavedProjectOnly");
         SetWorkflowStatus(WorkflowStatusSeverity.Warning, UiText.Get("Workflow.SavedBuildRequired"));
     }
@@ -1937,7 +2719,42 @@ internal sealed class MainForm : Form
         bool ready = _runtimeUiProject is not null && _runtimeUiState is not null && !ProjectVariantOwnership.IsOriginal(_activeTranslationCode);
         btnReloadRuntimeUi.Enabled = !string.IsNullOrWhiteSpace(txtGameDir.Text);
         btnSaveRuntimeUi.Enabled = ready && _runtimeUiDirty;
-        btnResetRuntimeUi.Enabled = ready && runtimeUiGrid.CurrentRow?.Tag is RuntimeUiLogicalRecordId;
+        btnResetRuntimeUi.Enabled = ready && RuntimeUiSelectedRowSupportsReset();
+        btnDiscardLegacyRuntimeUi.Enabled = ready && cmbRuntimeUiLegacy.SelectedItem is RuntimeUiLegacyChoice;
+    }
+
+    /// <summary>
+    /// R9F: Reset is row-specific. It is enabled only where an override can
+    /// exist and be cleared meaningfully: VGA Pause.menu and
+    /// audited EGA records with a stored override (RUNIT preserves its legacy
+    /// cell behavior). All other rows stay disabled instead of silently doing
+    /// nothing.
+    /// </summary>
+    private bool RuntimeUiSelectedRowSupportsReset()
+    {
+        if (_runtimeUiState is null || _runtimeUiVariant is null) return false;
+        if (runtimeUiGrid.CurrentRow?.Tag is not RuntimeUiLogicalRecordId id) return false;
+        if (!RuntimeUiRowSupportsEdit(id)) return false;
+        // Runtime-scoped identity: only an override stored for the VIEWED
+        // runtime enables Reset. An EGA override never enables a VGA Reset.
+        return _runtimeUiState.Overrides.Any(value => value.Runtime == _runtimeUiVariant.RuntimeKind && value.LogicalRecordId == id);
+    }
+
+    /// <summary>
+    /// Explicit edit-support contract: route/evidence alone never implies
+    /// editability. VGA: the three proven-live variable-width records
+    /// (Pause.menu, Confirm.generic, Save.overwrite). EGA: every audited
+    /// contract record. RUNIT: frozen scope keeps legacy cell behavior.
+    /// </summary>
+    private bool RuntimeUiRowSupportsEdit(RuntimeUiLogicalRecordId id)
+    {
+        if (_runtimeUiVariant is null) return false;
+        return _runtimeUiVariant.RuntimeKind switch
+        {
+            VariantRuntimeKind.Elvira1Vga => RunVgaVariableUiService.IsVariableRecord(id),
+            VariantRuntimeKind.Elvira1Ega => RunEgaUiService.IsEditable(id),
+            _ => true,
+        };
     }
 
     private static string FriendlyRuntimeUiStatus(RuntimeUiLayoutValidationResult result) => result.Status switch
@@ -1952,10 +2769,15 @@ internal sealed class MainForm : Form
         RuntimeUiLayoutValidationStatus.DefaultTextUnavailable => UiText.Get("RuntimeUi.OriginalUnavailable"),
         RuntimeUiLayoutValidationStatus.EncodingFailure => UiText.Get("RuntimeUi.Status.EncodingFailure"),
         RuntimeUiLayoutValidationStatus.UnsupportedGlyph => UiText.Get("RuntimeUi.Status.UnsupportedGlyph"),
-        RuntimeUiLayoutValidationStatus.RecordCapacityExceeded or RuntimeUiLayoutValidationStatus.TextTooLong => UiText.Get("RuntimeUi.Status.TextTooLong"),
+        RuntimeUiLayoutValidationStatus.RecordCapacityExceeded => UiText.Get("RuntimeUi.Status.RecordCapacityExceeded"),
+        RuntimeUiLayoutValidationStatus.TextTooLong => UiText.Get("RuntimeUi.Status.TextTooLong"),
         RuntimeUiLayoutValidationStatus.BankCapacityExceeded => UiText.Get("RuntimeUi.Status.BankCapacityExceeded"),
         RuntimeUiLayoutValidationStatus.InvalidFrozenDescriptor => UiText.Get("RuntimeUi.Status.LayoutUnavailable"),
-        RuntimeUiLayoutValidationStatus.UnsupportedRecord => UiText.Get("RuntimeUi.Status.UnsupportedRecord"),
+        RuntimeUiLayoutValidationStatus.UnsupportedRecord => UiText.Get("RuntimeUi.Status.UnsupportedForRuntime"),
+        RuntimeUiLayoutValidationStatus.FixedColumnViolation => UiText.Get("RuntimeUi.Status.FixedColumnViolation"),
+        RuntimeUiLayoutValidationStatus.HotspotViolation => UiText.Get("RuntimeUi.Status.HotspotViolation"),
+        RuntimeUiLayoutValidationStatus.VisualCollision => UiText.Get("RuntimeUi.Status.VisualCollision"),
+        RuntimeUiLayoutValidationStatus.RowOverflow => UiText.Get("RuntimeUi.Status.RowOverflow"),
         _ => result.Status.ToString()
     };
 
@@ -2196,6 +3018,7 @@ internal sealed class MainForm : Form
         btnSelectLauncherFile.Text = UiText.Get("SelectLauncher");
         lblModderName.Text = UiText.Get("ModderName");
         lblDefaultVariant.Text = UiText.Get("DefaultVariant");
+        FitDefaultVariantCombo();
         lblVariantManagerTitle.Text = UiText.Get("VariantManager.Title");
         lblVariantManagerHint.Text = UiText.Get("VariantManager.SelectHint");
         btnPreviewLauncher.Text = UiText.Get("PreviewLauncher");
@@ -2219,11 +3042,80 @@ internal sealed class MainForm : Form
             variantManagerGrid.Columns["BuildStatus"].HeaderText = UiText.Get("VariantManager.BuildStatus");
             variantManagerGrid.Columns["Readiness"].HeaderText = UiText.Get("VariantManager.Readiness");
         }
-        if (_variantCatalog is not null)
-            RefreshVariantGrid(CurrentTranslationDataFileForPresentation());
-        else
-            UpdateVariantActions();
-        RefreshVariantManager();
+        // V8.2: locale switches are presentation-only. Availability and
+        // build status were computed by the last full refresh (which hashes
+        // variant outputs); recomputing them here caused the visible freeze.
+        // Relocalize cached projections instead of touching the filesystem.
+        UpdateVariantGridLocalization();
+        UpdateVariantActions();
+        UpdateVariantManagerLocalization();
+        UpdateLauncherReadinessLocalization();
+    }
+
+    /// <summary>V8.2 localization-only refresh of the Mods variant grid.
+    /// Headers and Status/Enabled cells are re-rendered from cached row tags;
+    /// no availability revalidation (and therefore no file hashing) occurs.</summary>
+    private void UpdateVariantGridLocalization()
+    {
+        if (variantGrid.Columns.Count == 5)
+        {
+            variantGrid.Columns["Order"].HeaderText = UiText.Get("VariantOrder");
+            variantGrid.Columns["Name"].HeaderText = UiText.Get("VariantName");
+            variantGrid.Columns["DataFile"].HeaderText = UiText.Get("VariantDataFile");
+            variantGrid.Columns["Status"].HeaderText = UiText.Get("VariantStatus");
+            variantGrid.Columns["Enabled"].HeaderText = UiText.Get("VariantEnabled");
+        }
+        foreach (DataGridViewRow row in variantGrid.Rows)
+        {
+            if (row.Tag is not VariantEntry entry)
+                continue;
+            // Cached at full-refresh time; rows predating the cache keep
+            // their existing text rather than triggering filesystem IO.
+            if (row.Cells["Status"].Tag is bool available)
+                row.Cells["Status"].Value = available ? UiText.Get("VariantAvailable") : UiText.Get("VariantMissing");
+            row.Cells["Enabled"].Value = entry.Enabled ? UiText.Get("VariantYes") : UiText.Get("VariantNo");
+        }
+    }
+
+    /// <summary>V8.2 localization-only refresh of the Variant Manager grid
+    /// from cached per-row projections. No InspectEdition/filesystem work.</summary>
+    private void UpdateVariantManagerLocalization()
+    {
+        if (variantManagerGrid.Columns.Count == 7)
+        {
+            variantManagerGrid.Columns["Active"].HeaderText = UiText.Get("VariantManager.Active");
+            variantManagerGrid.Columns["Variant"].HeaderText = UiText.Get("VariantManager.Variant");
+            variantManagerGrid.Columns["Runtime"].HeaderText = UiText.Get("VariantManager.Runtime");
+            variantManagerGrid.Columns["Directory"].HeaderText = UiText.Get("VariantManager.Directory");
+            variantManagerGrid.Columns["Ownership"].HeaderText = UiText.Get("VariantManager.Ownership");
+            variantManagerGrid.Columns["BuildStatus"].HeaderText = UiText.Get("VariantManager.BuildStatus");
+            variantManagerGrid.Columns["Readiness"].HeaderText = UiText.Get("VariantManager.Readiness");
+        }
+        foreach (DataGridViewRow row in variantManagerGrid.Rows)
+        {
+            if (row.Tag is not VariantManagerRow cached)
+                continue;
+            row.Cells["Runtime"].Value = UiText.Get("VariantManager.Runtime." + cached.Variant.RuntimeKind);
+            row.Cells["Ownership"].Value = UiText.Get("VariantManager.Ownership." + cached.Ownership);
+            row.Cells["BuildStatus"].Value = UiText.Get("VariantManager.BuildStatus." + cached.BuildStatus);
+            row.Cells["Readiness"].Value = UiText.Get("VariantManager.Readiness." + cached.Readiness);
+        }
+    }
+
+    /// <summary>V8.2 localization-only refresh of the launcher readiness
+    /// summary from the cached target/plan. No ResolveEdition hashing.</summary>
+    private void UpdateLauncherReadinessLocalization()
+    {
+        if (_activeProject is null || _activeVariant is null || _lastLauncherTarget is null || _lastLauncherPlan is null)
+        {
+            if (_activeProject is null || _activeVariant is null)
+                lblLauncherReadiness.Text = NeutralInstallationPrompt;
+            return;
+        }
+        VariantLaunchTarget target = _lastLauncherTarget;
+        LauncherRedirectionPlan plan = _lastLauncherPlan;
+        lblLauncherReadiness.Text = string.Format(UiText.Get("Launcher.Readiness"), target.GameId, target.VariantId, target.Ownership,
+            target.BuildConfigured ? UiText.Get("Launcher.Configured") : UiText.Get("Launcher.Incomplete"), target.Readiness, plan.Detail);
     }
 
     private void SaveTextDataFileAs(bool createVariant)
@@ -2297,10 +3189,16 @@ internal sealed class MainForm : Form
         btnReloadRuntimeUi.Text = UiText.Get("RuntimeUi.Reload");
         btnSaveRuntimeUi.Text = UiText.Get("SaveToProject");
         btnResetRuntimeUi.Text = UiText.Get("RuntimeUi.ResetOverride");
+        UpdateRuntimeUiLegacyPresentation();
+        // V8.2: live locale switch must regenerate localized Status/Detail
+        // cells from existing in-memory state. Presentation-only: no dirty,
+        // no save, no source reload; column widths are untouched because the
+        // rebuild only replaces rows.
+        QueueRuntimeUiGridRefresh();
         btnRunVariant.Text = UiText.Get("Execution.Run"); btnDebugVariant.Text = UiText.Get("Execution.Debug");
         lblRecoveryTitle.Text = UiText.Get("Recovery.Title");
         btnVerifyPristine.Text = UiText.Get("Recovery.VerifyPristine"); btnRestoreBaselineLauncher.Text = UiText.Get("Recovery.RestoreLauncher");
-        btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
+        btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnAdoptLegacyVariant.Text = UiText.Get("Recovery.AdoptLegacy"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
         btnBrowseGame.Text = UiText.Get("Browse");
         btnFindGames.Text = UiText.Get("FindGames");
         lblActiveProjectCaption.Text = UiText.Get("Edition") + ":";
@@ -4482,7 +5380,7 @@ internal sealed class MainForm : Form
             return;
         }
 
-        VariantBuildStatusProjection status = _variantBuildStatus.Inspect(_activeProject, _activeVariant);
+        VariantBuildStatusProjection status = _variantBuildStatus.InspectEdition(_activeProject, _activeVariant, _activeTranslationCode);
         if (status.Status == VariantBuildStatus.Ready)
             SetWorkflowStatus(WorkflowStatusSeverity.Success, UiText.Get("Workflow.BuiltReady"));
         else if (status.Status is VariantBuildStatus.Incomplete or VariantBuildStatus.Invalid)
@@ -4789,6 +5687,7 @@ internal sealed class MainForm : Form
             (btnRestoreBaselineLauncher, nameof(btnRestoreBaselineLauncher)),
             (btnRebuildOwnedVariant, nameof(btnRebuildOwnedVariant)),
             (btnRemoveOwnedVariant, nameof(btnRemoveOwnedVariant)),
+            (btnAdoptLegacyVariant, nameof(btnAdoptLegacyVariant)),
             (btnReverseAllPreview, nameof(btnReverseAllPreview)),
             (btnRunVariant, nameof(btnRunVariant)), (btnDebugVariant, nameof(btnDebugVariant)),
             (btnOpenDataFile, nameof(btnOpenDataFile)), (btnReloadTexts, nameof(btnReloadTexts)),
@@ -5077,6 +5976,13 @@ internal sealed record VariantManagerRow(
     VariantBuildStatus BuildStatus,
     int ConfiguredCapabilities,
     int CapabilityCount);
+
+/// <summary>Explicit selection of unassigned migration residue. It carries
+/// no runtime identity and can only be discarded from project metadata.</summary>
+internal sealed record RuntimeUiLegacyChoice(RuntimeUiLogicalRecordId Id, string Display)
+{
+    public override string ToString() => Display;
+}
 
 internal sealed record PalettePreviewChoice(int? BankIndex, string Display)
 {

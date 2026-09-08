@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 // Production adapter around the E2 structural script parser.  It reads only
 // the active VGA1/VGA2 pair and caches by both resources' identities.

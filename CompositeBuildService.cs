@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum CompositeBuildMode { PristineOnly, Full }
 internal enum CompositeBuildStage { ValidateContext, ValidateBaseline, ValidateProjectInputs, ValidateVariant, PrepareDisposableVariant, ApplyDataTransformations, ApplyGraphicsTransformations, ApplyFontTransformations, ApplyRuntimeUiTransformations, ApplyExecutableTransformation, ValidateOutput }
@@ -44,7 +44,7 @@ internal sealed class CompositeBuildService
     {
         Validate(project, variant);
         return new(PristineManifestService.GameIdFor(project.GameProfile), variant.VariantId, variant.RuntimeKind,
-            GetProjectVariantCode(project, variant), _directories.GetVariantDirectoryPath(project, variant), project.BaselineFingerprint, mode, OrderedStages, BuildCapabilities(project, variant));
+            GetProjectVariantCode(project, variant), GetEditionDirectoryPath(project, variant), project.BaselineFingerprint, mode, OrderedStages, BuildCapabilities(project, variant));
     }
 
     public CompositeBuildResult Build(ProjectContext project, VariantContext variant, CompositeBuildMode mode)
@@ -67,7 +67,7 @@ internal sealed class CompositeBuildService
         }
         if (mode == CompositeBuildMode.Full && !HasRequiredFutureStages(applicable))
             return Finish(CompositeBuildStatus.NotFullyConfigured, results, plan, CompositeBuildStage.ApplyExecutableTransformation, "Future transformations", false, "Required transformation stages are not configured: " + string.Join(", ", MissingFutureStages(applicable)) + ".");
-        DisposableVariantBuildResult baseBuild = _disposable.Build(project, variant);
+        DisposableVariantBuildResult baseBuild = _disposable.Build(project, variant, GetProjectVariantCode(project, variant));
         if (baseBuild.Status != DisposableVariantBuildStatus.Success) return Finish(CompositeBuildStatus.DisposableBuildFailed, results, plan, CompositeBuildStage.PrepareDisposableVariant, "DisposableVariantBuildService", false, baseBuild.Status.ToString());
         results.Add(new(CompositeBuildStage.PrepareDisposableVariant, "DisposableVariantBuildService", true, true, "Pristine tree ready"));
         foreach (ICompositeBuildStep step in applicable)
@@ -76,7 +76,7 @@ internal sealed class CompositeBuildService
             if (error is not null) return Finish(CompositeBuildStatus.TransformationFailed, results, plan, step.Stage, step.Name, true, error);
             results.Add(new(step.Stage, step.Name, true, true, "Executed"));
         }
-        VariantDirectoryOperationResult owned = _directories.ValidateOwnedVariantDirectory(project, variant);
+        VariantDirectoryOperationResult owned = _directories.ValidateOwnedVariantEditionDirectory(project, variant, GetProjectVariantCode(project, variant));
         if (owned.Status != VariantDirectoryOperationStatus.AlreadyValid) return Finish(CompositeBuildStatus.ValidationFailed, results, plan, CompositeBuildStage.ValidateOutput, "Output", true, owned.Status.ToString());
         try { VariantManifestService.Write(project, variant, _directories, mode, GetRuntimeArtifactNames(project, variant), GetProjectVariantCode(project, variant)); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -98,6 +98,16 @@ internal sealed class CompositeBuildService
     {
         Validate(project, variant);
         return ProjectVariantOwnership.NormalizeCode(project, _projectVariantProvider?.Invoke(project, variant) ?? ProjectVariantOwnership.OriginalCode);
+    }
+
+    /// <summary>Authoritative owned output identity for one runnable
+    /// (Installation + Project + Edition + Runtime). Every consumer
+    /// (build, status, launch, manifest) resolves through this path so
+    /// editions coexist instead of replacing each other.</summary>
+    internal string GetEditionDirectoryPath(ProjectContext project, VariantContext variant)
+    {
+        Validate(project, variant);
+        return _directories.GetVariantEditionDirectoryPath(project, variant, GetProjectVariantCode(project, variant));
     }
 
     private IReadOnlyList<ICompositeBuildStep> ApplicableSteps(ProjectContext project, VariantContext variant)

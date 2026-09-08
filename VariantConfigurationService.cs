@@ -1,8 +1,17 @@
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
-internal sealed record VariantEntry(string DisplayName, string DataFile, bool Enabled, int Order, string Code = "", string ExeFile = "");
+internal sealed record VariantEntry(string DisplayName, string DataFile, bool Enabled, int Order, string Code = "", string ExeFile = "")
+{
+    /// <summary>Stable human-friendly label for selection controls
+    /// (never the record debug representation): DisplayName (Code) — ExeFile.</summary>
+    internal string DisplayLabel => string.IsNullOrWhiteSpace(Code) || string.IsNullOrWhiteSpace(ExeFile)
+        ? $"{DisplayName} ({DataFile})"
+        : $"{DisplayName} ({Code}) — {ExeFile}";
+
+    public override string ToString() => DisplayLabel;
+}
 
 internal sealed record VariantEntryStatus(VariantEntry Entry, bool IsAvailable);
 

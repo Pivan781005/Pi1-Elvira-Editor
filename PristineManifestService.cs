@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum PristineManifestInitializationStatus { Initialized, AlreadyValid, BaselineConflict, UnsupportedExecutableVersion, InvalidSource }
 internal enum BaselineValidationStatus { MatchesBaseline, ExternalInstallationChange, MissingPristineFile, UnexpectedFile, CurrentDiffersFromBaseline, ManifestMissing, ManifestInvalid, UnsupportedSchema, UnsupportedExecutableVersion }

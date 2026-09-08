@@ -1,6 +1,6 @@
 using System.Drawing;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Read-only explanation for an exact-palette PNG validation failure.</summary>
 internal sealed class PaletteValidationDialog : Form

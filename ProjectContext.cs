@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>
 /// Immutable, read-only description of one opened physical game installation.

@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>
 /// A compact presentation model for the active Runtime + Edition workflow.

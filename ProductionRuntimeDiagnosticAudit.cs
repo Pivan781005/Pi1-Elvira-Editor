@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 // O3 validation helper. It exercises only in-memory metadata and read-only
 // parser loads; it never opens the WinForms UI or writes a game installation.

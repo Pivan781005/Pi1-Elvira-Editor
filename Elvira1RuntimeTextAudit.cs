@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 // O1 diagnostic only.  It deliberately does not alter the production Runtime
 // classifier: code-flow evidence is incomplete, so unproven entries remain

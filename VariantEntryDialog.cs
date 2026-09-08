@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Small metadata-only editor for a launcher variant. It never touches a data file.</summary>
 internal sealed class VariantEntryDialog : Form

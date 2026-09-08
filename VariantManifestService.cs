@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Deterministic, editor-owned description of one completed variant
 /// output. This file is diagnostic metadata, never evidence of launch readiness.
@@ -34,9 +34,10 @@ internal static class VariantManifestService
         if (!ReferenceEquals(project, variant.Project))
             throw new ArgumentException("VariantContext does not belong to the project.", nameof(variant));
 
-        VariantDirectoryOperationResult owned = directories.ValidateOwnedVariantDirectory(project, variant);
+        VariantDirectoryOperationResult owned = directories.ValidateOwnedVariantEditionDirectory(project, variant,
+            ProjectVariantOwnership.NormalizeCode(project, projectCode ?? ProjectVariantOwnership.OriginalCode));
         if (owned.Status != VariantDirectoryOperationStatus.AlreadyValid)
-            throw new InvalidDataException("A variant manifest may be written only to an editor-owned variant directory.");
+            throw new InvalidDataException("A variant manifest may be written only to an editor-owned runtime+edition variant directory.");
 
         VariantManifest manifest = Create(project, variant, owned.Path, mode, runtimeArtifactNames, projectCode);
         string destination = Path.Combine(owned.Path, FileName);

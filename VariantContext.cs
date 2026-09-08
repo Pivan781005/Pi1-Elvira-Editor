@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Stable semantic identities for the built-in runtime variants.</summary>
 internal enum BuiltInVariantId { Elvira1Vga, Elvira1Ega, Elvira2Vga }

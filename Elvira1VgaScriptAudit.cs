@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 // Read-only diagnostic for Elvira I DOS VGA1/VGA2 pairs. It is deliberately
 // not connected to the UI or Automatic palette selection.

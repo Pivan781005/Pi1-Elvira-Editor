@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 // Bootstrap semantic keys. R7B will move translations to JSON without changing
 // these control-facing identities.

@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>
 /// Frozen, evidence-backed Elvira II production facts.  This is metadata and

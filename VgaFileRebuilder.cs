@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed class VgaFileRebuilder
 {

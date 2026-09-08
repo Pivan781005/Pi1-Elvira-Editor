@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed record UiLocaleDescriptor(string Id, string SourcePath)
 {

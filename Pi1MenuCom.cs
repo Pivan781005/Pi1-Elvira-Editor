@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Deterministic project-owned 8086 .COM keyboard helper. No timer, DOS clock, or timeout code exists.</summary>
 internal static class Pi1MenuCom

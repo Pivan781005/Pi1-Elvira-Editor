@@ -1,10 +1,11 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Variant-local adapter for the proven RUNIT V2 split-font base only.</summary>
 internal sealed class RunItCompositeBuildStep : ICompositeBuildStep
 {
     private readonly VariantDirectoryService _directories;
-    public RunItCompositeBuildStep(VariantDirectoryService directories) => _directories = directories ?? throw new ArgumentNullException(nameof(directories));
+    private readonly string _projectCode;
+    public RunItCompositeBuildStep(VariantDirectoryService directories, string projectCode = "EN") => (_directories, _projectCode) = (directories ?? throw new ArgumentNullException(nameof(directories)), projectCode);
     public CompositeBuildStage Stage => CompositeBuildStage.ApplyExecutableTransformation;
     public string Name => "RUNIT V2 split-font bootstrap";
     public bool AppliesTo(VariantContext variant) => variant is not null && variant.RuntimeKind == VariantRuntimeKind.Elvira2Vga;
@@ -19,7 +20,7 @@ internal sealed class RunItCompositeBuildStep : ICompositeBuildStep
     }
     public string? Execute(ProjectContext project,VariantContext variant)
     {
-        try{string root=_directories.GetVariantDirectoryPath(project,variant),source=Path.Combine(root,Elvira2ProductionProfile.ActiveExecutable),output=Path.Combine(root,Elvira2ProductionProfile.GeneratedSlovakExecutable);
+        try{string root=_directories.GetVariantEditionDirectoryPath(project,variant,_projectCode),source=Path.Combine(root,Elvira2ProductionProfile.ActiveExecutable),output=Path.Combine(root,Elvira2ProductionProfile.GeneratedSlovakExecutable);
         // R9D: fail closed with a Missing vs Unsupported distinction; never patch an unknown binary.
         SupportedExecutableClassification identity=SupportedExecutableIdentityService.ClassifyRunIt(source);
         if(identity.Identity!=SupportedExecutableIdentity.SupportedPacked)return SupportedExecutableIdentityService.DescribeBlocked(identity,"RUNIT bootstrap");

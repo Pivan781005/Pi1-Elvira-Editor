@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum GraphicsEditScope { Shared, RuntimeSpecific }
 internal enum GraphicsApplicabilityStatus { Shared, RuntimeSpecific, Unsupported }

@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Shared, hash-gated EXEPACK RB canonicalizer. It has no file side effects.</summary>
 internal static class ExepackCanonicalizer

@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 // Phase 6C9O2B2 diagnostic only. It consumes the corrected F34C raw-stack
 // trace offline; it does not open a UI and has no GAMEPC write path.

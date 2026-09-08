@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Shared immutable-original/temporary-active replacement primitives for GAMEPC and VGA resources.</summary>
 internal static class SafeDeployer

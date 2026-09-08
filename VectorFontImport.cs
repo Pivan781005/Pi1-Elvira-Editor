@@ -3,7 +3,7 @@ using System.Drawing.Text;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed record VectorFontRasterOptions(string FamilyName, float PixelSize, int XOffset, int YOffset, bool ComposeDiacritics);
 

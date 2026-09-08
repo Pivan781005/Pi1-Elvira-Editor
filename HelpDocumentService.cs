@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed record HelpTopic(string Id, string Group, string Title, string Body);
 internal sealed record HelpDocument(string LocaleId, IReadOnlyList<HelpTopic> Topics);

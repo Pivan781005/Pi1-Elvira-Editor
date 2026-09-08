@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum FontPreviewMode
 {

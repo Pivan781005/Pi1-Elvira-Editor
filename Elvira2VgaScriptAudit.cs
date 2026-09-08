@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 // N7 read-only diagnostic. Deliberately separate from Elvira I and production UI.
 internal static class Elvira2VgaScriptAudit

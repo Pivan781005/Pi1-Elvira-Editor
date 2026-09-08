@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed class FontEditorForm : Form
 {
@@ -25,6 +25,7 @@ internal sealed class FontEditorForm : Form
     private readonly Button _exportFont = new();
     private readonly Button _copyOriginalToEdited = new();
     private readonly Button _reset = new();
+    private readonly Button _clearGlyph = new();
     private readonly Button _copyHex = new();
     private readonly Button _shiftLeft = new();
     private readonly Button _shiftRight = new();
@@ -62,6 +63,33 @@ internal sealed class FontEditorForm : Form
     internal bool HasFontVariantPresentationForTest => _projectVariantInfo.Parent is not null;
     internal VariantContext? BoundProjectVariantForTest => _fontVariant;
     internal int ProjectEditCountForTest => _fontProjectState?.Edits.Count ?? 0;
+    internal int CurrentGlyphForTest => _current?.ByteValue ?? -1;
+    internal GlyphMatrixControl EditedMatrixForTest => _editedMatrix;
+    internal void LoadExecutableForTest(string path) => LoadRunVga(path, showErrors: false);
+    internal bool GlyphHasEditedForTest(int byteValue) => _glyphs[byteValue].HasEdited;
+    internal byte[] GlyphOriginalForTest(int byteValue) => _glyphs[byteValue].Original.ToArray();
+    internal byte[] GlyphEditedForTest(int byteValue) => _glyphs[byteValue].Edited.ToArray();
+    internal bool SelectGlyphForTest(int byteValue)
+    {
+        int index = _list.Items.IndexOf(byteValue);
+        if (index < 0) return false;
+        _list.SelectedIndex = index;
+        return _current?.ByteValue == byteValue;
+    }
+    internal void ToggleCurrentPixelForTest(int row, int column) => EditedMatrixOnPixelToggled(this, new GlyphPixelToggleEventArgs(row, column));
+    internal void ShiftCurrentGlyphForTest(int dx, int dy) => ShiftCurrentGlyph(dx, dy);
+    // Headless-safe mirror of the Reset-glyph click path (PerformClick is a
+    // no-op on an unshown form because the button cannot take selection).
+    internal bool IsClearGlyphEnabledForTest => _clearGlyph.Enabled;
+    internal void ClearCurrentGlyphForTest() => ClearCurrentGlyph();
+    internal void ResetCurrentGlyphForTest()
+    {
+        if (_current is null || IsReservedHudEraseGlyph(_current)) return;
+        _current.Reset();
+        RefreshEditedActionState();
+        UpdateMatricesOnly();
+        RefreshListItem(_current.ByteValue);
+    }
 
     public FontEditorForm(string? initialGameDirectory = null)
     {
@@ -382,6 +410,11 @@ internal sealed class FontEditorForm : Form
             RefreshListItem(_current.ByteValue);
         };
 
+        _clearGlyph.Text = UiText.Get("ClearGlyph");
+        _clearGlyph.SetBounds(465, 604, 110, 28);
+        _clearGlyph.Enabled = false;
+        _clearGlyph.Click += (_, _) => ClearCurrentGlyph();
+
         _copyHex.Text = UiText.Get("CopyHex");
         _copyHex.SetBounds(585, 570, 100, 30);
         _copyHex.Enabled = false;
@@ -403,7 +436,7 @@ internal sealed class FontEditorForm : Form
         _shiftRight.Click += (_, _) => ShiftCurrentGlyph(1, 0);
         _shiftUp.Click += (_, _) => ShiftCurrentGlyph(0, -1);
         _shiftDown.Click += (_, _) => ShiftCurrentGlyph(0, 1);
-        foreach (Button button in new[] { _reset, _copyHex, _shiftLeft, _shiftUp, _shiftDown, _shiftRight, _fullCharacterSet })
+        foreach (Button button in new[] { _reset, _clearGlyph, _copyHex, _shiftLeft, _shiftUp, _shiftDown, _shiftRight, _fullCharacterSet })
             ConfigureCenteredButton(button);
 
         _shiftInfo.SetBounds(700, 604, 240, 24);
@@ -420,6 +453,7 @@ internal sealed class FontEditorForm : Form
         SetStatusText(UiText.Get("FontReadyHint"));
 
         main.Controls.Add(_status);
+        main.Controls.Add(_clearGlyph);
         main.Controls.Add(_shiftInfo);
         main.Controls.Add(_shiftRight);
         main.Controls.Add(_shiftDown);
@@ -666,8 +700,9 @@ internal sealed class FontEditorForm : Form
         _toolTip.SetToolTip(_selected, reserved ? UiText.Get("ReservedHudEraseGlyphTip") : string.Empty);
         _toolTip.SetToolTip(_editedMatrix, reserved ? UiText.Get("ReservedHudEraseGlyphTip") : string.Empty);
         _reset.Enabled = _current.IsLoadedFromSource && !reserved;
+        _clearGlyph.Enabled = CanBeginEditingCurrentGlyph();
         _copyHex.Enabled = _current.HasEdited;
-        SetShiftButtonsEnabled(_current.HasEdited && !reserved);
+        SetShiftButtonsEnabled(CanBeginEditingCurrentGlyph());
         UpdateFontProjectPresentation();
         UpdateMatricesOnly();
     }
@@ -686,15 +721,41 @@ internal sealed class FontEditorForm : Form
         byte[] edited = reserved
             ? FontSlotMetadata.GetCanonicalBytes(_loaded!, _current.ByteValue)
             : (_current.HasEdited ? _current.Edited : new byte[8]);
-        _editedMatrix.SetGlyph(edited, _current.HasEdited && !reserved, _advanced.Checked && !reserved);
+        // V8.3: editability answers "may the user begin editing", not "does
+        // a working copy already exist". A fresh supported glyph keeps its
+        // matrix (and shift actions) live so the first real click reaches
+        // the lazy working-copy handler instead of being swallowed.
+        _editedMatrix.SetGlyph(edited, CanBeginEditingCurrentGlyph(), _advanced.Checked && !reserved);
         _originalHex.Text = UiText.Get("OriginalHex") + " " + ToHex(_current.Original);
         _editedHex.Text = _current.HasEdited ? UiText.Get("EditedHex") + " " + ToHex(_current.Edited) : UiText.Get("EditedHex") + " [EMPTY]";
         _shiftInfo.Text = _current.HasEdited
             ? string.Format(UiText.Get("GlyphShiftInfo"), _current.ShiftX, _current.ShiftY, _current.OutsidePixelCount)
             : string.Format(UiText.Get("GlyphShiftInfo"), 0, 0, 0);
-        SetShiftButtonsEnabled(_current.HasEdited && !reserved);
+        SetShiftButtonsEnabled(CanBeginEditingCurrentGlyph());
+        _clearGlyph.Enabled = CanBeginEditingCurrentGlyph();
         UpdatePreview();
     }
+
+    /// <summary>V8.3b Clear glyph: replaces the Edited working copy with an
+    /// explicit all-zero 8-byte bitmap. Same mutation gates as pixel/shift
+    /// editing (reserved/unsupported slots stay disabled); Reset semantics
+    /// are untouched.</summary>
+    private void ClearCurrentGlyph()
+    {
+        if (_current is null || !CanBeginEditingCurrentGlyph()) return;
+        _current.ClearToZero();
+        RefreshEditedActionState();
+        UpdateMatricesOnly();
+        UpdateFontStatusSummary();
+        RefreshListItem(_current.ByteValue);
+    }
+
+    /// <summary>V8.3 editability model: the EDITED matrix accepts a first
+    /// mutation when a source bitmap exists, the slot is supported and not
+    /// reserved. HasEdited is deliberately not part of this predicate.</summary>
+    private bool CanBeginEditingCurrentGlyph() =>
+        _current is not null && !IsReservedHudEraseGlyph(_current) &&
+        _loaded is not null && _loaded.CanInitializeEdited && _current.IsLoadedFromSource;
 
     private void UpdateFontProjectPresentation()
     {
@@ -727,9 +788,26 @@ internal sealed class FontEditorForm : Form
         _projectVariantInfo.Text = _fontVariant.DisplayName + " — " + scope + "; " + bank;
     }
 
+    /// <summary>V8.2 lazy working copy: the first mutating action on a normal
+    /// editable glyph clones ORIGINAL into the edited working copy, then the
+    /// requested mutation applies in the same operation. Viewing/selecting
+    /// never creates state; protected 0x81 never becomes editable.</summary>
+    private bool EnsureEditedWorkingCopyForMutation()
+    {
+        // Same gate as the matrix editability model above, so every gesture
+        // the control accepts also succeeds here in the same operation.
+        if (_current is null || !CanBeginEditingCurrentGlyph()) return false;
+        if (_current.HasEdited) return true;
+        _current.CopyOriginalToEdited();
+        RefreshEditedActionState();
+        RefreshListItem(_current.ByteValue);
+        return true;
+    }
+
     private void EditedMatrixOnPixelToggled(object? sender, GlyphPixelToggleEventArgs e)
     {
-        if (_current is null || !_current.HasEdited || IsReservedHudEraseGlyph(_current)) return;
+        if (_current is null || IsReservedHudEraseGlyph(_current)) return;
+        if (!EnsureEditedWorkingCopyForMutation()) return;
         _current.ToggleEditedPixel(e.Row, e.Column);
         UpdateMatricesOnly();
         UpdateFontStatusSummary();
@@ -738,7 +816,8 @@ internal sealed class FontEditorForm : Form
 
     private void ShiftCurrentGlyph(int dx, int dy)
     {
-        if (_current is null || !_current.HasEdited || IsReservedHudEraseGlyph(_current)) return;
+        if (_current is null || IsReservedHudEraseGlyph(_current)) return;
+        if (!EnsureEditedWorkingCopyForMutation()) return;
         _current.ShiftEdited(dx, dy);
         UpdateMatricesOnly();
         UpdateFontStatusSummary();
@@ -941,7 +1020,7 @@ internal sealed class FontEditorForm : Form
             if (!glyph.IsLoadedFromSource)
                 continue;
             if (IsReservedHudEraseGlyph(glyph))
-                glyph.ReplaceEdited(FontSlotMetadata.GetCanonicalBytes(_loaded!, glyph.ByteValue));
+                glyph.ReplaceReservedCanonical(FontSlotMetadata.GetCanonicalBytes(_loaded!, glyph.ByteValue));
             else
                 glyph.CopyOriginalToEdited();
             copied++;
@@ -1077,7 +1156,10 @@ internal sealed class FontEditorForm : Form
         _fullCharacterSet.Text = UiText.Get("FullCharacterSet");
         _advanced.Text = UiText.Get("AdvancedColumns");
         _reset.Text = UiText.Get("ResetGlyph");
+        _clearGlyph.Text = UiText.Get("ClearGlyph");
         _copyHex.Text = UiText.Get("CopyHex");
+        _toolTip.SetToolTip(_reset, UiText.Get("ResetGlyphTip"));
+        _toolTip.SetToolTip(_clearGlyph, UiText.Get("ClearGlyphTip"));
         _toolTip.SetToolTip(_shiftLeft, UiText.Get("GlyphShiftLeft"));
         _toolTip.SetToolTip(_shiftRight, UiText.Get("GlyphShiftRight"));
         _toolTip.SetToolTip(_shiftUp, UiText.Get("GlyphShiftUp"));
@@ -1133,6 +1215,7 @@ internal sealed class FontEditorForm : Form
         RunVgaFontLayout.OriginalPackedAscii98 => UiText.Get("Font.Layout.OriginalPackedAscii98"),
         RunVgaFontLayout.OriginalAscii98 => UiText.Get("Font.Layout.OriginalAscii98"),
         RunVgaFontLayout.ExtendedCp852V5 => UiText.Get("Font.Layout.ExtendedCp852V5"),
+        RunVgaFontLayout.ExtendedCp852RunEga => UiText.Get("Font.Layout.ExtendedCp852RunEga"),
         RunVgaFontLayout.ExtendedCp852RunIt => UiText.Get("Font.Layout.ExtendedCp852RunIt"),
         _ => UiText.Get("Font.Layout.Unknown")
     };
@@ -1142,7 +1225,7 @@ internal sealed class FontEditorForm : Form
         RunVgaFontLayout.OriginalPackedAscii80 => UiText.Get("Font.Range.OriginalPackedAscii80"),
         RunVgaFontLayout.OriginalPackedAscii98 => UiText.Get("Font.Range.OriginalPackedAscii98"),
         RunVgaFontLayout.OriginalAscii98 => UiText.Get("Font.Range.OriginalAscii98"),
-        RunVgaFontLayout.ExtendedCp852V5 or RunVgaFontLayout.ExtendedCp852RunIt => UiText.Get("Font.Range.ExtendedCp852"),
+        RunVgaFontLayout.ExtendedCp852V5 or RunVgaFontLayout.ExtendedCp852RunEga or RunVgaFontLayout.ExtendedCp852RunIt => UiText.Get("Font.Range.ExtendedCp852"),
         _ => string.Empty
     };
 

@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum PristineFileClassification { Immutable, MutableBackedUp, GeneratedIgnored }
 internal enum PristineFileRole { Executable, GameData, Resource, Launcher, Config, Save, EditorGenerated, Unknown }

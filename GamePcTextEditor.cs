@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed record GamePcStringEntry(int Index, int Offset, int ByteLength, byte[] OriginalBytes)
 {

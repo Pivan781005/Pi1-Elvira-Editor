@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 // O2A4 diagnostic only.  This is deliberately offline and has no UI or GAMEPC
 // write path.  RAW keeps every renderer event; TEXT_CANDIDATE removes only the

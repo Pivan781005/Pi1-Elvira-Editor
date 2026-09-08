@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal static class PaletteTools
 {

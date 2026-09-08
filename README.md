@@ -1,4 +1,4 @@
-# π1 Elvira I & II Editor v1.0
+# π1 Elvira Editor v1.0
 
 A Windows editor for the original DOS releases of **Elvira: Mistress of the Dark** and **Elvira II: The Jaws of Cerberus**. It edits VGA resources, GAMEPC text, and the games' extended CP852-compatible bitmap fonts.
 
@@ -32,7 +32,7 @@ The editor uses a clean four-layer architecture:
 **Generated Runnable Identity**
 A runnable variant is the combination: **Installation + Project + Edition + Runtime Target**
 
-Output artifacts are materialized into **owned, disposable VARIANTS** directories under `<GameRoot>\VARIANTS\<KEY>\`, never written directly into the pristine GameRoot.
+Output artifacts are materialized into **owned, disposable VARIANTS** directories under `<GameRoot>\VARIANTS\<KEY>\<EDITION>\` (e.g. `VARIANTS\E1VGA\SK`), never written directly into the pristine GameRoot. Editions coexist: each Full build starts from a pristine-only copy inside its own edition directory.
 
 ### GameRoot Policy — Important Nuance
 
@@ -211,7 +211,7 @@ Run/Debug does NOT automatically rebuild unless explicitly invoked.
 6. `ApplyDataTransformations` — text translations materialized
 7. `ApplyGraphicsTransformations` — graphics edits materialized (VGA rebuild)
 8. `ApplyFontTransformations` — stage exists; validates/preflights project font state via `NoProjectChangesBuildStep`; normal saved font override materialization is unavailable in v1.0 (preflight fails if saved overrides exist)
-9. `ApplyRuntimeUiTransformations` — stage exists; validates/preflights Runtime UI project state via `RuntimeUiProjectBuildStep`; normal saved Runtime UI override materialization is unavailable in v1.0 (preflight fails if saved overrides exist)
+9. `ApplyRuntimeUiTransformations` — stage exists; validates/preflights Runtime UI project state via `RuntimeUiProjectBuildStep`; validated VGA structured overrides (Pause.menu/Confirm.generic/Save.overwrite) and audited EGA overrides materialize into the owned VARIANT output by `TranslationAwareExecutableBuildStep`; all other Runtime UI overrides still fail the build
 10. `ApplyExecutableTransformation` — executable built (RUNVGA/RUNEGA/RUNIT)
 11. `ValidateOutput` — owned variant directory structurally valid + manifest written
 
@@ -222,7 +222,7 @@ Run/Debug does NOT automatically rebuild unless explicitly invoked.
 | **Text** | YES (isolated per edition) | YES — `SelectedTranslationProjectBuildStep` |
 | **Graphics** | YES (isolated, runtime-scoped) | YES — `GraphicsProjectMaterializationBuildStep` |
 | **Font** | YES (isolated per edition) | NO — `NoProjectChangesBuildStep` fails preflight if saved font overrides exist |
-| **Runtime UI** | YES (isolated, evidence-validated) | NO — `RuntimeUiProjectBuildStep` fails preflight if saved overrides exist |
+| **Runtime UI** | YES (isolated, evidence-validated) | VGA Pause.menu/Confirm.generic/Save.overwrite + audited EGA records (see below); all other overrides fail preflight |
 | **Executable** | N/A (derived) | YES — `TranslationAwareExecutableBuildStep` (RUNVGA/RUNEGA/RUNIT) |
 
 **Controlled Exception:** Standalone Font Editor "Apply changes to EXE" writes directly to GameRoot (R9D-gated, O-backup preserved). This is NOT the normal Project/Edition/Runtime build path.
@@ -230,7 +230,7 @@ Run/Debug does NOT automatically rebuild unless explicitly invoked.
 ### Key Concepts
 
 - `DisposableVariantBuildService` — pristine-only copy, manifest-driven
-- `VariantDirectoryService` — `<VARIANTS>\<KEY>` + `.pi1-variant-owner.json` ownership marker
+- `VariantDirectoryService` — `<VARIANTS>\<KEY>\<EDITION>` + `.pi1-variant-owner.json` ownership marker (runtime+edition scoped; schema 2 binds the edition)
 - `ActiveProjectCompositeBuildSteps` — 5 steps for active project (Translation, Graphics, Font, Runtime UI, Executable)
 - `VariantManifestService` — `variant-manifest.json` with provenance
 - `ProjectVariantOwnership` — `EN` = immutable baseline; owned state at `Project\Projects\<CODE>\`
@@ -248,6 +248,7 @@ Run/Debug does NOT automatically rebuild unless explicitly invoked.
 - Graphics isolated (`graphics-edits.json`)
 - Font isolated (`font-edits.json`)
 - Runtime UI isolated (`runtime-ui.json`)
+- The Original (`EN`) edition is read-only: explicit edit attempts explain this instead of silently doing nothing.
 
 State sharing between runtime targets inside the SAME edition is proven only where explicitly implemented. No sharing across projects or editions.
 
@@ -265,13 +266,23 @@ Evidence terminology used by the project:
 - **Proven** Runtime UI bank: module `0x31000..0x317FF` / physical `0x33400..0x33BFF` / segment `0x3100`
 - **Rejected**: `0x30800..0x30FFF` (startup-written, not persistent runtime UI)
 - 8 records (`F000`–`F007`): Pause.menu (`ProvenLive`), Confirm.generic (`ProvenByBinary`), Save.prompt (`ProvenLive`), Save.failed (`ProvenByBinary`), Restore.loadFailed (`ProvenByBinary`), Restore.fileNotFound (`ProvenByBinary`), Disk.retry (`ProvenByBinary`), Save.overwrite (`ProvenByBinary`)
+- R9F audit: all eight records have audited edit contracts and are editable/materializable. Simple messages (`Save.failed`, `Restore.loadFailed`, `Restore.fileNotFound`, `Disk.retry`) accept a 1..max message after their frozen indent prefix; structured records (`Pause.menu`, `Confirm.generic`, `Save.prompt`, `Save.overwrite`) accept one semantic field with frozen separators, fixed columns and button lines (`Continue`/`Quit`, `Yes`/`No`) preserved byte-exact. Button/input-field geometry is frozen (read-only subfields). Originals decode authoritatively from the canonical RUNEGA source spans; the output bank lives at the same `0x33400` offsets in the generated executable. Capacity fit alone never implies editability: unstructured values fail validation with hotspot errors instead of a misleading Valid.
+- R9F V3 storage limits: record storage stays the fixed English envelope (e.g. `Save.failed` 18 bytes incl. NUL) because variable-length bank relocation is NOT proven safe: the 9-byte bridge holds no selector/offset table, record spans are non-uniform (no algorithmic stride), and no debugger/memory evidence shows the free bank areas are never runtime scratch. A longer translation is rejected with its composed-vs-envelope byte counts, never truncated. Storage capacity (bank bytes) and screen geometry (line width, fixed columns, hotspots) are validated and reported as distinct conditions.
+- R9F V3 semantic editor: double-click (or Edit) opens the structured record (Title/Prompt/Message plus read-only buttons/questions/geometry with reasons). The grid keeps Record/Original/Project/Validation/Details with field-only presentation; raw CR separators, padding and NUL are never shown to the translator.
+- R9F V4 hotspot labels (RUNEGA in-place materializer only): `Continue`/`Quit`/`Yes`/`No` are translatable fixed-width slots — TEXT MAY CHANGE, HOTSPOT GEOMETRY MUST NOT CHANGE. Shorter labels are space-padded so following columns never move; overlong labels are rejected with their slot width, never truncated (e.g. `Continue`→`Pokračuj` and `Yes`→`Áno` fit exactly; a 6-character label does not fit a 4-wide EGA `Quit` slot and is rejected). EGA record byte length is invariant under button translation.
+- R9F V3 runtime-scoped state: `runtime-ui.json` schema v2 keys every override by `(Runtime, LogicalRecordId)` — `(Elvira1Ega, PauseMenu)` and `(Elvira1Vga, PauseMenu)` are independent. An EGA override never appears in a VGA view, grid, validation, build or materialization. Legacy schema-v1 files migrate deterministically (unambiguous records assigned to their only qualifying runtime; ambiguous residue kept unassigned, surfaced, never built, never silently duplicated; v1 bytes backed up to `runtime-ui.v1.backup.json` before the first validated v2 write).
 
 ### Elvira I RUNVGA
 - 8 logical records with frozen binary routes (original blocks, runtime sources, renderer/dispatcher call sites)
-- **Pause.menu** route/relocation: `ProvenLive` (live relocation test + Continue/Quit hotspot debugging)
-- Other 7 routes: `ProvenByBinary` (incl. SAVE failure path Save.failed → Disk.retry, RESTORE failure path Restore.loadFailed → Restore.fileNotFound)
-- Per-record layout/capacity mapping remains **incomplete** (R4B layout flags are constraints, not edit contracts); no frozen persistent bank, no manufactured spans
-- The grid reports proven routes as route-proven yet layout-incomplete; patching stays blocked and CompositeBuild Runtime UI override materialization is unavailable in v1.0
+- **Pause.menu / Confirm.generic / Save.overwrite**: human-proven-live variable-width structured records (DOSBox RVGBTN POC). Translated labels render and operate with frozen start anchors and lengths differing from English; the clickable hotspot is separate fixed geometry — translated labels may have variable visual lengths, fixed anchor/hotspot geometry is preserved, text and mouse hotspot are separate concepts. Hotspot width does NOT follow translated text, and not every visible character is clickable.
+- Live observations (evidence, not a per-character guarantee): `Koniec` rendered 6 characters with the fifth clickable and the final sixth outside the effective hotspot; `Nie` rendered 3 characters with the final character still clickable; `Pokračuj` resumed gameplay; `Áno` quit/overwrote correctly; no crash/corruption.
+- Production model: semantic fields (Title/Continue/Quit, Prompt/Yes/No, Message/Question/Yes/No); first labels keep ≥1 separating space before the frozen second anchor (else visual collision); second labels and message lines bounded by proven one-line visual widths (Pause option row 21 cols, Confirm/Overwrite button row 18 cols, message lines 21 cols — widest live-rendered content in this dialog family). Fitting records materialize in place; over-envelope records materialize via one deterministic append (per-record thunk + relocated record, fixed slots, retained call relocations + bridge relocations, memory-margin fix, MZ update, explicit whitelist).
+- Other 5 records (`Save.prompt`, `Save.failed`, `Restore.loadFailed`, `Restore.fileNotFound`, `Disk.retry`): genuinely read-only (route-proven yet layout-incomplete where applicable): locked cells, programmatic edits rejected without touching project state, no Reset, builds fail closed. No EGA spans are borrowed for them. RUNIT is untouched.
+
+### Variant Status and Runnable Identity
+- Runnable identity is Installation + Project + Edition + Runtime. Owned outputs live in `VARIANTS\<RuntimeKey>\<EditionCode>` (e.g. `VARIANTS\E1VGA\SK`): SK and S1 builds for the same runtime coexist independently — building one edition never deletes or replaces another, and building EGA never touches VGA outputs. The variant manifest records both runtime and edition codes.
+- Legacy flat outputs (pre-R9F files directly in `VARIANTS\E1VGA`) are detected, reported, and left untouched: they are never launched, never rebuilt in place, and never silently deleted. Recovery offers an explicit, hash-verified **Adopt legacy output** action (moves only fully manifest-proven payloads into `VARIANTS\<KEY>\<EDITION>`; anything unproven aborts untouched) as well as explicit removal. A disabled Rebuild button is explained in the recovery status line.
+- Variant Manager readiness is selection-independent: each row evaluates its own runtime+edition artifacts plus the manifest, so selecting another runtime never flips a built row. Translated Mods entries resolve per edition inside the active runtime (pristine `GAMEPC` still resolves to GameRoot); never-built editions report Missing/Not-built, never corrupt; corrupt/foreign outputs report Invalid distinctly.
 
 ### Elvira II RUNIT
 - **SAVE_FAILURE** (`F100`) — `SupportedAndMapped` / `ProvenByBinary` (mapped)
@@ -300,8 +311,8 @@ Evidence terminology used by the project:
 - **Pristine manifest** (`Baseline/pristine-manifest.json`) — schema v1, GameId, Distribution=Unknown
 - **Immutable baseline** — GAMEPC, EXE, VGA files classified `Immutable`
 - **MutableBackedUp semantics** — ELVIRA.BAT/CERBERUS.BAT backed up once to `.BAK` (immutable)
-- **Owned generated files** — in `VARIANTS\<KEY>\` with ownership marker
-- **Variant ownership marker** — `.pi1-variant-owner.json` (Schema=1, Product, GameId, VariantId, DirectoryKey, BaselineFingerprint)
+- **Owned generated files** — in `VARIANTS\<KEY>\<EDITION>` with ownership marker
+- **Variant ownership marker** — `.pi1-variant-owner.json` (Schema=2 for runtime+edition outputs: Product, GameId, VariantId, DirectoryKey, ProjectCode, BaselineFingerprint; Schema=1 legacy runtime roots)
 - **Unexpected external files** — reported, not silently deleted
 - **Recovery** — explicit, scoped (`RecoverySafetyService`)
 - **Restoration** — scoped to mutable backed-up files
@@ -424,6 +435,6 @@ PRE-R9D remains an unnumbered stabilization phase between R9C and R9D. Earlier m
 
 ---
 
-**Product Identity:** π1 Elvira I & II Editor v1.0
-**Repository:** ElviraVgaEditor (release-time rename to Pi1-Elvira-I-II-Editor planned for R11)
+**Product Identity:** π1 Elvira Editor v1.0
+**Repository:** Pi1ElviraEditor (local directory; remote: Pi1-Elvira-I-II-Editor)
 **License:** GPL-3.0

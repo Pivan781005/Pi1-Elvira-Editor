@@ -1,4 +1,4 @@
-# π1 Elvira I & II Editor Help
+# π1 Elvira Editor Help
 
 ## [getting-started] Getting Started
 Use the **Installation** selector to choose a supported VGA game. The editor remembers valid installations in your user application settings, never in the game folder. **Find games...** performs a fast, bounded check of common GOG locations and remembered paths; it does not scan entire disks automatically at startup. **Browse folder...** always lets you validate and add a game folder manually. Multiple Elvira I/II installations remain separate entries, and the selected installation identifies and activates the supported game automatically. Select English, Slovak, or Czech in **Interface language**. Use Graphics, Text, Font, and Mods & Launcher; Help is read-only and About is a short product summary.
@@ -38,7 +38,7 @@ Runtime Sound Setup creates/updates `SET PI1SND=/s` in PI1SND.BAT, not ELVIRA_MO
 ## [font] Font Editor
 Preview the original font, work in the editable copy, use **Import font...**, Export font..., Apply Font, Save Patched Copy, filters, glyph editor, Original/Edited views, shifts, and 1x/2x/4x/8x previews. "Import font..." intentionally supports more than TTF.
 
-All recovered renderers use 8 rows and show 6 columns from source bits 7..2; the two rightmost bitmap columns are renderer-inactive. Original glyph 0x81 is `00 FC FC FC FC FC FC 00`, a protected HUD erase/blanking glyph. Patched extended fonts use `FC FC FC FC FC FC FC FC` for an intentional 6x8 full-cell HUD erase. Editing, copy/reset, import, and every V5/V2 output path enforce that value; opening an older malformed patched EXE remains read-only until you explicitly create an output.
+All recovered renderers use 8 rows and show 6 columns from source bits 7..2; the two rightmost bitmap columns are renderer-inactive. Original glyph 0x81 is `00 FC FC FC FC FC FC 00`, a protected HUD erase/blanking glyph. Patched V5/RUNIT-V2 extended fonts use `FC FC FC FC FC FC FC FC` for an intentional 6x8 full-cell HUD erase. Editing, copy/reset, import, and every V5/V2 output path enforce that value; generated RUNEGA intentionally retains the original `00 FC FC FC FC FC FC 00` mask; opening an older malformed patched EXE remains read-only until you explicitly create an output.
 
 ### Elvira I / Elvira II
 Original RUNVGA table: 0x1A216..0x1A525, 784 bytes, 98 glyphs, 0x20..0x81. V5: 0x3AE60..0x3B65F, 2048 bytes, 256x8 CP852-compatible table. Original RUNIT: 0x168CA..0x16BD9, same 784-byte/98-glyph range. RUNIT V2 is split: LOW 0x20..0x81 original; HIGH 0x82..0xFF at 0x28480..0x2886F (126x8=1008), helper at 0x28870. These are validated supported executable layouts, not universal offsets.
@@ -62,7 +62,7 @@ If a game is not detected, choose the correct VGA installation; unsupported EXEs
 `RUNEGA` font/CP852 mutation is outside the supported scope. EGA/RUNEGA is a supported runtime target for CompositeBuild; only RUNEGA executable/font patching is unsupported.
 
 ## [about] About / Credits
-**π1 Elvira I & II Editor v1.0** supports VGA/EGA graphics editing, GAMEPC text/data variants, extended CP852-compatible fonts, Mods & Launcher, and a portable DOS launcher helper. Glyph `0x81` is protected as the HUD erase glyph. RUNEGA font/CP852 mutation is unsupported; EGA/RUNEGA remains a supported runtime target.
+**π1 Elvira Editor v1.0** supports VGA/EGA graphics editing, GAMEPC text/data variants, extended CP852-compatible fonts, Mods & Launcher, and a portable DOS launcher helper. Glyph `0x81` is protected as the HUD erase glyph. RUNEGA font/CP852 mutation is unsupported; EGA/RUNEGA remains a supported runtime target.
 
 Project: `https://github.com/Pivan781005/Pi1-Elvira-I-II-Editor`
 

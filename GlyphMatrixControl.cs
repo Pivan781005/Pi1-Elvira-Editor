@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed class GlyphMatrixControl : Control
 {
@@ -26,6 +26,27 @@ internal sealed class GlyphMatrixControl : Control
         Cursor = editable ? Cursors.Hand : Cursors.Default;
         Invalidate();
     }
+
+    internal bool IsEditableForTest => _editable;
+
+    /// <summary>V8.3 headless simulation of the real mouse path: identical
+    /// hit-testing and the same OnMouseDown entry point a physical click
+    /// uses. Returns false when the control itself would ignore the gesture
+    /// (non-editable matrix or out-of-grid coordinates).</summary>
+    internal bool SimulatePixelClickForTest(int row, int column)
+    {
+        if (row < 0 || row > 7 || column < 0 || column > 7 || !_editable)
+            return false;
+        int cell = Math.Max(1, Math.Min(ClientSize.Width, ClientSize.Height) / 8);
+        int gridW = cell * 8, gridH = cell * 8;
+        int x0 = (ClientSize.Width - gridW) / 2, y0 = (ClientSize.Height - gridH) / 2;
+        OnMouseDown(new MouseEventArgs(MouseButtons.Left, 1, x0 + column * cell + cell / 2, y0 + row * cell + cell / 2, 0));
+        return true;
+    }
+
+    /// <summary>Headless simulation of the real arrow-key path through the
+    /// same OnKeyDown entry point physical keys use.</summary>
+    internal void SimulateShiftKeyForTest(Keys key) => OnKeyDown(new KeyEventArgs(key));
 
     protected override void OnPaint(PaintEventArgs e)
     {

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>
 /// Project-owned Game Text translation state.  It deliberately stores logical
@@ -141,17 +141,17 @@ internal sealed class TranslationProjectService
     }
 
     /// <summary>Explicit build-only projection.  The destination is validated as the
-    /// exact editor-owned runtime directory; no installation-root file is ever written.</summary>
+    /// exact editor-owned runtime+edition directory; no installation-root file is ever written.</summary>
     internal string MaterializeOwnedVariantDataFile(ProjectContext project, VariantContext runtime, VariantDirectoryService directories, TranslationProjectVariant translation)
     {
         project = RequireProject(project);
         if (runtime is null || !ReferenceEquals(runtime.Project, project)) throw new ArgumentException("Runtime must belong to the project.", nameof(runtime));
-        if (directories.ValidateOwnedVariantDirectory(project, runtime).Status != VariantDirectoryOperationStatus.AlreadyValid)
-            throw new InvalidOperationException("The target runtime directory is not editor-owned and ready.");
+        if (directories.ValidateOwnedVariantEditionDirectory(project, runtime, translation.Code).Status != VariantDirectoryOperationStatus.AlreadyValid)
+            throw new InvalidOperationException("The target runtime+edition directory is not editor-owned and ready.");
         string source = Path.Combine(project.GameRoot, runtime.LogicalDataFileName);
         IReadOnlyList<GamePcStringEntry> entries = GamePcTextEditor.LoadEntries(source, project.GameProfile);
         byte[] data = GamePcTextEditor.BuildEditedData(source, translation.Edits, entries, GamePcTextEditor.GetEncoding("CP852"), project.GameProfile, entries);
-        string destination = Path.Combine(directories.GetVariantDirectoryPath(project, runtime), translation.DataFile);
+        string destination = Path.Combine(directories.GetVariantEditionDirectoryPath(project, runtime, translation.Code), translation.DataFile);
         if (File.Exists(destination)) throw new IOException($"Generated translation output already exists: {destination}");
         string temporary = destination + ".tmp";
         try

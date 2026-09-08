@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum RunItBootstrapState { Unsupported, OriginalPacked, CanonicalUnpackedAscii98, ExtendedCp852 }
 

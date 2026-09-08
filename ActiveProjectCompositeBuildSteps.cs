@@ -1,4 +1,4 @@
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 /// <summary>Explicit snapshot of editor project state consumed by one authorized
 /// composite build. It is never persisted in the pristine game root.</summary>
@@ -18,10 +18,10 @@ internal static class ActiveProjectCompositeBuildFactory
         return
         [
             new SelectedTranslationProjectBuildStep(translations, directories, input.Translation),
-            new GraphicsProjectMaterializationBuildStep(directories, graphics, input.Graphics),
+            new GraphicsProjectMaterializationBuildStep(directories, graphics, input.Graphics, input.Translation.Code),
             new NoProjectChangesBuildStep(CompositeBuildStage.ApplyFontTransformations, "No saved font project changes", input.HasFontProjectState),
             new RuntimeUiProjectBuildStep(input.RuntimeUi),
-            new TranslationAwareExecutableBuildStep(directories, input.Translation)
+            new TranslationAwareExecutableBuildStep(directories, input.Translation, input.RuntimeUi)
         ];
     }
 }
@@ -82,8 +82,9 @@ internal sealed class GraphicsProjectMaterializationBuildStep : ICompositeBuildS
     private readonly VariantDirectoryService _directories;
     private readonly GraphicsVariantService _graphics;
     private readonly GraphicsProjectState _state;
-    internal GraphicsProjectMaterializationBuildStep(VariantDirectoryService directories, GraphicsVariantService graphics, GraphicsProjectState state)
-    { _directories = directories; _graphics = graphics; _state = state; }
+    private readonly string _projectCode;
+    internal GraphicsProjectMaterializationBuildStep(VariantDirectoryService directories, GraphicsVariantService graphics, GraphicsProjectState state, string projectCode)
+    { _directories = directories; _graphics = graphics; _state = state; _projectCode = projectCode; }
     public CompositeBuildStage Stage => CompositeBuildStage.ApplyGraphicsTransformations;
     public string Name => "Project graphics edits";
     public bool AppliesTo(VariantContext variant) => variant is not null;
@@ -101,7 +102,7 @@ internal sealed class GraphicsProjectMaterializationBuildStep : ICompositeBuildS
     {
         try
         {
-            string root = _directories.GetVariantDirectoryPath(project, variant);
+            string root = _directories.GetVariantEditionDirectoryPath(project, variant, _projectCode);
             foreach (IGrouping<string, GraphicsVariantProjection> group in _graphics.GetGraphicsEditsForVariant(project, _state, variant)
                 .GroupBy(item => item.Edit.Identity.ResourceFileName, StringComparer.OrdinalIgnoreCase).OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase))
             {
@@ -163,8 +164,48 @@ internal sealed class RuntimeUiProjectBuildStep : ICompositeBuildStep
     public CompositeBuildStage Stage => CompositeBuildStage.ApplyRuntimeUiTransformations;
     public string Name => "Runtime UI project state";
     public bool AppliesTo(VariantContext variant) => variant is not null;
-    public string? Preflight(ProjectContext project, VariantContext variant) => _state.Overrides.Count == 0 ? null : UiText.Get("RuntimeUi.BuildNotMaterialized");
+    public string? Preflight(ProjectContext project, VariantContext variant)
+    {
+        IReadOnlyList<RuntimeUiTextOverride> scoped = Scoped(project, variant);
+        if (scoped.Count == 0) return null;
+        // R9F V5: the three proven-live variable-width VGA records may pass
+        // preflight when their overrides validate (geometry + encoding).
+        // Only overrides stored for THIS runtime are consumed; EGA state
+        // never leaks into a VGA build and vice versa.
+        if (variant is null || variant.RuntimeKind != VariantRuntimeKind.Elvira1Vga)
+        {
+            // R9F RUNEGA: overrides are allowed only for audited records whose
+            // stored values satisfy their frozen edit contracts. Anything else
+            // (including legacy unstructured values) fails with its reason.
+            if (variant is not null && variant.RuntimeKind == VariantRuntimeKind.Elvira1Ega)
+            {
+                foreach (RuntimeUiTextOverride value in scoped.OrderBy(item => item.LogicalRecordId))
+                {
+                    if (!RunEgaUiService.IsEditable(value.LogicalRecordId))
+                        return UiText.Get("RuntimeUi.BuildNotMaterialized");
+                    if (!RunEgaUiService.TryValidateStored(value.Text, value.LogicalRecordId, out _, out string egaDetail))
+                        return egaDetail;
+                }
+                return null;
+            }
+            return UiText.Get("RuntimeUi.BuildNotMaterialized");
+        }
+        foreach (RuntimeUiTextOverride value in scoped)
+        {
+            if (!RunVgaVariableUiService.IsVariableRecord(value.LogicalRecordId))
+                return UiText.Get("RuntimeUi.BuildNotMaterialized");
+            if (!RunVgaVariableUiService.TryValidateStored(value.Text, value.LogicalRecordId, out _, out string detail))
+                return detail;
+        }
+        return null;
+    }
     public string? Execute(ProjectContext project, VariantContext variant) => null;
+
+    private IReadOnlyList<RuntimeUiTextOverride> Scoped(ProjectContext project, VariantContext variant)
+    {
+        if (variant is null) return [];
+        return _state.Overrides.Where(value => value.Runtime == variant.RuntimeKind).OrderBy(value => value.LogicalRecordId).ToArray();
+    }
 }
 
 /// <summary>Uses the frozen runtime bootstrap, then gives the selected
@@ -174,39 +215,158 @@ internal sealed class TranslationAwareExecutableBuildStep : ICompositeBuildStep
 {
     private readonly VariantDirectoryService _directories;
     private readonly TranslationProjectVariant _translation;
-    internal TranslationAwareExecutableBuildStep(VariantDirectoryService directories, TranslationProjectVariant translation)
-    { _directories = directories; _translation = translation; }
+    private readonly RuntimeUiTextState? _runtimeUi;
+    internal TranslationAwareExecutableBuildStep(VariantDirectoryService directories, TranslationProjectVariant translation, RuntimeUiTextState? runtimeUi = null)
+    { _directories = directories; _translation = translation; _runtimeUi = runtimeUi; }
     public CompositeBuildStage Stage => CompositeBuildStage.ApplyExecutableTransformation;
     public string Name => "Selected translation executable";
     public bool AppliesTo(VariantContext variant) => variant is not null;
     public string? Preflight(ProjectContext project, VariantContext variant)
     {
+        IReadOnlyList<RuntimeUiTextOverride> scoped = ScopedUi(variant);
+        // R9F V5: the three proven-live variable-width VGA records require a
+        // translated (V5) variant. EN baseline builds must fail closed rather
+        // than silently ignore them. Only overrides stored for THIS runtime
+        // are consumed.
+        if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Vga && scoped.Count > 0)
+        {
+            foreach (RuntimeUiTextOverride value in scoped)
+            {
+                if (!RunVgaVariableUiService.IsVariableRecord(value.LogicalRecordId))
+                    return UiText.Get("RuntimeUi.BuildNotMaterialized");
+                if (!RunVgaVariableUiService.TryValidateStored(value.Text, value.LogicalRecordId, out _, out string detail))
+                    return detail;
+            }
+            if (_translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase))
+                return UiText.Get("RuntimeUi.Detail.PauseRequiresTranslatedVariant");
+        }
+        // R9F RUNEGA: audited records with contract-valid overrides require a
+        // translated (RUNEGASK) variant, exactly like VGA Pause above.
+        if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Ega && scoped.Count > 0)
+        {
+            foreach (RuntimeUiTextOverride value in scoped.OrderBy(item => item.LogicalRecordId))
+            {
+                if (!RunEgaUiService.IsEditable(value.LogicalRecordId))
+                    return UiText.Get("RuntimeUi.BuildNotMaterialized");
+                if (!RunEgaUiService.TryValidateStored(value.Text, value.LogicalRecordId, out _, out string detail))
+                    return detail;
+            }
+            if (_translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase))
+                return UiText.Get("RuntimeUi.Detail.EgaRequiresTranslatedVariant");
+        }
         if (_translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase)) return null;
         return CreateBootstrap(variant)?.Preflight(project, variant);
     }
     public string? Execute(ProjectContext project, VariantContext variant)
     {
-        if (_translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase)) return null;
+        IReadOnlyList<RuntimeUiTextOverride> scoped = ScopedUi(variant);
+        if (_translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase))
+        {
+            if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Vga && scoped.Count > 0)
+                return UiText.Get("RuntimeUi.Detail.PauseRequiresTranslatedVariant");
+            if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Ega && scoped.Count > 0)
+                return UiText.Get("RuntimeUi.Detail.EgaRequiresTranslatedVariant");
+            return null;
+        }
         ICompositeBuildStep? bootstrap = CreateBootstrap(variant);
         if (bootstrap is null) return "No executable bootstrap is defined for the selected runtime.";
         string? error = bootstrap.Execute(project, variant);
         if (error is not null) return error;
         try
         {
-            string root = _directories.GetVariantDirectoryPath(project, variant);
+            string root = _directories.GetVariantEditionDirectoryPath(project, variant, _translation.Code);
             string generated = Path.Combine(root, variant.GeneratedExecutableName);
             string selected = Path.Combine(root, ActiveProjectBuildIdentity.ExecutableName(variant, _translation));
             if (!File.Exists(generated)) return "Frozen bootstrap did not create its generated executable.";
             if (!generated.Equals(selected, StringComparison.OrdinalIgnoreCase)) File.Move(generated, selected, false);
+            // R9F V5: apply every validated variable-width VGA override
+            // inside the owned runtime+edition V5 output only: fitting
+            // records in place, overflow records via one deterministic
+            // append. Pristine GameRoot is never touched.
+            if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Vga && scoped.Count > 0)
+            {
+                foreach (RuntimeUiTextOverride value in scoped)
+                {
+                    if (!RunVgaVariableUiService.IsVariableRecord(value.LogicalRecordId))
+                        return UiText.Get("RuntimeUi.BuildNotMaterialized");
+                    if (!RunVgaVariableUiService.TryValidateStored(value.Text, value.LogicalRecordId, out _, out string preDetail))
+                        return preDetail;
+                }
+                try
+                {
+                    byte[] before = File.ReadAllBytes(selected);
+                    if (RunVgaBootstrapService.DetectState(selected) != RunVgaBootstrapState.ExtendedCp852V5 || before.Length != RunVgaBootstrapService.V5Size)
+                        return "Variable VGA materialization requires the frozen V5 executable image.";
+                    var texts = scoped.OrderBy(value => value.LogicalRecordId).ToDictionary(value => value.LogicalRecordId, value => value.Text);
+                    byte[] after = RunVgaVariableUiService.Appender.Materialize(before, texts);
+                    string temporary = selected + ".vgaui.tmp";
+                    try
+                    {
+                        File.WriteAllBytes(temporary, after);
+                        File.Move(temporary, selected, true);
+                    }
+                    finally { if (File.Exists(temporary)) File.Delete(temporary); }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+                { return "Variable VGA materialization failed: " + ex.Message; }
+            }
+            // R9F RUNEGA: apply every validated override inside the owned
+            // runtime+edition output only (validated one by one above, written
+            // atomically). Pristine GameRoot is never touched.
+            if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Ega && scoped.Count > 0)
+            {
+                try
+                {
+                    byte[] before = File.ReadAllBytes(selected);
+                    if (before.Length != RunEgaBootstrapService.OutputSize)
+                        return "RUNEGA Runtime UI materialization requires the frozen output image.";
+                    var ordered = scoped.OrderBy(value => value.LogicalRecordId).ToArray();
+                    foreach (RuntimeUiTextOverride value in ordered)
+                    {
+                        if (!RunEgaUiService.IsEditable(value.LogicalRecordId))
+                            return UiText.Get("RuntimeUi.BuildNotMaterialized");
+                        if (!RunEgaUiService.TryValidateStored(value.Text, value.LogicalRecordId, out _, out string preDetail))
+                            return preDetail;
+                    }
+                    byte[] after = (byte[])before.Clone();
+                    RunEgaUiService.ApplyOverridesToImage(after, ordered);
+                    RunEgaUiService.VerifyOnlyEgaSpansChanged(before, after,
+                        ordered.Select(value => RunEgaUiService.Contract(value.LogicalRecordId)).ToArray());
+                    RunEgaBootstrapService.ValidateOutput(after);
+                    string temporary = selected + ".ega-ui.tmp";
+                    try
+                    {
+                        File.WriteAllBytes(temporary, after);
+                        File.Move(temporary, selected, true);
+                    }
+                    finally { if (File.Exists(temporary)) File.Delete(temporary); }
+                    byte[] reread = File.ReadAllBytes(selected);
+                    foreach (RuntimeUiTextOverride value in ordered)
+                    {
+                        if (!RunEgaUiService.TryDecodeBankSpan(reread, value.LogicalRecordId, out string? roundTrip, out _))
+                            return "Patched RUNEGA Runtime UI did not decode deterministically.";
+                        if (!roundTrip!.Equals(value.Text, StringComparison.Ordinal))
+                            return "Patched RUNEGA Runtime UI does not contain the expected override text.";
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+                { return "RUNEGA Runtime UI materialization failed: " + ex.Message; }
+            }
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "Selected executable materialization failed: " + ex.Message; }
     }
     private ICompositeBuildStep? CreateBootstrap(VariantContext variant) => variant.RuntimeKind switch
     {
-        VariantRuntimeKind.Elvira1Vga => new RunVgaCompositeBuildStep(_directories),
-        VariantRuntimeKind.Elvira1Ega => new RunEgaCompositeBuildStep(_directories),
-        VariantRuntimeKind.Elvira2Vga => new RunItCompositeBuildStep(_directories),
+        VariantRuntimeKind.Elvira1Vga => new RunVgaCompositeBuildStep(_directories, _translation.Code),
+        VariantRuntimeKind.Elvira1Ega => new RunEgaCompositeBuildStep(_directories, _translation.Code),
+        VariantRuntimeKind.Elvira2Vga => new RunItCompositeBuildStep(_directories, _translation.Code),
         _ => null
     };
+
+    private IReadOnlyList<RuntimeUiTextOverride> ScopedUi(VariantContext variant)
+    {
+        if (_runtimeUi is null || variant is null) return [];
+        return _runtimeUi.Overrides.Where(value => value.Runtime == variant.RuntimeKind).OrderBy(value => value.LogicalRecordId).ToArray();
+    }
 }

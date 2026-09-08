@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Drawing;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed record ElviraPaletteBank(int Index, Color[] Colors)
 {

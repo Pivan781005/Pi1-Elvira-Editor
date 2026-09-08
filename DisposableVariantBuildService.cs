@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal enum DisposableVariantBuildStatus
 {
@@ -19,9 +19,9 @@ internal sealed class DisposableVariantBuildService
 
     public DisposableVariantBuildService(VariantDirectoryService directories) => _directories = directories ?? throw new ArgumentNullException(nameof(directories));
 
-    public DisposableVariantBuildResult Build(ProjectContext project, VariantContext variant)
+    public DisposableVariantBuildResult Build(ProjectContext project, VariantContext variant, string projectCode)
     {
-        VariantDirectoryOperationResult owned = _directories.ValidateOwnedVariantDirectory(project, variant);
+        VariantDirectoryOperationResult owned = _directories.ValidateOwnedVariantEditionDirectory(project, variant, projectCode);
         string root = owned.Path;
         if (owned.Status == VariantDirectoryOperationStatus.NotFound) return new(DisposableVariantBuildStatus.VariantDirectoryMissing, root);
         if (owned.Status == VariantDirectoryOperationStatus.InvalidContext) return new(DisposableVariantBuildStatus.InvalidContext, root);
@@ -34,14 +34,14 @@ internal sealed class DisposableVariantBuildService
 
         try
         {
-            VariantDirectoryOperationResult cleared = _directories.ClearVariantDirectory(project, variant);
+            VariantDirectoryOperationResult cleared = _directories.ClearVariantEditionDirectory(project, variant, projectCode);
             if (cleared.Status != VariantDirectoryOperationStatus.Cleared) return new(DisposableVariantBuildStatus.VariantOwnershipConflict, root);
             foreach (DisposableVariantBuildSource source in preflight.Sources) CopySource(root, source);
         }
         catch (IOException) { return new(DisposableVariantBuildStatus.CopyFailure, root); }
         catch (UnauthorizedAccessException) { return new(DisposableVariantBuildStatus.CopyFailure, root); }
 
-        return VerifyOutput(project, variant, preflight.Sources);
+        return VerifyOutput(project, variant, projectCode, preflight.Sources);
     }
 
     /// <summary>Read-only source-resolution primitive; useful for testing mutable backup semantics.</summary>
@@ -65,9 +65,9 @@ internal sealed class DisposableVariantBuildService
         return (DisposableVariantBuildStatus.Success, sources);
     }
 
-    private DisposableVariantBuildResult VerifyOutput(ProjectContext project, VariantContext variant, IReadOnlyList<DisposableVariantBuildSource> sources)
+    private DisposableVariantBuildResult VerifyOutput(ProjectContext project, VariantContext variant, string projectCode, IReadOnlyList<DisposableVariantBuildSource> sources)
     {
-        VariantDirectoryOperationResult owned = _directories.ValidateOwnedVariantDirectory(project, variant);
+        VariantDirectoryOperationResult owned = _directories.ValidateOwnedVariantEditionDirectory(project, variant, projectCode);
         if (owned.Status != VariantDirectoryOperationStatus.AlreadyValid) return new(DisposableVariantBuildStatus.VerificationFailure, owned.Path);
         foreach (DisposableVariantBuildSource source in sources)
         {

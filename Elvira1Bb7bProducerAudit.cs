@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 // Phase 6C9O2B4 static-only audit: BB7B and its seven validated direct callers.
 internal static class Elvira1Bb7bProducerAudit

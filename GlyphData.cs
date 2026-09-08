@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace ElviraVgaEditor;
+namespace Pi1ElviraEditor;
 
 internal sealed class GlyphModel
 {
@@ -46,15 +46,34 @@ internal sealed class GlyphModel
     public void ReplaceEdited(ReadOnlySpan<byte> bitmap)
     {
         if (bitmap.Length != 8) throw new ArgumentException("Elvira glyphs must contain exactly 8 bytes.", nameof(bitmap));
-        // 0x81 is an engine-owned HUD full-cell erase pass, not an editable
-        // CP852 character. Keep this guard below the UI level so import, copy,
+        // 0x81 is an engine-owned HUD erase glyph, not an editable CP852
+        // character. Keep this guard below the UI level so import, copy,
         // reset and any future model caller cannot introduce unsafe bytes.
+        // Layout-aware callers must use ReplaceReservedCanonical with the
+        // FontSlotMetadata canonical bytes for their loaded layout instead:
+        // the default below preserves legacy V5/RUNIT fail-closed behavior.
         if (ByteValue == FontSlotMetadata.HudEraseGlyph)
             bitmap = FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes;
         _editedPixels.Clear();
         ShiftX = 0;
         ShiftY = 0;
         AddBitmapPixels(bitmap, _editedPixels);
+        HasEdited = true;
+    }
+
+    /// <summary>Layout-aware reserved-slot canonicalization (copy/import/
+    /// initialization paths that know the loaded layout). The canonical bytes
+    /// must come from FontSlotMetadata.GetCanonicalBytes: patched full-cell
+    /// for RUNVGA V5 / RUNIT V2, the frozen original mask for RUNEGA.</summary>
+    public void ReplaceReservedCanonical(byte[] canonical)
+    {
+        if (ByteValue != FontSlotMetadata.HudEraseGlyph)
+            throw new InvalidOperationException($"Glyph 0x{ByteValue:X2} is not reserved.");
+        if (canonical.Length != 8) throw new ArgumentException("Elvira glyphs must contain exactly 8 bytes.", nameof(canonical));
+        _editedPixels.Clear();
+        ShiftX = 0;
+        ShiftY = 0;
+        AddBitmapPixels(canonical, _editedPixels);
         HasEdited = true;
     }
 
@@ -69,6 +88,23 @@ internal sealed class GlyphModel
         ShiftX = 0;
         ShiftY = 0;
         HasEdited = false;
+    }
+
+    /// <summary>Explicit empty working copy: an 8-byte zero bitmap with
+    /// HasEdited set. Distinct from ClearEdited (no working copy): the UI
+    /// shows real zero HEX instead of [EMPTY], and later pixel edits modify
+    /// the zero bitmap rather than re-cloning Original. Defense in depth:
+    /// reserved engine glyphs fail closed here even if a future caller
+    /// bypasses the UI gates, using the same authoritative reservation
+    /// metadata as the rest of the font system.</summary>
+    public void ClearToZero()
+    {
+        if (ByteValue == FontSlotMetadata.HudEraseGlyph)
+            throw new InvalidOperationException("Glyph 0x81 is engine-reserved and cannot be cleared to zero.");
+        _editedPixels.Clear();
+        ShiftX = 0;
+        ShiftY = 0;
+        HasEdited = true;
     }
 
     public void Reset() => CopyOriginalToEdited();
