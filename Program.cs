@@ -1139,7 +1139,7 @@ internal static class Program
         }
         if (args.Length == 1 && args[0].Equals("--branding-assets-smoke", StringComparison.OrdinalIgnoreCase))
         {
-            try { RunBrandingAssetsSmoke(); Console.WriteLine("Branding assets: PASS"); Environment.ExitCode = 0; }
+            try { string exe = RunBrandingAssetsSmoke(); Console.WriteLine($"Branding assets: PASS exe={exe} icon=validated"); Environment.ExitCode = 0; }
             catch (Exception ex) { Console.Error.WriteLine("Branding assets: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
@@ -1686,7 +1686,7 @@ internal static class Program
 
     private static int ReadTextBlockLength(byte[] data) => checked((int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(0x10, 4)));
 
-    private static void RunBrandingAssetsSmoke()
+    private static string RunBrandingAssetsSmoke()
     {
         var assembly = typeof(Program).Assembly;
         Require(string.Equals(assembly.GetName().Name, "Pi1ElviraEditor", StringComparison.Ordinal), "Assembly name is not Pi1ElviraEditor.");
@@ -1727,11 +1727,99 @@ internal static class Program
 
         try
         {
-            string? exePath = Environment.ProcessPath;
-            if (string.IsNullOrWhiteSpace(exePath))
-                exePath = assembly.Location;
-            using Icon? exeIcon = Icon.ExtractAssociatedIcon(exePath);
-            Require(exeIcon is not null && exeIcon.Width > 0 && exeIcon.Height > 0, "EXE has no extractable icon.");
+            // Explicitly validate the built application EXE. Never use
+            // Environment.ProcessPath here: under `dotnet DLL` hosting it
+            // points to dotnet.exe and would false-positive on the host icon.
+            string exePath = Path.Combine(AppContext.BaseDirectory, "Pi1ElviraEditor.exe");
+            Require(File.Exists(exePath), $"Built application EXE was not found: {exePath}.");
+            Require(string.Equals(Path.GetFileName(exePath), "Pi1ElviraEditor.exe", StringComparison.OrdinalIgnoreCase), "Smoke is not validating Pi1ElviraEditor.exe.");
+
+            Bitmap exeBitmap;
+            try
+            {
+                using Icon? exeIcon = Icon.ExtractAssociatedIcon(exePath);
+                if (exeIcon is null || exeIcon.Width <= 0 || exeIcon.Height <= 0)
+                    throw new InvalidDataException("Pi1ElviraEditor.exe has no extractable icon.");
+                using Bitmap provisional = exeIcon.ToBitmap();
+                exeBitmap = new Bitmap(provisional);
+            }
+            catch (InvalidDataException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidDataException("Pi1ElviraEditor.exe icon extraction failed: " + ex.Message);
+            }
+
+            using (exeBitmap)
+            {
+                // The extracted EXE icon must pixel-match one configured ICO
+                // frame, proving it is the application branding and not a
+                // generic host icon.
+                bool matchesConfiguredIco = false;
+                try
+                {
+                    foreach (Size frameSize in BrandingAssets.GetIcoFrameSizes(icoPath))
+                    {
+                        try
+                        {
+                            using Bitmap frameBitmap = BrandingAssets.LoadIcoFrameBitmap(icoPath, frameSize);
+                            if (BitmapsEqual(frameBitmap, exeBitmap))
+                            {
+                                matchesConfiguredIco = true;
+                                break;
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+                catch
+                {
+                }
+                Require(matchesConfiguredIco, $"Pi1ElviraEditor.exe icon does not match the configured Assets\\Branding\\Pi1ElviraEditor.ico (extracted {exeBitmap.Width}x{exeBitmap.Height}).");
+
+                // Self-check: when hosted via dotnet, prove the validated icon
+                // is not merely the dotnet host icon.
+                try
+                {
+                    string? hostPath = Environment.ProcessPath;
+                    if (!string.IsNullOrWhiteSpace(hostPath) && File.Exists(hostPath) &&
+                        !string.Equals(hostPath, exePath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        using Icon? hostIcon = Icon.ExtractAssociatedIcon(hostPath);
+                        if (hostIcon is not null)
+                        {
+                            using Bitmap hostBitmap = hostIcon.ToBitmap();
+                            if (BitmapsEqual(hostBitmap, exeBitmap))
+                                throw new InvalidDataException($"Pi1ElviraEditor.exe icon is indistinguishable from host '{hostPath}'.");
+                        }
+                    }
+                }
+                catch (InvalidDataException)
+                {
+                    throw;
+                }
+                catch
+                {
+                }
+            }
+
+            string exeDirectory = AppContext.BaseDirectory;
+            DateTime currentWrite = File.GetLastWriteTimeUtc(assembly.Location);
+            foreach (string oldName in new[] { "Pi1ElviraVgaEditor.exe", "Pi1ElviraVgaEditor.dll", "ElviraVgaEditor.exe", "ElviraVgaEditor.dll" })
+            {
+                string candidate = Path.Combine(exeDirectory, oldName);
+                if (!File.Exists(candidate))
+                    continue;
+                DateTime oldWrite = File.GetLastWriteTimeUtc(candidate);
+                if (oldWrite >= currentWrite - TimeSpan.FromMinutes(2))
+                    throw new InvalidDataException($"Fresh old-identity output was produced beside the EXE: {oldName}.");
+            }
+
+            return exePath;
         }
         catch (InvalidDataException)
         {
@@ -1741,20 +1829,17 @@ internal static class Program
         {
             throw new InvalidDataException("EXE icon extraction failed: " + ex.Message);
         }
+    }
 
-        string exeDirectory = AppContext.BaseDirectory;
-        DateTime currentWrite = File.GetLastWriteTimeUtc(assembly.Location);
-        foreach (string oldName in new[] { "Pi1ElviraVgaEditor.exe", "Pi1ElviraVgaEditor.dll", "ElviraVgaEditor.exe", "ElviraVgaEditor.dll" })
-        {
-            string candidate = Path.Combine(exeDirectory, oldName);
-            if (!File.Exists(candidate))
-                continue;
-            // Do not confuse stale ignored files from an old build with newly
-            // produced files: only a freshly produced old-identity file fails.
-            DateTime oldWrite = File.GetLastWriteTimeUtc(candidate);
-            if (oldWrite >= currentWrite - TimeSpan.FromMinutes(2))
-                throw new InvalidDataException($"Fresh old-identity output was produced beside the EXE: {oldName}.");
-        }
+    private static bool BitmapsEqual(Bitmap left, Bitmap right)
+    {
+        if (left.Size != right.Size)
+            return false;
+        for (int y = 0; y < left.Height; y++)
+            for (int x = 0; x < left.Width; x++)
+                if (left.GetPixel(x, y).ToArgb() != right.GetPixel(x, y).ToArgb())
+                    return false;
+        return true;
     }
 
     private static string LocateBrandingIco()
