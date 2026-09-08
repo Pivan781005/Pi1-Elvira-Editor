@@ -58,7 +58,7 @@
       "id": "recommended-workflow",
       "group": "Obecné",
       "title": "Doporučený pracovní postup",
-      "body": "**Vybrat instalaci → Vybrat aktivní variantu → Upravit projekt → Zkontrolovat Stav sestavení → Sestavit variantu → Ověřit připravenost/manifest → Spustit nebo Ladit.**\n\nPůvodní instalaci zachovávejte jako referenční baseline. Generované runtime výstupy patří do variant vlastněných editorem. Sestavení materializuje úpravy textů a grafiky; uložená přepsání písma a Runtime UI sestavení varianty ve v1.0 nematerializuje. Pokud Obnova a bezpečnost hlásí neočekávaný soubor, před pokračováním jej prověřte."
+      "body": "**Vybrat instalaci → Vybrat aktivní variantu → Upravit projekt → Zkontrolovat Stav sestavení → Sestavit variantu → Ověřit připravenost/manifest → Spustit nebo Ladit.**\n\nPůvodní instalaci zachovávejte jako referenční baseline. Generované runtime výstupy patří do variant vlastněných editorem. Sestavení materializuje úpravy textů, grafiky a podporovaná přepsání písma/Runtime UI do vlastněných výstupů varianty; nepodporovaná přepsání sestavení zamítne místo tichého zahození. Pokud Obnova a bezpečnost hlásí neočekávaný soubor, před pokračováním jej prověřte."
     },
     {
       "id": "troubleshooting",
@@ -118,19 +118,19 @@
       "id": "font-e1-vga",
       "group": "Písmo",
       "title": "Elvira I — VGA / RUNVGA",
-      "body": "RUNVGA podporuje ověřený workflow rozšířeného písma CP852. Můžete prohlížet zdrojové písmo, upravovat pracovní kopii, importovat/exportovat bitmapové písmo nebo rasterizovat vhodné vektorové písmo do herního úložiště 8×8.\n\nObnovený renderer zobrazuje levých 6 sloupců; dva pravé uložené sloupce jsou pro renderer neaktivní. Znak **0x81** je rezervován pro mazání HUD a je chráněn ve všech podporovaných výstupních cestách.\n\nVýstup EXE vytvářejte pouze podporovanou výslovnou produkční/build akcí."
+      "body": "RUNVGA podporuje ověřený workflow rozšířeného písma CP852. Můžete prohlížet zdrojové písmo, upravovat pracovní kopii, importovat/exportovat bitmapové písmo nebo rasterizovat vhodné vektorové písmo do herního úložiště 8×8.\n\nObnovený renderer zobrazuje levých 6 sloupců; dva pravé uložené sloupce jsou pro renderer neaktivní. Znak **0x81** je rezervován pro mazání HUD a je chráněn ve všech podporovaných výstupních cestách.\n\nVýstup EXE vytvářejte pouze podporovanou výslovnou produkční/build akcí. Upravené znaky uložte přes Uložit do projektu a poté Sestavit variantu: úpravy se promítnou do vlastněného EXE varianty. Původní EXE v GameRoot se nikdy nemění."
     },
     {
       "id": "font-e1-ega",
       "group": "Písmo",
       "title": "Elvira I — EGA / RUNEGA",
-      "body": "Elvira I EGA / RUNEGA je podporovaný runtime cíl s vlastními frozen důkazy Runtime UI, nezávislý na RUNVGA. Mutace písma/CP852 v RUNEGA NENÍ podporována: neexistuje podporovaný zapisovač písma ani důvěryhodný mutační workflow pro RUNEGA, proto nenačítejte ani nepoužívejte projekt písma RUNEGA.\n\nStejné principy CP852 platí všude, kde se zobrazuje náhled písma: zachovat ověřená pravidla uložení/rozložení a znak **0x81** ponechat rezervovaný pro engine.\n\nPoznámka ke kompatibilitě: správné vykreslování RUNEGA bylo ověřeno v DOSBox 0.74-2 a DOSBox Staging; DOSBox-X může v některých konfiguracích zobrazovat odlišné znaky."
+      "body": "Elvira I EGA / RUNEGA je podporovaný runtime cíl s vlastními frozen důkazy Runtime UI, nezávislý na RUNVGA. Mutace písma/CP852 v RUNEGA NENÍ podporována: neexistuje podporovaný zapisovač písma ani důvěryhodný mutační workflow pro RUNEGA, proto sestavení RUNEGA s úpravami písma platnými pro EGA skončí zamítnutím s vysvětlením a nic nezapíše. Náhled písem RUNEGA zůstává dostupný.\n\nStejné principy CP852 platí všude, kde se zobrazuje náhled písma: zachovat ověřená pravidla uložení/rozložení a znak **0x81** ponechat rezervovaný pro engine.\n\nPoznámka ke kompatibilitě: správné vykreslování RUNEGA bylo ověřeno v DOSBox 0.74-2 a DOSBox Staging; DOSBox-X může v některých konfiguracích zobrazovat odlišné znaky."
     },
     {
       "id": "font-e2",
       "group": "Písmo",
       "title": "Elvira II — RUNIT",
-      "body": "Podporovaný rozšířený profil CP852 pro RUNIT používá ověřené dělené uložení LOW/HIGH. Neznámé nebo změněné EXE zůstávají pouze pro čtení, pokud neodpovídají podporovanému produkčnímu zdroji.\n\nZnak **0x81** zůstává chráněným znakem pro mazání HUD. Upravené znaky nebo bezpečné výchozí pozice se použijí pouze při výslovné podporované výstupní/build akci."
+      "body": "Podporovaný rozšířený profil CP852 pro RUNIT používá ověřené dělené uložení LOW/HIGH. Neznámé nebo změněné EXE zůstávají pouze pro čtení, pokud neodpovídají podporovanému produkčnímu zdroji.\n\nZnak **0x81** zůstává chráněným znakem pro mazání HUD. Upravené znaky nebo bezpečné výchozí pozice se použijí pouze při výslovné podporované výstupní/build akci. Upravené znaky uložte přes Uložit do projektu a poté Sestavit variantu: úpravy se promítnou do vlastněného výstupu RUNITSK.EXE."
     },
     {
       "id": "mods-launcher-e1",

@@ -57,12 +57,12 @@ For normal project workflows:
 
 **EDIT → SAVE TO PROJECT → BUILD VARIANT → RUN**
 
-- Graphics/Text edits are saved to the project (`Save To Project`)
-- `Build Variant` runs CompositeBuild, materializing Text and Graphics into `VARIANTS\`
-- Font/Runtime UI project state is saved but NOT materialized by normal CompositeBuild in v1.0 (see matrix below)
+- Graphics/Text/Font edits are saved to the project (`Save To Project`)
+- `Build Variant` runs CompositeBuild, materializing Text, Graphics and supported Font/Runtime UI state into `VARIANTS\`
+- Elvira I VGA (V5) and Elvira II VGA (V2) font edits materialize into owned variant executables; EGA font edits fail the build closed (no proven writer)
 - `Run` / `Debug` launches the authorized variant (readiness validated)
 
-**Standalone Font Editor exception:** "Apply changes to EXE" writes directly to the game executable (R9D-gated, O-backup preserved) — this is NOT the normal project workflow.
+Original (EN) game assets in GameRoot are immutable: no normal editor action replaces them. Legacy O-files remain recovery-only.
 
 ### v1.0 CompositeBuild Materialization Matrix
 
@@ -70,8 +70,8 @@ For normal project workflows:
 |--------|---------------|-------------------------------|
 | Text | YES (isolated per edition) | YES |
 | Graphics | YES (isolated, runtime-scoped) | YES |
-| Font | YES (isolated per edition) | NO — no materializer; preflight fails if overrides exist |
-| Runtime UI | YES (isolated, evidence-validated) | NO — no materializer; preflight fails if overrides exist |
+| Font | YES (isolated per edition, runtime-scoped) | YES for Elvira I VGA (V5) and Elvira II VGA (V2); EGA edits fail preflight closed |
+| Runtime UI | YES (isolated, evidence-validated) | VGA Pause.menu/Confirm.generic/Save.overwrite + audited EGA records; all other overrides fail preflight |
 | Executable | N/A (derived) | YES (RUNVGA/RUNEGA/RUNIT) |
 
 ## Download Verification

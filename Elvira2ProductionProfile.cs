@@ -27,7 +27,7 @@ internal static class Elvira2ProductionProfile
         ActiveGamePc, ImmutableGamePc, GeneratedSlovakGamePc, OriginalGamePcSha256);
 
     internal const string DeploymentContract =
-        "GamePatchDeploymentService validates a temporary V2 image, preserves RUNITO.EXE once, replaces only RUNIT.EXE, and never writes GAMEPC.";
+        "Font edits materialize only into owned VARIANTS executables through CompositeBuild; the pristine GameRoot RUNIT.EXE is never replaced. Legacy RUNITO.EXE files remain recovery-only and are never overwritten. GAMEPC is never written by font materialization.";
     internal const string DiscoveryContract =
         "Installation discovery requires GAMEPC, a VGA zone, and RUNIT in OriginalPacked, CanonicalUnpackedAscii98, or ExtendedCp852 state; no Elvira II EGA executable is modeled.";
     internal const string VariantContract =

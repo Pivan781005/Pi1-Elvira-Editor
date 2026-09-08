@@ -58,7 +58,7 @@
       "id": "recommended-workflow",
       "group": "General",
       "title": "Recommended Project Workflow",
-      "body": "**Select installation → Select active variant → Edit project content → Check Build Status → Build variant → Review readiness/manifest → Run or Debug.**\n\nKeep the original installation as the reference baseline. Generated runtime outputs belong to editor-owned variant builds. Text and Graphics edits are materialized by the build; saved Font and Runtime UI overrides are not materialized by Build variant in v1.0. If Recovery & Safety reports an unexpected file, investigate it before continuing."
+      "body": "**Select installation → Select active variant → Edit project content → Check Build Status → Build variant → Review readiness/manifest → Run or Debug.**\n\nKeep the original installation as the reference baseline. Generated runtime outputs belong to editor-owned variant builds. Text, Graphics and supported Font/Runtime UI overrides are materialized by the build into owned variant outputs; unsupported overrides fail the build closed instead of being silently dropped. If Recovery & Safety reports an unexpected file, investigate it before continuing."
     },
     {
       "id": "troubleshooting",
@@ -118,19 +118,19 @@
       "id": "font-e1-vga",
       "group": "Font",
       "title": "Elvira I — VGA / RUNVGA",
-      "body": "RUNVGA supports the validated extended CP852 font workflow. You can preview the source font, edit a working copy, import/export bitmap font data, or rasterize a suitable vector font into the game's 8×8 storage.\n\nThe recovered renderer displays the left 6 columns; the two rightmost stored columns are renderer-inactive. Character **0x81** is reserved for HUD erasing and is protected in every supported output path.\n\nCreate executable output only through a supported, explicit production/build action."
+      "body": "RUNVGA supports the validated extended CP852 font workflow. You can preview the source font, edit a working copy, import/export bitmap font data, or rasterize a suitable vector font into the game's 8×8 storage.\n\nThe recovered renderer displays the left 6 columns; the two rightmost stored columns are renderer-inactive. Character **0x81** is reserved for HUD erasing and is protected in every supported output path.\n\nCreate executable output only through a supported, explicit production/build action. Save edited glyphs with Save to project, then Build Variant: the edits materialize into the owned VARIANTS executable. The pristine GameRoot executable is never modified."
     },
     {
       "id": "font-e1-ega",
       "group": "Font",
       "title": "Elvira I — EGA / RUNEGA",
-      "body": "Elvira I EGA / RUNEGA is a supported runtime target with its own frozen Runtime UI evidence, independent of RUNVGA. RUNEGA font/CP852 mutation is NOT supported: there is no supported RUNEGA font writer or trusted mutation workflow, so do not load or apply a RUNEGA font project.\n\nThe same CP852 editing principles apply wherever a font is previewed: preserve validated storage/layout rules and keep character **0x81** reserved for the engine.\n\nCompatibility note: RUNEGA rendering has been observed correctly in DOSBox 0.74-2 and DOSBox Staging; DOSBox-X may display different characters in some configurations."
+      "body": "Elvira I EGA / RUNEGA is a supported runtime target with its own frozen Runtime UI evidence, independent of RUNVGA. RUNEGA font/CP852 mutation is NOT supported: there is no supported RUNEGA font writer or trusted mutation workflow, so a RUNEGA build carrying EGA-applicable font edits fails closed with an explanation instead of writing anything. Previewing RUNEGA fonts remains available.\n\nThe same CP852 editing principles apply wherever a font is previewed: preserve validated storage/layout rules and keep character **0x81** reserved for the engine.\n\nCompatibility note: RUNEGA rendering has been observed correctly in DOSBox 0.74-2 and DOSBox Staging; DOSBox-X may display different characters in some configurations."
     },
     {
       "id": "font-e2",
       "group": "Font",
       "title": "Elvira II — RUNIT",
-      "body": "The supported RUNIT extended CP852 profile uses a validated split low/high font arrangement. Unknown or modified executable layouts remain read-only unless they match a supported production source.\n\nCharacter **0x81** remains the protected HUD erase character. Edited glyphs and safe default slots are used only when an explicit supported output/build action is performed."
+      "body": "The supported RUNIT extended CP852 profile uses a validated split low/high font arrangement. Unknown or modified executable layouts remain read-only unless they match a supported production source.\n\nCharacter **0x81** remains the protected HUD erase character. Edited glyphs and safe default slots are used only when an explicit supported output/build action is performed. Save edited glyphs with Save to project, then Build Variant: the edits materialize into the owned RUNITSK.EXE variant output."
     },
     {
       "id": "mods-launcher-e1",

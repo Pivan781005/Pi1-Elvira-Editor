@@ -31,8 +31,13 @@ internal static class HelpDocumentService
     internal static void ValidateAll()
     {
         HelpDocument english = Load("en");
+        // The canonical hierarchy follows the actual shipped Help topics:
+        // General, Graphics, Game Text, Runtime UI, Font, Mods/Launching.
+        // An older contract expected Common/Elvira I/Elvira II; that structure
+        // is obsolete and must not force docs back into it.
+        string[] expectedGroups = ["General", "Graphics", "Game Text", "Runtime UI", "Font", "Mods, Launching & Debugging"];
         if (english.Topics.Count < 18 || english.Topics.Select(topic => topic.Id).Distinct(StringComparer.Ordinal).Count() != english.Topics.Count ||
-            !english.Topics.Select(topic => topic.Group).Distinct(StringComparer.Ordinal).SequenceEqual(new[] { "Common", "Elvira I", "Elvira II" }))
+            !english.Topics.Select(topic => topic.Group).Distinct(StringComparer.Ordinal).SequenceEqual(expectedGroups, StringComparer.Ordinal))
             throw new InvalidDataException("English Help document does not define the required deterministic hierarchy.");
         foreach (string localeId in new[] { "sk", "cs" })
         {

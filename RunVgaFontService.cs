@@ -328,6 +328,10 @@ internal static class RunVgaFontService
     public static void SaveCopy(FontLoadResult loaded, string destinationPath)
     {
         if (!loaded.CanApply) throw new InvalidOperationException("Unknown font layout; refusing to create a modified executable.");
+        // Pristine-GameRoot firewall: a Save copy must never overwrite the
+        // loaded source executable itself. Choose a different filename.
+        if (Path.GetFullPath(destinationPath).Equals(Path.GetFullPath(loaded.SourcePath), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Save copy cannot overwrite the loaded source executable. Choose a different filename. No files were changed.");
         // R9D: font binary patching must fail closed on unknown/modified executables.
         // Signature-based layout detection alone never proves a supported identity, and
         // structural recognition of a generated V5/V2 FORMAT alone never authorizes a

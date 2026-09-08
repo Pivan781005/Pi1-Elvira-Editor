@@ -355,3 +355,7 @@ Z doterajšej analýzy vieme, že Elvira II má podobný `GAMEPC` textový pool,
 ### Herné dáta
 
 Projekt neobsahuje originálne herné EXE/VGA/GAMEPC/TABLES ani iné komerčné assety. Používateľ pracuje so svojou vlastnou inštaláciou hry. Elvira a súvisiace herné názvy, grafika a ochranné známky patria príslušným držiteľom práv; screenshoty a názvy slúžia iba na dokumentáciu kompatibility.
+
+### Nemenný GameRoot a varianty (v1.0)
+
+Originálne herné súbory v GameRoot (`RUNVGA.EXE`, `RUNEGA.EXE`, `RUNIT.EXE`, `GAMEPC`, VGA zdroje) sú nemenné: žiadna bežná akcia editora ich nenahrádza. Úpravy písma sa ukladajú cez Uložiť do projektu a materializujú sa zostavením variantu do vlastnených výstupov `VARIANTS\<runtime>\<edition>\`. Priame zapisovanie do GameRoot bolo odstránené; staré O-súbory (`RUNVGAO.EXE`, `RUNITO.EXE`, `GAMEPCO`) zostávajú iba ako recovery-kompatibilita. Výnimkou je generovanie/obnova launcher BAT s existujúcou zálohou.

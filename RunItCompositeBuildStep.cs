@@ -24,7 +24,14 @@ internal sealed class RunItCompositeBuildStep : ICompositeBuildStep
         // R9D: fail closed with a Missing vs Unsupported distinction; never patch an unknown binary.
         SupportedExecutableClassification identity=SupportedExecutableIdentityService.ClassifyRunIt(source);
         if(identity.Identity!=SupportedExecutableIdentity.SupportedPacked)return SupportedExecutableIdentityService.DescribeBlocked(identity,"RUNIT bootstrap");
-        if(File.Exists(output))return "Fresh variant already contains generated RUNITSK.EXE.";RunItBootstrapResult built=RunItBootstrapService.CreateExtendedCp852(source,output,GlyphRepository.CreateAllCp852Slots());byte[] image=File.ReadAllBytes(built.OutputPath);RunItBootstrapService.ValidateExtended(image);if(image.Length!=RunItBootstrapService.ExtendedSize||built.Sha256!=Elvira2ProductionProfile.DeterministicFontEnabled.Sha256)return "Generated RUNITSK.EXE diverged from the frozen V2 image.";return null;}
+        if(File.Exists(output))return "Fresh variant already contains generated RUNITSK.EXE.";
+        // Variant-only font materialization: the edition font edits applicable
+        // to this runtime overlay the deterministic defaults. The bootstrap
+        // keeps enforcing the reserved 0x81 glyph. With edits applied the
+        // image is validated structurally instead of against the default-font
+        // golden hash; without edits the frozen golden image still applies.
+        IReadOnlyList<GlyphModel> glyphs=FontVariantService.ResolveBootstrapGlyphs(project,_projectCode,variant);
+        RunItBootstrapResult built=RunItBootstrapService.CreateExtendedCp852(source,output,glyphs);byte[] image=File.ReadAllBytes(built.OutputPath);RunItBootstrapService.ValidateExtended(image);if(image.Length!=RunItBootstrapService.ExtendedSize)return "Generated RUNITSK.EXE has an unexpected image size.";if(!glyphs.Any(g=>g.HasEdited)&&built.Sha256!=Elvira2ProductionProfile.DeterministicFontEnabled.Sha256)return "Generated RUNITSK.EXE diverged from the frozen V2 image.";return null;}
         catch(Exception ex)when(ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException){return "RUNIT bootstrap failed: "+ex.Message;}
     }
 }

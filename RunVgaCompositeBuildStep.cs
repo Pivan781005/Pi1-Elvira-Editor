@@ -47,7 +47,12 @@ internal sealed class RunVgaCompositeBuildStep : ICompositeBuildStep
             if (File.Exists(output)) return "Fresh variant already contains generated RUNVGASK.EXE.";
 
             byte[] hud = Elvira1ProductionProfile.RunVga.Font.HudBytes ?? throw new InvalidDataException("Frozen RUNVGA HUD glyph is absent.");
-            RunVgaBootstrapResult built = RunVgaBootstrapService.CreateExtendedCp852(source, output, GlyphRepository.CreateAllCp852Slots());
+            // Variant-only font materialization: the edition font edits
+            // applicable to this runtime overlay the deterministic defaults.
+            // The bootstrap keeps enforcing the reserved 0x81 glyph, and the
+            // pristine GameRoot source is only read, never written.
+            IReadOnlyList<GlyphModel> glyphs = FontVariantService.ResolveBootstrapGlyphs(project, _projectCode, variant);
+            RunVgaBootstrapResult built = RunVgaBootstrapService.CreateExtendedCp852(source, output, glyphs);
             FontLoadResult loaded = RunVgaFontService.LoadRunVga(built.OutputPath);
             if (RunVgaBootstrapService.DetectState(built.OutputPath) != RunVgaBootstrapState.ExtendedCp852V5 ||
                 loaded.Layout != RunVgaFontLayout.ExtendedCp852V5 || loaded.LoadedGlyphCount != 256 ||

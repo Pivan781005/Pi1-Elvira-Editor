@@ -134,6 +134,32 @@ internal sealed class FontVariantService
             return new FontVariantProjection(edit, slot.Bank, status);
         }).Where(item => item.Applicability != FontApplicabilityStatus.Unsupported).OrderBy(item => item.Edit.Identity.ByteValue).ToArray();
     }
+
+    /// <summary>Builds the 256-slot bootstrap glyph table for an owned variant
+    /// executable: deterministic defaults overlaid with the edition font edits
+    /// applicable to this runtime. The binary bootstrap keeps enforcing the
+    /// reserved 0x81 glyph independently, so project state can never smuggle
+    /// unsafe bytes through this path. The pristine GameRoot source is only
+    /// ever read; the generated image is written to the variant copy.</summary>
+    internal static IReadOnlyList<GlyphModel> ResolveBootstrapGlyphs(ProjectContext project, string projectVariantCode, VariantContext variant)
+    {
+        project = Require(project ?? throw new ArgumentNullException(nameof(project)));
+        if (variant is null) throw new ArgumentNullException(nameof(variant));
+        var service = new FontVariantService();
+        FontProjectLoadResult loaded = service.Load(project, projectVariantCode);
+        if (!loaded.IsSuccess)
+            throw new InvalidDataException("Font project state is invalid: " + (loaded.Detail ?? loaded.Status.ToString()));
+        IReadOnlyList<FontVariantProjection> applicable = service.GetFontEditsForVariant(project, loaded.State!, variant);
+        if (applicable.Count == 0)
+            return GlyphRepository.CreateAllCp852Slots();
+        List<GlyphModel> glyphs = GlyphRepository.CreateAllCp852Slots().ToList();
+        foreach (FontVariantProjection projection in applicable)
+        {
+            GlyphModel glyph = glyphs.First(g => g.ByteValue == projection.Edit.Identity.ByteValue);
+            glyph.ReplaceEdited(projection.Edit.Bitmap);
+        }
+        return glyphs;
+    }
     public FontSlotProjection GetSlotProjection(VariantContext variant, int byteValue)
     {
         if (variant is null) throw new ArgumentNullException(nameof(variant));

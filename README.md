@@ -38,16 +38,16 @@ Output artifacts are materialized into **owned, disposable VARIANTS** directorie
 
 **NORMAL PROJECT WORKFLOW:**
 - Editor project state lives outside pristine game files (`ElviraEditor\Project\`)
-- Generated text/graphics/runtime artifacts go through CompositeBuild
+- Generated text/graphics/font/runtime artifacts go through CompositeBuild
 - Runnable outputs belong in `VARIANTS\`
 - Legacy direct GAMEPCxx/RUNxxx project-build workflows into GameRoot were removed in R10
+- Former standalone Font Editor direct-to-GameRoot Apply/Activate was removed in R9F V8.6: font edits persist via Save to project and materialize into owned variant executables
 
 **CONTROLLED EXCEPTIONS (explicit, user-confirmed):**
-- Standalone Font Editor "Apply changes to EXE" — gated by R9D executable trust validation, preserves O-backup semantics
-- Launcher companion generation/restoration where currently supported
+- Launcher companion generation/restoration where currently supported (BAT + `.BAK` backup semantics)
 - Recovery/Safety restoration operations
 
-The Font Apply path is explicit, protected by R9D trust, and is NOT the normal Project/Edition/Runtime build path.
+Original (EN) game assets in GameRoot are immutable: no normal editor action replaces them, even with a backup present.
 
 ## Supported Games & Runtimes
 
@@ -221,11 +221,11 @@ Run/Debug does NOT automatically rebuild unless explicitly invoked.
 |--------|---------------|-------------------------------|
 | **Text** | YES (isolated per edition) | YES — `SelectedTranslationProjectBuildStep` |
 | **Graphics** | YES (isolated, runtime-scoped) | YES — `GraphicsProjectMaterializationBuildStep` |
-| **Font** | YES (isolated per edition) | NO — `NoProjectChangesBuildStep` fails preflight if saved font overrides exist |
+| **Font** | YES (isolated per edition, runtime-scoped Shared/RuntimeSpecific) | YES for Elvira I VGA (V5) and Elvira II VGA (V2) — edition font edits overlay the deterministic bootstrap inside the owned variant executable (`FontProjectBuildStep` gate + `RunVga/RunItCompositeBuildStep`); EGA has no proven writer so EGA-applicable edits fail preflight closed |
 | **Runtime UI** | YES (isolated, evidence-validated) | VGA Pause.menu/Confirm.generic/Save.overwrite + audited EGA records (see below); all other overrides fail preflight |
 | **Executable** | N/A (derived) | YES — `TranslationAwareExecutableBuildStep` (RUNVGA/RUNEGA/RUNIT) |
 
-**Controlled Exception:** Standalone Font Editor "Apply changes to EXE" writes directly to GameRoot (R9D-gated, O-backup preserved). This is NOT the normal Project/Edition/Runtime build path.
+**Immutable GameRoot rule:** no normal editor action replaces pristine GameRoot assets (`RUNVGA.EXE`, `RUNEGA.EXE`, `RUNIT.EXE`, `GAMEPC`, VGA resources). Font edits persist via Save to project and materialize only into owned `VARIANTS` executables through Build Variant. Legacy O-files (`RUNVGAO.EXE`, `RUNITO.EXE`, `GAMEPCO`) remain recovery-only and are never overwritten.
 
 ### Key Concepts
 
@@ -347,8 +347,7 @@ Evidence terminology used by the project:
 
 Help/*.md audited against final post-R10 UI/workflow:
 
-- Removed stale references to: manual Game selector, direct Graphics Deploy button, TranslationVariantService, direct GAMEPCxx/RUNxxx project workflow into GameRoot, obsolete independent Text translation selector, old Apply-to-game workflow, old header geometry/controls, obsolete build terminology
-- **Preserved:** Font Editor standalone "Apply changes to EXE" (still supported, R9D-gated)
+- Removed stale references to: manual Game selector, direct Graphics Deploy button, TranslationVariantService, direct GAMEPCxx/RUNxxx project workflow into GameRoot, standalone Font Apply/Activate direct-to-GameRoot, obsolete independent Text translation selector, old Apply-to-game workflow, old header geometry/controls, obsolete build terminology
 - EN/SK/CS Help describes consistent workflow: **EDIT → SAVE TO PROJECT → BUILD VARIANT → RUN**
 
 ## Release Notes v1.0 Summary
@@ -359,7 +358,7 @@ Help/*.md audited against final post-R10 UI/workflow:
 - Project/Edition/Runtime model
 - Text translation editions (project-owned, isolated)
 - Graphics editing (project-owned, runtime-scoped)
-- Font/CP852 functionality (V5 RUNVGA, V2 RUNIT, RUNEGA identity only)
+- Font/CP852 functionality (V5 RUNVGA + V2 RUNIT variant materialization, RUNEGA identity only)
 - Evidence-based Runtime UI editing
 - Disposable/owned variant builds (VARIANTS)
 - Build reproducibility (R9C deterministic)
@@ -374,18 +373,18 @@ Help/*.md audited against final post-R10 UI/workflow:
 - Incomplete RUNVGA Runtime UI capacity/mapping
 - Unresolved RUNIT Runtime UI routes (LOAD_FAILURE, FILE_NOT_FOUND, TRY_ANOTHER_DISK)
 - Czech game binary/data localization
-- Not every GameRoot write eliminated (Font Apply + recovery/launcher exceptions remain)
+- RUNEGA font materialization (no proven writer; EGA-applicable font edits fail the build closed)
+- Not every GameRoot write eliminated (explicit recovery/launcher BAT exceptions remain)
 
 ## Known Limitations (v1.0)
 
 1. **Incomplete RUNVGA Runtime UI** — capacity/mapping knowledge incomplete
 2. **Unresolved RUNIT Runtime UI** — LOAD_FAILURE, FILE_NOT_FOUND, TRY_ANOTHER_DISK routes not fully mapped
 3. **Protected HUD glyph 0x81** — cannot be remapped (engine invariant)
-4. **Standalone Font Apply architectural exception** — writes to GameRoot, not VARIANTS
+4. **RUNEGA font materialization gap** — font edits cannot be built into RUNEGA variants (fail-closed with explanation)
 5. **Supported executable identities required** — unsupported binaries fail closed
-6. **Font materialization** — no CompositeBuild font replacement for RUNEGA or normal workflow yet
-7. **Runtime UI materialization** — Font/Runtime UI build steps currently fail preflight if overrides exist (no materializer implemented)
-8. **0x81 remapping research** — not implemented
+6. **Runtime UI materialization** — unmapped Runtime UI overrides fail preflight (no materializer implemented)
+7. **0x81 remapping research** — not implemented
 
 ## Post-v1.0 / Future Research (NOT IMPLEMENTED IN v1.0)
 

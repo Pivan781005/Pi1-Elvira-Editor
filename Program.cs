@@ -1149,6 +1149,24 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("Startup splash: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 3 && args[0].Equals("--pristine-gameroot-immutability-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { RunPristineGameRootImmutabilitySmoke(args[1], args[2]); Console.WriteLine("Pristine GameRoot immutability: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Pristine GameRoot immutability: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--direct-gameroot-write-block-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { RunDirectGameRootWriteBlockSmoke(args[1], args[2]); Console.WriteLine("Direct GameRoot write block: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Direct GameRoot write block: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--font-variant-materialization-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { RunFontVariantMaterializationSmoke(args[1], args[2]); Console.WriteLine("Font variant materialization: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Font variant materialization: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 1 && args[0].Equals("--version-smoke", StringComparison.OrdinalIgnoreCase))
         {
             try { RunVersionSmoke(); Console.WriteLine("Product version: PASS"); Environment.ExitCode = 0; }
@@ -1686,6 +1704,348 @@ internal static class Program
 
     private static int ReadTextBlockLength(byte[] data) => checked((int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(0x10, 4)));
 
+    private static Dictionary<string, string> SnapshotGameRootContent(string gameRoot)
+    {
+        // Pristine content only: editor-owned ElviraEditor/ and VARIANTS/ change legitimately.
+        return Directory.EnumerateFiles(gameRoot, "*", SearchOption.AllDirectories)
+            .Where(path =>
+            {
+                string relative = Path.GetRelativePath(gameRoot, path);
+                return !relative.StartsWith("ElviraEditor" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                    !relative.StartsWith("VARIANTS" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                    !relative.Equals("ElviraEditor", StringComparison.OrdinalIgnoreCase) &&
+                    !relative.Equals("VARIANTS", StringComparison.OrdinalIgnoreCase);
+            })
+            .ToDictionary(path => Path.GetRelativePath(gameRoot, path), HashFile, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static void RequireGameRootContentEqual(Dictionary<string, string> before, string gameRoot, string operation,
+        IReadOnlySet<string>? allowedChanged = null, IReadOnlySet<string>? allowedAdded = null)
+    {
+        Dictionary<string, string> after = SnapshotGameRootContent(gameRoot);
+        var problems = new List<string>();
+        foreach ((string relative, string hash) in before)
+        {
+            if (!after.TryGetValue(relative, out string? afterHash))
+                problems.Add("deleted:" + relative);
+            else if (afterHash != hash && (allowedChanged is null || !allowedChanged.Contains(relative)))
+                problems.Add("modified:" + relative);
+        }
+        foreach ((string relative, _) in after)
+        {
+            if (!before.ContainsKey(relative) && (allowedAdded is null || !allowedAdded.Contains(relative)))
+                problems.Add("added:" + relative);
+        }
+        if (problems.Count > 0)
+            throw new InvalidDataException(operation + " changed pristine GameRoot content: " + string.Join(",", problems));
+        foreach (string legacy in new[] { "GAMEPCO", "RUNVGAO.EXE", "RUNEGAO.EXE", "RUNITO.EXE" })
+            if (after.ContainsKey(legacy) && !before.ContainsKey(legacy))
+                throw new InvalidDataException(operation + " created a legacy O-file: " + legacy);
+    }
+
+    private static void RunPristineGameRootImmutabilitySmoke(string elvira1Source, string elvira2Source)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "Pi1PristineImmutability", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            ProjectContext e2 = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
+            Dictionary<string, string> beforeE1 = SnapshotGameRootContent(e1.GameRoot);
+            Dictionary<string, string> beforeE2 = SnapshotGameRootContent(e2.GameRoot);
+            var directories = new VariantDirectoryService();
+            var translations = new TranslationProjectService();
+            var graphics = new GraphicsVariantService();
+            var fonts = new FontVariantService();
+            var runtimeUi = new RuntimeUiTextService();
+
+            // Text project edits (SK, both games) persist as project state only.
+            TranslationProjectState textState = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(e1, textState, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            translations.Save(e1, translations.Add(textState, sk));
+            TranslationProjectState textState2 = TranslationProjectState.Empty(ElviraGameProfile.Elvira2);
+            TranslationProjectVariant sk2 = translations.Create(e2, textState2, "Slovak", "SK", new Dictionary<int, string>());
+            translations.Save(e2, translations.Add(textState2, sk2));
+            RequireGameRootContentEqual(beforeE1, e1.GameRoot, "text project save");
+            RequireGameRootContentEqual(beforeE2, e2.GameRoot, "text project save");
+
+            // Graphics project save persists metadata only.
+            if (!graphics.Save(e1, "SK", GraphicsProjectState.Empty(ElviraGameProfile.Elvira1)).Succeeded)
+                throw new InvalidDataException("Graphics project save failed.");
+            RequireGameRootContentEqual(beforeE1, e1.GameRoot, "graphics project save");
+
+            // Font project edits (SK, runtime-scoped) persist as project state only.
+            FontProjectState fontState = FontProjectState.Empty(ElviraGameProfile.Elvira1);
+            fontState = fonts.SetEdit(e1, fontState, FontProjectEdit.Create(new(0x41), Convert.FromHexString("A0B0C0D0E0F00000"), FontEditScope.RuntimeSpecific, VariantRuntimeKind.Elvira1Vga));
+            if (!fonts.Save(e1, "SK", fontState).Succeeded)
+                throw new InvalidDataException("Font project save failed.");
+            FontProjectState fontState2 = FontProjectState.Empty(ElviraGameProfile.Elvira2);
+            fontState2 = fonts.SetEdit(e2, fontState2, FontProjectEdit.Create(new(0x42), Convert.FromHexString("0102030405060708"), FontEditScope.RuntimeSpecific, VariantRuntimeKind.Elvira2Vga));
+            if (!fonts.Save(e2, "SK", fontState2).Succeeded)
+                throw new InvalidDataException("Font project save failed.");
+            RequireGameRootContentEqual(beforeE1, e1.GameRoot, "font project save");
+            RequireGameRootContentEqual(beforeE2, e2.GameRoot, "font project save");
+
+            // Supported Runtime UI edits persist as project state only.
+            RuntimeUiTextState uiEmpty = runtimeUi.Load(e1, "SK").State ?? throw new InvalidDataException("Runtime UI load failed.");
+            RuntimeUiTextState uiState = runtimeUi.SetOverride(e1, uiEmpty, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, "     R9F PAUSE!\r\r\r Continue      Quit");
+            if (!runtimeUi.Save(e1, "SK", uiState).Succeeded)
+                throw new InvalidDataException("Runtime UI project save failed.");
+            RequireGameRootContentEqual(beforeE1, e1.GameRoot, "runtime UI project save");
+
+            // Build Variant (SK) for both VGA runtimes: all domains compose
+            // into owned VARIANTS output; GameRoot originals stay identical.
+            VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            VariantContext e2Vga = VariantContextCatalog.CreateBuiltIns(e2).Single(item => item.VariantId == BuiltInVariantId.Elvira2Vga);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "SK"), VariantDirectoryOperationStatus.Created, "immutability E1 fixture directory");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e2, e2Vga, "SK"), VariantDirectoryOperationStatus.Created, "immutability E2 fixture directory");
+            GraphicsProjectState graphicsState = GraphicsProjectState.Empty(ElviraGameProfile.Elvira1);
+            foreach ((ProjectContext project, VariantContext variant, TranslationProjectVariant translation, GraphicsProjectState gState, RuntimeUiTextState uState, FontProjectState fState) in new[]
+            {
+                (e1, e1Vga, sk, graphicsState, uiState, fonts.Load(e1, "SK").State!),
+                (e2, e2Vga, sk2, GraphicsProjectState.Empty(ElviraGameProfile.Elvira2), RuntimeUiTextState.Empty(ElviraGameProfile.Elvira2), fonts.Load(e2, "SK").State!),
+            })
+            {
+                var build = new CompositeBuildService(new DisposableVariantBuildService(directories), directories,
+                    stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                        new ActiveProjectBuildInput(translation, gState, uState, fState)),
+                    runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, translation), translation.DataFile],
+                    projectVariantProvider: (_, _) => translation.Code);
+                CompositeBuildResult result = build.Build(project, variant, CompositeBuildMode.Full);
+                if (result.Status != CompositeBuildStatus.Success)
+                    throw new InvalidDataException($"Immutability fixture composite build failed: {result.Status} / {result.Stages.Last().Detail}");
+            }
+            RequireGameRootContentEqual(beforeE1, e1.GameRoot, "composite build");
+            RequireGameRootContentEqual(beforeE2, e2.GameRoot, "composite build");
+
+            // Owned outputs exist with the font edits; sources do not.
+            string e1Exe = Path.Combine(directories.GetVariantEditionDirectoryPath(e1, e1Vga, "SK"), ActiveProjectBuildIdentity.ExecutableName(e1Vga, sk));
+            FontLoadResult builtVga = RunVgaFontService.LoadRunVga(e1Exe);
+            if (!builtVga.Glyphs[0x41].Original.SequenceEqual(Convert.FromHexString("A0B0C0D0E0F00000")))
+                throw new InvalidDataException("Variant V5 output lost the SK font edit.");
+            string e2Exe = Path.Combine(directories.GetVariantEditionDirectoryPath(e2, e2Vga, "SK"), ActiveProjectBuildIdentity.ExecutableName(e2Vga, sk2));
+            FontLoadResult builtIt = RunVgaFontService.LoadRunVga(e2Exe);
+            if (!builtIt.Glyphs[0x42].Original.SequenceEqual(Convert.FromHexString("0102030405060708")))
+                throw new InvalidDataException("Variant V2 output lost the SK font edit.");
+
+            // BAT exception phase: launcher generation may touch only the
+            // launcher BAT set; every other original stays byte-identical.
+            var catalog = new VariantCatalog(e1.GameRoot, ElviraGameProfile.Elvira1,
+                [new VariantEntry("Slovak", "GAMEPCSK", true, 1, "SK", "RUNVGASK.EXE")], false);
+            var settings = new LauncherSettings("ELVIRA.BAT", "Smoke", "GAMEPCSK");
+            LauncherService.Generate(ElviraGameProfile.Elvira1, catalog, settings, UiLanguage.English, false);
+            RequireGameRootContentEqual(beforeE1, e1.GameRoot, "launcher BAT generation",
+                allowedChanged: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ELVIRA.BAT" },
+                allowedAdded: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ELVIRA.BAK", "PI1MENU.COM" });
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void RunDirectGameRootWriteBlockSmoke(string elvira1Source, string elvira2Source)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "Pi1DirectWriteBlock", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            // Variant-only bootstrap images used as SaveCopy sources (temp copies).
+            // Real installations may already carry an extended executable, so
+            // only packed/baseline sources are bootstrapped; extended ones are
+            // used as copied.
+            string v5Source = PrepareSaveCopySource(Path.Combine(elvira1Source, "RUNVGA.EXE"), Path.Combine(root, "RUNVGA_SRC.EXE"), vga: true);
+            string v2Source = PrepareSaveCopySource(Path.Combine(elvira2Source, "RUNIT.EXE"), Path.Combine(root, "RUNIT_SRC.EXE"), vga: false);
+            string v5Hash = HashFile(v5Source), v2Hash = HashFile(v2Source);
+
+            // Service-level firewall: SaveCopy refuses to overwrite its source.
+            foreach (string source in new[] { v5Source, v2Source })
+            {
+                bool blocked = false;
+                try { RunVgaFontService.SaveCopy(RunVgaFontService.LoadRunVga(source), source); }
+                catch (InvalidOperationException ex) { blocked = ex.Message.Contains("cannot overwrite", StringComparison.OrdinalIgnoreCase); }
+                if (!blocked)
+                    throw new InvalidDataException($"SaveCopy overwrote its loaded source: {Path.GetFileName(source)}.");
+            }
+            if (HashFile(v5Source) != v5Hash || HashFile(v2Source) != v2Hash)
+                throw new InvalidDataException("Blocked SaveCopy still modified its source.");
+
+            // Original EN project state is read-only at the service layer.
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var fonts = new FontVariantService();
+            FontProjectSaveResult enSave = fonts.Save(e1, "EN", FontProjectState.Empty(ElviraGameProfile.Elvira1));
+            if (enSave.Succeeded)
+                throw new InvalidDataException("Font project save succeeded for Original EN.");
+            if (File.Exists(Path.Combine(e1.GameRoot, "ElviraEditor", "Project", "Projects", "EN", "font-edits.json")))
+                throw new InvalidDataException("Original EN save created project state on disk.");
+
+            // UI layer: unbound and EN-bound editors offer no project mutation.
+            using (var unbound = new FontEditorForm())
+            {
+                if (unbound.IsSaveToProjectEnabledForTest)
+                    throw new InvalidDataException("Font project save is enabled without a bound project.");
+            }
+            VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            using (var bound = new FontEditorForm())
+            {
+                bound.BindProjectVariant(e1, e1Vga, "EN");
+                if (bound.IsSaveToProjectEnabledForTest)
+                    throw new InvalidDataException("Font project save is enabled for Original EN.");
+            }
+
+            // Fixture GameRoots are byte-identical: this smoke wrote temp only.
+            foreach (string original in new[] { Path.Combine(elvira1Source, "RUNVGA.EXE"), Path.Combine(elvira2Source, "RUNIT.EXE") })
+            {
+                if (!File.Exists(original))
+                    throw new InvalidDataException("Expected game source is missing: " + original);
+            }
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static string PrepareSaveCopySource(string sourceExe, string tempCopy, bool vga)
+    {
+        File.Copy(sourceExe, tempCopy, true);
+        bool canBootstrap = vga
+            ? RunVgaBootstrapService.DetectState(tempCopy) is RunVgaBootstrapState.OriginalPacked or RunVgaBootstrapState.UnpackedBaseline
+            : RunItBootstrapService.DetectState(tempCopy) is RunItBootstrapState.OriginalPacked or RunItBootstrapState.CanonicalUnpackedAscii98;
+        if (!canBootstrap)
+            return tempCopy;
+        string generated = tempCopy + ".gen";
+        if (vga)
+            RunVgaBootstrapService.CreateExtendedCp852(tempCopy, generated, GlyphRepository.CreateAllCp852Slots());
+        else
+            RunItBootstrapService.CreateExtendedCp852(tempCopy, generated, GlyphRepository.CreateAllCp852Slots());
+        return generated;
+    }
+
+    private static void RunFontVariantMaterializationSmoke(string elvira1Source, string elvira2Source)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "Pi1FontVariantMaterialization", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            ProjectContext e2 = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
+            string pristineVga = HashFile(Path.Combine(e1.GameRoot, "RUNVGA.EXE"));
+            string pristineIt = HashFile(Path.Combine(e2.GameRoot, "RUNIT.EXE"));
+            var directories = new VariantDirectoryService();
+            var translations = new TranslationProjectService();
+            var graphics = new GraphicsVariantService();
+            var fonts = new FontVariantService();
+            var runtimeUi = new RuntimeUiTextService();
+
+            TranslationProjectState textState = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(e1, textState, "Slovak", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+            translations.Save(e1, translations.Add(textState, sk));
+            TranslationProjectState textState2 = TranslationProjectState.Empty(ElviraGameProfile.Elvira2);
+            TranslationProjectVariant sk2 = translations.Create(e2, textState2, "Slovak", "SK", new Dictionary<int, string>());
+            translations.Save(e2, translations.Add(textState2, sk2));
+
+            // SK carries a Shared E1 glyph edit plus a VGA-scoped E2 edit.
+            FontProjectState fontState = fonts.SetEdit(e1, FontProjectState.Empty(ElviraGameProfile.Elvira1),
+                FontProjectEdit.Create(new(0x41), Convert.FromHexString("A0B0C0D0E0F00000"), FontEditScope.Shared, null));
+            if (!fonts.Save(e1, "SK", fontState).Succeeded)
+                throw new InvalidDataException("E1 SK font project save failed.");
+            FontProjectState fontState2 = fonts.SetEdit(e2, FontProjectState.Empty(ElviraGameProfile.Elvira2),
+                FontProjectEdit.Create(new(0x42), Convert.FromHexString("0102030405060708"), FontEditScope.RuntimeSpecific, VariantRuntimeKind.Elvira2Vga));
+            if (!fonts.Save(e2, "SK", fontState2).Succeeded)
+                throw new InvalidDataException("E2 SK font project save failed.");
+
+            CompositeBuildResult Build(ProjectContext project, VariantContext variant, TranslationProjectVariant translation,
+                GraphicsProjectState gState, RuntimeUiTextState uState, FontProjectState fState)
+            {
+                var build = new CompositeBuildService(new DisposableVariantBuildService(directories), directories,
+                    stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                        new ActiveProjectBuildInput(translation, gState, uState, fState)),
+                    runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, translation), translation.DataFile],
+                    projectVariantProvider: (_, _) => translation.Code);
+                return build.Build(project, variant, CompositeBuildMode.Full);
+            }
+
+            // E1 VGA SK: edit lands in the owned executable; GameRoot unchanged.
+            VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            FontProjectState e1Sk = fonts.Load(e1, "SK").State ?? throw new InvalidDataException("E1 SK font state reload failed.");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "SK"), VariantDirectoryOperationStatus.Created, "font fixture variant directory");
+            CompositeBuildResult vgaResult = Build(e1, e1Vga, sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1),
+                RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1), e1Sk);
+            if (vgaResult.Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("E1 VGA SK font build failed: " + vgaResult.Status + " / " + vgaResult.Stages.Last().Detail);
+            string vgaExe = Path.Combine(directories.GetVariantEditionDirectoryPath(e1, e1Vga, "SK"), ActiveProjectBuildIdentity.ExecutableName(e1Vga, sk));
+            FontLoadResult vgaFont = RunVgaFontService.LoadRunVga(vgaExe);
+            if (!vgaFont.Glyphs[0x41].Original.SequenceEqual(Convert.FromHexString("A0B0C0D0E0F00000")))
+                throw new InvalidDataException("Owned V5 output lost the SK glyph edit.");
+            if (!vgaFont.Glyphs[0x81].Original.SequenceEqual(FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes))
+                throw new InvalidDataException("Owned V5 output lost the reserved 0x81 glyph.");
+            if (HashFile(Path.Combine(e1.GameRoot, "RUNVGA.EXE")) != pristineVga)
+                throw new InvalidDataException("E1 VGA SK font build modified the pristine GameRoot executable.");
+            if (Directory.EnumerateFiles(e1.GameRoot, "*O.EXE").Any() || File.Exists(Path.Combine(e1.GameRoot, "GAMEPCO")))
+                throw new InvalidDataException("E1 VGA SK font build created a legacy O-file in GameRoot.");
+
+            // Edition isolation: a second edition without edits builds cleanly.
+            TranslationProjectState s1Holder = translations.Load(e1).State ?? throw new InvalidDataException("E1 translation reload failed.");
+            TranslationProjectVariant s1 = translations.Create(e1, s1Holder, "Slovak2", "S1", new Dictionary<int, string>());
+            translations.Save(e1, translations.Add(s1Holder, s1));
+            FontProjectState e1S1 = fonts.Load(e1, "S1").State ?? throw new InvalidDataException("E1 S1 font state reload failed.");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "S1"), VariantDirectoryOperationStatus.Created, "font S1 isolation directory");
+            CompositeBuildResult s1Result = Build(e1, e1Vga, s1, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1),
+                RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1), e1S1);
+            if (s1Result.Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("E1 VGA S1 isolation build failed: " + s1Result.Status);
+            string s1Exe = Path.Combine(directories.GetVariantEditionDirectoryPath(e1, e1Vga, "S1"), ActiveProjectBuildIdentity.ExecutableName(e1Vga, s1));
+            FontLoadResult s1Font = RunVgaFontService.LoadRunVga(s1Exe);
+            if (s1Font.Glyphs[0x41].Original.SequenceEqual(Convert.FromHexString("A0B0C0D0E0F00000")))
+                throw new InvalidDataException("E1 VGA S1 output received another edition font state.");
+
+            // Deterministic rebuild: same inputs regenerate identical bytes.
+            string vgaHash = HashFile(vgaExe);
+            directories.DeleteVariantEditionDirectory(e1, e1Vga, "SK");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "SK"), VariantDirectoryOperationStatus.Created, "font fixture rebuild directory");
+            CompositeBuildResult rebuild = Build(e1, e1Vga, sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1),
+                RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1), e1Sk);
+            if (rebuild.Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("E1 VGA SK font rebuild failed: " + rebuild.Status);
+            if (HashFile(vgaExe) != vgaHash)
+                throw new InvalidDataException("E1 VGA SK font rebuild was not deterministic.");
+
+            // EGA gap: the Shared SK edit has no proven EGA writer, so the EGA
+            // build must fail closed instead of silently dropping the edit.
+            VariantContext e1Ega = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Ega);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Ega, "SK"), VariantDirectoryOperationStatus.Created, "font EGA gap directory");
+            CompositeBuildResult egaResult = Build(e1, e1Ega, sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1),
+                RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1), e1Sk);
+            if (egaResult.Status == CompositeBuildStatus.Success)
+                throw new InvalidDataException("E1 EGA SK font build succeeded without a proven EGA writer.");
+            if (!egaResult.Stages.Any(stage => (stage.Detail ?? string.Empty).Contains("RUNEGA", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("E1 EGA SK font build failure does not explain the RUNEGA gap.");
+
+            // E2 VGA SK: scoped edit lands in the owned split-font output.
+            VariantContext e2Vga = VariantContextCatalog.CreateBuiltIns(e2).Single(item => item.VariantId == BuiltInVariantId.Elvira2Vga);
+            FontProjectState e2Sk = fonts.Load(e2, "SK").State ?? throw new InvalidDataException("E2 SK font state reload failed.");
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e2, e2Vga, "SK"), VariantDirectoryOperationStatus.Created, "font E2 fixture directory");
+            CompositeBuildResult itResult = Build(e2, e2Vga, sk2, GraphicsProjectState.Empty(ElviraGameProfile.Elvira2),
+                RuntimeUiTextState.Empty(ElviraGameProfile.Elvira2), e2Sk);
+            if (itResult.Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("E2 VGA SK font build failed: " + itResult.Status + " / " + itResult.Stages.Last().Detail);
+            string itExe = Path.Combine(directories.GetVariantEditionDirectoryPath(e2, e2Vga, "SK"), ActiveProjectBuildIdentity.ExecutableName(e2Vga, sk2));
+            FontLoadResult itFont = RunVgaFontService.LoadRunVga(itExe);
+            if (!itFont.Glyphs[0x42].Original.SequenceEqual(Convert.FromHexString("0102030405060708")))
+                throw new InvalidDataException("Owned V2 output lost the SK glyph edit.");
+            if (!itFont.Glyphs[0x81].Original.SequenceEqual(FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes))
+                throw new InvalidDataException("Owned V2 output lost the reserved 0x81 glyph.");
+            if (HashFile(Path.Combine(e2.GameRoot, "RUNIT.EXE")) != pristineIt)
+                throw new InvalidDataException("E2 VGA SK font build modified the pristine GameRoot executable.");
+
+            // Manifest/status see the font-built output as owned and valid.
+            string manifest = Path.Combine(directories.GetVariantEditionDirectoryPath(e1, e1Vga, "SK"), VariantManifestService.FileName);
+            if (!File.Exists(manifest))
+                throw new InvalidDataException("Font-built variant manifest is missing.");
+            var status = new VariantBuildStatusService(
+                new CompositeBuildService(new DisposableVariantBuildService(directories), directories, CompleteFixtureStages(null, null)),
+                new VariantLauncherService(directories, new CompositeBuildService(new DisposableVariantBuildService(directories), directories, CompleteFixtureStages(null, null))));
+            if (status.Inspect(e1, e1Vga).Status == VariantBuildStatus.Invalid)
+                throw new InvalidDataException("Font-built variant was reported Invalid.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
     private static string RunBrandingAssetsSmoke()
     {
         var assembly = typeof(Program).Assembly;
@@ -2014,27 +2374,41 @@ internal static class Program
         string sourceDir = Path.GetDirectoryName(pristineExe) ?? throw new InvalidDataException("Source directory missing.");
         File.Copy(pristineExe, activeExe);
         File.Copy(Path.Combine(sourceDir, "GAMEPC"), gamepc);
-        FontLoadResult initial = RunVgaFontService.LoadRunVga(activeExe);
-        ProductionDeploymentResult first = GamePatchDeploymentService.Deploy(initial, initial.Glyphs);
-        string originalExeHash = Hash(first.OriginalExecutable), activeGamePcHash = Hash(gamepc);
-        if (File.Exists(Path.Combine(directory, "GAMEPCO")))
-            throw new InvalidDataException($"{name}: font-only deployment unexpectedly created GAMEPCO.");
-        if (Hash(gamepc) != activeGamePcHash)
+        string activeHash = Hash(activeExe), gamePcHash = Hash(gamepc);
+        // Frozen architecture: font deployment is variant-only. Bootstrap a NEW
+        // extended copy carrying one edited glyph; the source executable stays
+        // byte-identical, no O-file appears, and GAMEPC is untouched.
+        List<GlyphModel> glyphs = GlyphRepository.CreateAllCp852Slots().ToList();
+        glyphs.First(g => g.ByteValue == 0x41).ReplaceEdited(Convert.FromHexString("A0B0C0D0E0F00000"));
+        string output = Path.Combine(directory, game == ElviraGame.Elvira1 ? "RUNVGA_V5.EXE" : "RUNIT_V2.EXE");
+        if (game == ElviraGame.Elvira1)
+            RunVgaBootstrapService.CreateExtendedCp852(activeExe, output, glyphs);
+        else
+            RunItBootstrapService.CreateExtendedCp852(activeExe, output, glyphs);
+        if (Hash(activeExe) != activeHash)
+            throw new InvalidDataException($"{name}: variant-only font deployment modified the source executable.");
+        if (File.Exists(Path.Combine(directory, "GAMEPCO")) || Directory.EnumerateFiles(directory, "*O.EXE").Any())
+            throw new InvalidDataException($"{name}: font-only deployment created a legacy O-file.");
+        if (Hash(gamepc) != gamePcHash)
             throw new InvalidDataException($"{name}: font-only deployment modified GAMEPC.");
-        byte[] deployed = File.ReadAllBytes(first.ActiveExecutable);
+        byte[] deployed = File.ReadAllBytes(output);
         int hudOffset = game == ElviraGame.Elvira1
             ? RunVgaBootstrapService.V5FontOffset + FontSlotMetadata.HudEraseGlyph * RunVgaFontService.GlyphBytes
             : RunItBootstrapService.OriginalFontOffset + (FontSlotMetadata.HudEraseGlyph - RunVgaFontService.OriginalFirstChar) * RunVgaFontService.GlyphBytes;
         if (!deployed.AsSpan(hudOffset, RunVgaFontService.GlyphBytes).SequenceEqual(FontSlotMetadata.PatchedHudFullCellEraseGlyphBytes))
             throw new InvalidDataException($"{name}: generated executable did not preserve reserved glyph 0x81.");
-        FontLoadResult extended = RunVgaFontService.LoadRunVga(first.ActiveExecutable);
-        extended.Glyphs[0x41].ReplaceEdited(Convert.FromHexString("A0B0C0D0E0F00000"));
-        ProductionDeploymentResult second = GamePatchDeploymentService.Deploy(extended, extended.Glyphs);
-        if (Hash(second.OriginalExecutable) != originalExeHash || Hash(gamepc) != activeGamePcHash || File.Exists(Path.Combine(directory, "GAMEPCO")))
-            throw new InvalidDataException($"{name}: repeated font deployment changed an immutable backup or unrelated GAMEPC state.");
-        FontLoadResult reopened = RunVgaFontService.LoadRunVga(second.ActiveExecutable);
+        FontLoadResult reopened = RunVgaFontService.LoadRunVga(output);
         if (!reopened.Glyphs[0x41].Original.SequenceEqual(Convert.FromHexString("A0B0C0D0E0F00000")))
-            throw new InvalidDataException($"{name}: active glyph did not round-trip.");
+            throw new InvalidDataException($"{name}: edited glyph did not round-trip into the variant copy.");
+        // Deterministic rebuild: the same table regenerates identical bytes.
+        string output2 = output + ".rebuild";
+        if (game == ElviraGame.Elvira1)
+            RunVgaBootstrapService.CreateExtendedCp852(activeExe, output2, glyphs);
+        else
+            RunItBootstrapService.CreateExtendedCp852(activeExe, output2, glyphs);
+        if (Hash(output2) != Hash(output))
+            throw new InvalidDataException($"{name}: repeated font deployment was not deterministic.");
+        File.Delete(output2);
     }
 
     private static string Hash(string path) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
@@ -2542,14 +2916,21 @@ internal static class Program
             byte[] editedA = glyph.Original.ToArray();
             editedA[0] ^= 0x40;
             glyph.ReplaceEdited(editedA);
-            ProductionDeploymentResult deployment = GamePatchDeploymentService.Deploy(czechLoaded, czechLoaded.Glyphs);
-            if (!string.Equals(deployment.ActiveExecutable, runVgaCz, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Czech Font Apply was redirected away from the bound RUNVGACZ.EXE target.");
+            // Frozen architecture: Czech edits persist to project state only.
+            // Without a bound project the editor offers no GameRoot mutation,
+            // and SaveCopy refuses to overwrite the loaded bound executable.
+            if (editor.IsSaveToProjectEnabledForTest)
+                throw new InvalidDataException("Font project save is available without a bound project.");
+            bool saveCopyBlocked = false;
+            try { RunVgaFontService.SaveCopy(czechLoaded, czechLoaded.SourcePath); }
+            catch (InvalidOperationException) { saveCopyBlocked = true; }
+            if (!saveCopyBlocked)
+                throw new InvalidDataException("SaveCopy overwrote the loaded bound executable.");
             if (Hash(runVga) != englishHash || Hash(Path.Combine(elvira1, "GAMEPCCZ")) != czechDataHash || Hash(Path.Combine(elvira1, "GAMEPCO")) != originalDataHash)
-                throw new InvalidDataException("Czech Font Apply safety regression modified English EXE or GAMEPC data.");
+                throw new InvalidDataException("Czech Font isolation regression modified English EXE or GAMEPC data.");
 
             VariantEntry missing = new("Missing", "GAMEPCXX", true, 4, "XX", "RUNVGAMISSING.EXE");
-            if (editor.BindVariant(missing, elvira1, showErrors: false) || editor.CurrentSourcePath is not null || editor.IsApplyEnabledForTest)
+            if (editor.BindVariant(missing, elvira1, showErrors: false) || editor.CurrentSourcePath is not null || editor.IsSaveToProjectEnabledForTest)
                 throw new InvalidDataException("Missing variant EXE fell back to another source or left Apply enabled.");
         }
 
@@ -2566,7 +2947,7 @@ internal static class Program
         if (Hash(pristineRunVga) != sourceVgaHash || Hash(pristineRunIt) != sourceRunItHash)
             throw new InvalidDataException("Font variant binding smoke modified a supplied source executable.");
 
-        Console.WriteLine("Font variant targets: E1 EN=RUNVGA.EXE SK=RUNVGASK.EXE CZ=RUNVGACZ.EXE; E2 EN=RUNIT.EXE CZ=RUNITCZ.EXE; missing target rejected; Czech apply isolated.");
+        Console.WriteLine("Font variant targets: E1 EN=RUNVGA.EXE SK=RUNVGASK.EXE CZ=RUNVGACZ.EXE; E2 EN=RUNIT.EXE CZ=RUNITCZ.EXE; missing target rejected; Czech save isolated to project; GameRoot writes blocked.");
 
         static string CopyFixture(string source, string directory, string fileName)
         {
@@ -2845,11 +3226,17 @@ internal static class Program
             if (state == "corrupt_exe_o") File.WriteAllBytes(Path.Combine(dir, "RUNITO.EXE"), [0]);
             string beforeExeO = File.Exists(Path.Combine(dir, "RUNITO.EXE")) ? Hash(Path.Combine(dir, "RUNITO.EXE")) : "";
             string beforeGamePcO = File.Exists(Path.Combine(dir, "GAMEPCO")) ? Hash(Path.Combine(dir, "GAMEPCO")) : "";
-            bool shouldBlock = state is "active_missing" or "corrupt_exe_o";
+            // Frozen architecture: direct GameRoot font deployment no longer
+            // exists. The only sanctioned single-file writer (SaveCopy) must
+            // refuse to overwrite the loaded source in every partial state.
             bool blocked = false;
-            try { GamePatchDeploymentService.Deploy(RunVgaFontService.LoadRunVga(active), GlyphRepository.CreateAllCp852Slots()); }
+            try
+            {
+                FontLoadResult loaded = RunVgaFontService.LoadRunVga(active);
+                RunVgaFontService.SaveCopy(loaded, active);
+            }
             catch (Exception) { blocked = true; }
-            if (blocked != shouldBlock) throw new InvalidDataException($"Target-aware backup state {state} had unexpected result: blocked={blocked}.");
+            if (!blocked) throw new InvalidDataException($"Target-aware backup state {state} permitted a direct GameRoot font write.");
             if (beforeExeO.Length != 0 && Hash(Path.Combine(dir, "RUNITO.EXE")) != beforeExeO) throw new InvalidDataException($"State {state} overwrote RUNITO.EXE.");
             if (beforeGamePcO.Length != 0 && Hash(Path.Combine(dir, "GAMEPCO")) != beforeGamePcO) throw new InvalidDataException($"State {state} overwrote unrelated GAMEPCO.");
         }
@@ -5111,8 +5498,8 @@ internal static class Program
             form.LoadExecutableForTest(generated);
             if (form.SourceLoadCount != 1)
                 throw new InvalidDataException("Font editor did not load the generated RUNEGA source exactly once.");
-            if (form.IsApplyEnabledForTest)
-                throw new InvalidDataException("Apply stays enabled for a RUNEGA source; direct patching must remain disabled.");
+            if (form.IsSaveToProjectEnabledForTest)
+                throw new InvalidDataException("Font project save stays enabled for an unbound RUNEGA source; direct patching must remain disabled.");
             if (!form.SelectGlyphForTest(0x41) || form.GlyphHasEditedForTest(0x41) || !form.EditedMatrixForTest.IsEditableForTest)
                 throw new InvalidDataException("RUNEGA in-memory working-copy editing is not available for a normal glyph.");
             try

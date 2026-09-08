@@ -1764,7 +1764,7 @@ internal sealed class MainForm : Form
             : RequireRuntimeUiState(project, _activeTranslationCode);
         FontProjectState font = RequireFontState(project, _activeTranslationCode);
         return ActiveProjectCompositeBuildFactory.Create(_variantDirectories, _translationProjects, _graphicsVariants,
-            new ActiveProjectBuildInput(translation, graphics, runtimeUi, font.Edits.Count != 0));
+            new ActiveProjectBuildInput(translation, graphics, runtimeUi, font));
     }
 
     private IReadOnlyList<string> GetActiveProjectRuntimeArtifacts(ProjectContext project, VariantContext variant)

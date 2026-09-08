@@ -18,7 +18,7 @@ internal sealed class FontEditorForm : Form
     private readonly Label _sourceInfo = new();
     private readonly Label _projectVariantInfo = new();
     private readonly CheckBox _advanced = new();
-    private readonly Button _apply = new();
+    private readonly Button _saveProject = new();
     private readonly Button _saveCopy = new();
     private readonly Button _createExtendedCp852 = new();
     private readonly Button _importFont = new();
@@ -59,7 +59,7 @@ internal sealed class FontEditorForm : Form
     internal string? CurrentSourcePath => _loaded?.SourcePath;
     internal string? BoundVariantExecutablePath => _boundVariantPath;
     internal bool IsManualSource => _isManualSource;
-    internal bool IsApplyEnabledForTest => _apply.Enabled;
+    internal bool IsSaveToProjectEnabledForTest => _saveProject.Enabled;
     internal bool HasFontVariantPresentationForTest => _projectVariantInfo.Parent is not null;
     internal VariantContext? BoundProjectVariantForTest => _fontVariant;
     internal int ProjectEditCountForTest => _fontProjectState?.Edits.Count ?? 0;
@@ -163,12 +163,14 @@ internal sealed class FontEditorForm : Form
         {
             _fontProject = null; _fontVariant = null; _fontProjectState = null; _fontProjectCode = ProjectVariantOwnership.OriginalCode;
             UpdateFontProjectPresentation();
+            RefreshEditedActionState();
             return;
         }
         _fontProject = project; _fontVariant = variant; _fontProjectCode = ProjectVariantOwnership.NormalizeCode(project, projectVariantCode);
         FontProjectLoadResult loaded = _fontVariants.Load(project, _fontProjectCode);
         _fontProjectState = loaded.IsSuccess ? loaded.State : null;
         UpdateFontProjectPresentation();
+        RefreshEditedActionState();
     }
 
     /// <summary>Returns the embedded editor to the neutral no-installation
@@ -220,15 +222,15 @@ internal sealed class FontEditorForm : Form
         _exportFont.Enabled = false;
         _exportFont.Click += (_, _) => ExportFont();
 
-        _createExtendedCp852.Text = UiText.Get("ActivateCp852Patch");
+        _createExtendedCp852.Text = UiText.Get("Font.CreateExtendedExe");
         _createExtendedCp852.SetBounds(10, 45, 225, 30);
         _createExtendedCp852.Enabled = false;
         _createExtendedCp852.Click += (_, _) => CreateExtendedCp852();
 
-        _apply.Text = UiText.Get("ApplyToExe");
-        _apply.SetBounds(245, 45, 145, 30);
-        _apply.Enabled = false;
-        _apply.Click += (_, _) => ApplyToExe();
+        _saveProject.Text = UiText.Get("SaveToProject");
+        _saveProject.SetBounds(245, 45, 145, 30);
+        _saveProject.Enabled = false;
+        _saveProject.Click += (_, _) => SaveFontProjectState();
 
         _saveCopy.Text = UiText.Get("SaveCopyAs");
         _saveCopy.SetBounds(400, 45, 170, 30);
@@ -249,9 +251,9 @@ internal sealed class FontEditorForm : Form
         _projectVariantInfo.AutoEllipsis = true;
         _projectVariantInfo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _projectVariantInfo.ForeColor = SystemColors.ControlText;
-        foreach (Button button in new[] { _open, _copyOriginalToEdited, _importFont, _exportFont, _createExtendedCp852, _apply, _saveCopy })
+        foreach (Button button in new[] { _open, _copyOriginalToEdited, _importFont, _exportFont, _createExtendedCp852, _saveProject, _saveCopy })
             ConfigureCenteredButton(button);
-        top.Controls.AddRange(new Control[] { _open, _apply, _saveCopy, _createExtendedCp852, _copyOriginalToEdited, _importFont, _exportFont, _variantInfo, _sourceInfo, _projectVariantInfo });
+        top.Controls.AddRange(new Control[] { _open, _saveProject, _saveCopy, _createExtendedCp852, _copyOriginalToEdited, _importFont, _exportFont, _variantInfo, _sourceInfo, _projectVariantInfo });
 
         var left = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
         var previewHost = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 8, 10, 10), BackColor = SystemColors.Control };
@@ -577,7 +579,7 @@ internal sealed class FontEditorForm : Form
             _lastAutoLoadedPath = Path.GetFullPath(path);
             _glyphs = _loaded.Glyphs;
             PopulateList();
-            _apply.Enabled = false;
+            _saveProject.Enabled = false;
             _saveCopy.Enabled = false;
             RunVgaBootstrapState bootstrapState = RunVgaBootstrapService.DetectState(path);
             RunItBootstrapState runItState = RunItBootstrapService.DetectState(path);
@@ -593,7 +595,7 @@ internal sealed class FontEditorForm : Form
         catch (Exception ex)
         {
             _loaded = null;
-            _apply.Enabled = false;
+            _saveProject.Enabled = false;
             _saveCopy.Enabled = false;
             _createExtendedCp852.Enabled = false;
             _copyOriginalToEdited.Enabled = false;
@@ -627,7 +629,7 @@ internal sealed class FontEditorForm : Form
         _lastAutoLoadedPath = null;
         _glyphs = GlyphRepository.CreateAllCp852Slots().ToList();
         _current = null;
-        _apply.Enabled = false;
+        _saveProject.Enabled = false;
         _saveCopy.Enabled = false;
         _createExtendedCp852.Enabled = false;
         _copyOriginalToEdited.Enabled = false;
@@ -847,33 +849,72 @@ internal sealed class FontEditorForm : Form
         return answer == DialogResult.Yes;
     }
 
-    private void ApplyToExe()
+    /// <summary>Persists the in-memory edited glyphs as edition font project
+    /// state. Original game executables are never modified: the state
+    /// materializes into owned VARIANTS executables through Build Variant.
+    /// Edits are scoped to the bound variant runtime so other runtimes keep
+    /// building deterministically.</summary>
+    private void SaveFontProjectState()
     {
-        if (_loaded is null || !_loaded.CanApply || !_glyphs.Any(g => g.HasEdited)) return;
-        int modified = _glyphs.Count(g => g.IsLoadedFromSource && g.IsModified);
-        if (modified == 0)
+        if (_fontProject is null || _fontVariant is null || _fontProjectState is null) return;
+        if (ProjectVariantOwnership.IsOriginal(_fontProjectCode))
         {
-            MessageBox.Show(this, UiText.Get("NoGlyphChanges"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, UiText.Get("Workflow.OriginalReadOnly"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (_loaded is null) return;
+        if (!IsLoadedGameForProject())
+        {
+            MessageBox.Show(this, UiText.Get("Font.GameMismatch"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        if (!ConfirmClipBeforeOutput(UiText.Get("ApplyToExe"))) return;
-
-        var answer = MessageBox.Show(this,
-            string.Format(UiText.Get("ConfirmApplyFont"), modified, _loaded.SourcePath),
-            UiText.Get("ApplyFontTitle"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-        if (answer != DialogResult.Yes) return;
-
         try
         {
-            ProductionDeploymentResult result = GamePatchDeploymentService.Deploy(_loaded, _glyphs);
-            LoadRunVga(result.ActiveExecutable, showErrors: true);
-            MessageBox.Show(this, string.Format(UiText.Get("Font.PatchedExecutable"), result.ActiveExecutable, result.OriginalExecutable), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            FontProjectState state = _fontProjectState;
+            int saved = 0;
+            foreach (GlyphModel glyph in _glyphs)
+            {
+                if (!glyph.HasEdited || !glyph.IsLoadedFromSource) continue;
+                if (glyph.ByteValue == FontSlotMetadata.HudEraseGlyph) continue;
+                var edit = FontProjectEdit.Create(new(glyph.ByteValue), glyph.Edited, FontEditScope.RuntimeSpecific, _fontVariant.RuntimeKind);
+                state = _fontVariants.SetEdit(_fontProject, state, edit);
+                saved++;
+            }
+            if (saved == 0)
+            {
+                MessageBox.Show(this, UiText.Get("NoGlyphChanges"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            FontProjectSaveResult result = _fontVariants.Save(_fontProject, _fontProjectCode, state);
+            if (!result.Succeeded)
+            {
+                MessageBox.Show(this, result.Detail ?? UiText.Get("Font.ProjectSaveFailed"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            _fontProjectState = state;
+            SetStatusText(string.Format(UiText.Get("Font.ProjectSaved"), saved));
+            MessageBox.Show(this, string.Format(UiText.Get("Font.ProjectSaved"), saved), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            RefreshEditedActionState();
+            UpdateFontProjectPresentation();
+            _list.Invalidate();
+            SelectGlyph();
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, UiText.Get("ApplyFontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, ex.Message, UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private bool IsLoadedGameForProject()
+    {
+        if (_loaded is null || _fontProject is null) return false;
+        return (_loaded.Game, _fontProject.GameProfile) switch
+        {
+            (ElviraGame.Elvira1, ElviraGameProfile.Elvira1) => true,
+            (ElviraGame.Elvira2, ElviraGameProfile.Elvira2) => true,
+            _ => false
+        };
     }
 
     private void SaveCopy()
@@ -899,23 +940,13 @@ internal sealed class FontEditorForm : Form
         }
     }
 
+    /// <summary>Creates an extended-CP852 executable as a NEW user-chosen
+    /// file from a verified packed/baseline source. The pristine GameRoot
+    /// source is only read; this never patches a game installation.
+    /// Use Save to project + Build Variant for owned variant executables.</summary>
     private void CreateExtendedCp852()
     {
         if (_loaded is null) return;
-        if (_loaded.Game is ElviraGame.Elvira1 or ElviraGame.Elvira2)
-        {
-            if (!ConfirmClipBeforeOutput(UiText.Get("Font.ActivateCp852"))) return;
-            if (MessageBox.Show(this, UiText.Get("Font.ConfirmActivate"), UiText.Get("FontTitle"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-            try
-            {
-                ProductionDeploymentResult result = GamePatchDeploymentService.Deploy(_loaded, _glyphs);
-                LoadRunVga(result.ActiveExecutable, showErrors: true);
-                string profile = _loaded?.Game == ElviraGame.Elvira2 ? UiText.Get("Font.Elvira2V2Profile") : UiText.Get("Font.Elvira1V5Profile");
-                MessageBox.Show(this, string.Format(UiText.Get("Font.Activated"), profile, result.OriginalExecutable), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex) { MessageBox.Show(this, ex.Message, UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error); }
-            return;
-        }
         RunItBootstrapState runItState = RunItBootstrapService.DetectState(_loaded.SourcePath);
         if (runItState != RunItBootstrapState.Unsupported)
         {
@@ -1036,7 +1067,12 @@ internal sealed class FontEditorForm : Form
     {
         bool anyEdited = _glyphs.Any(g => g.HasEdited);
         bool fullEdited = _loaded?.HasFullCp852Font == true && _glyphs.All(g => g.HasEdited);
-        _apply.Enabled = _loaded?.CanApply == true && anyEdited;
+        bool canSaveToProject = _fontProject is not null && _fontVariant is not null && _fontProjectState is not null
+            && !ProjectVariantOwnership.IsOriginal(_fontProjectCode);
+        _saveProject.Enabled = canSaveToProject && anyEdited;
+        _toolTip.SetToolTip(_saveProject, _fontProject is null || _fontVariant is null || _fontProjectState is null
+            ? UiText.Get("Font.ProjectUnavailable")
+            : ProjectVariantOwnership.IsOriginal(_fontProjectCode) ? UiText.Get("Workflow.OriginalReadOnly") : string.Empty);
         _saveCopy.Enabled = _loaded?.CanApply == true && anyEdited;
         _exportFont.Enabled = fullEdited;
         UpdateFontStatusSummary();
@@ -1148,7 +1184,8 @@ internal sealed class FontEditorForm : Form
     {
         Text = UiText.Get("FontTitle");
         _open.Text = UiText.Get("OpenGameExe");
-        _apply.Text = UiText.Get("ApplyToExe");
+        _saveProject.Text = UiText.Get("SaveToProject");
+        _createExtendedCp852.Text = UiText.Get("Font.CreateExtendedExe");
         _saveCopy.Text = UiText.Get("SaveCopyAs");
         _copyOriginalToEdited.Text = UiText.Get("CopyOriginalEdited");
         _importFont.Text = UiText.Get("ImportFont");

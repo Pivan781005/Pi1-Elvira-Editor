@@ -6,7 +6,7 @@ internal sealed record ActiveProjectBuildInput(
     TranslationProjectVariant Translation,
     GraphicsProjectState Graphics,
     RuntimeUiTextState RuntimeUi,
-    bool HasFontProjectState = false);
+    FontProjectState? Font = null);
 
 internal static class ActiveProjectCompositeBuildFactory
 {
@@ -19,7 +19,7 @@ internal static class ActiveProjectCompositeBuildFactory
         [
             new SelectedTranslationProjectBuildStep(translations, directories, input.Translation),
             new GraphicsProjectMaterializationBuildStep(directories, graphics, input.Graphics, input.Translation.Code),
-            new NoProjectChangesBuildStep(CompositeBuildStage.ApplyFontTransformations, "No saved font project changes", input.HasFontProjectState),
+            new FontProjectBuildStep(input.Font),
             new RuntimeUiProjectBuildStep(input.RuntimeUi),
             new TranslationAwareExecutableBuildStep(directories, input.Translation, input.RuntimeUi)
         ];
@@ -146,14 +146,31 @@ internal sealed class GraphicsProjectMaterializationBuildStep : ICompositeBuildS
     }
 }
 
-internal sealed class NoProjectChangesBuildStep : ICompositeBuildStep
+/// <summary>Font project-state gate. VGA and EGA/RUNIT font edits materialize
+/// inside the owned variant executable bootstrap; this stage performs no byte
+/// mutation itself. Elvira I EGA has no proven font writer, so any
+/// EGA-applicable saved edit fails the build closed here instead of being
+/// silently dropped. Pristine GameRoot is never touched.</summary>
+internal sealed class FontProjectBuildStep : ICompositeBuildStep
 {
-    private readonly CompositeBuildStage _stage; private readonly string _name; private readonly bool _hasUnsupportedState;
-    internal NoProjectChangesBuildStep(CompositeBuildStage stage, string name, bool hasUnsupportedState)
-    { _stage = stage; _name = name; _hasUnsupportedState = hasUnsupportedState; }
-    public CompositeBuildStage Stage => _stage; public string Name => _name;
+    private readonly FontProjectState? _font;
+    internal FontProjectBuildStep(FontProjectState? font) => _font = font;
+    public CompositeBuildStage Stage => CompositeBuildStage.ApplyFontTransformations;
+    public string Name => "Project font edits";
     public bool AppliesTo(VariantContext variant) => variant is not null;
-    public string? Preflight(ProjectContext project, VariantContext variant) => _hasUnsupportedState ? "Saved project state requires a materializer that is not configured." : null;
+    public string? Preflight(ProjectContext project, VariantContext variant)
+    {
+        try
+        {
+            FontProjectState state = _font ?? FontProjectState.Empty(project.GameProfile);
+            IReadOnlyList<FontVariantProjection> applicable =
+                new FontVariantService().GetFontEditsForVariant(project, state, variant);
+            if (variant.RuntimeKind == VariantRuntimeKind.Elvira1Ega && applicable.Count > 0)
+                return UiText.Get("Font.EgaBuildNotMaterialized");
+            return null;
+        }
+        catch (ArgumentException ex) { return "Font project state is invalid: " + ex.Message; }
+    }
     public string? Execute(ProjectContext project, VariantContext variant) => null;
 }
 
