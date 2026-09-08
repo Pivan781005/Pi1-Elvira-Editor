@@ -59,11 +59,12 @@ internal static class RunItBootstrapService
         return IsExtended(data) ? RunItBootstrapState.ExtendedCp852 : RunItBootstrapState.Unsupported;
     }
 
-    public static RunItBootstrapResult CreateExtendedCp852(string sourcePath, string destinationPath, IReadOnlyList<GlyphModel> glyphs)
+    public static RunItBootstrapResult CreateExtendedCp852(string sourcePath, string destinationPath, IReadOnlyList<GlyphModel> glyphs, string? gameRoot = null)
     {
         // R9D: a missing source is a different result from an unsupported one.
         if (!File.Exists(sourcePath))
             throw new FileNotFoundException("RUNIT source is missing; bootstrap was blocked. No files were changed.", sourcePath);
+        GameRootWriteGuard.RejectGameFormatOutputInGameRoot(gameRoot, destinationPath);
         RunItBootstrapState state = DetectState(sourcePath);
         if (state == RunItBootstrapState.ExtendedCp852)
             throw new InvalidOperationException("This RUNIT.EXE is already Extended CP852; regenerate from RUNITO.EXE instead.");

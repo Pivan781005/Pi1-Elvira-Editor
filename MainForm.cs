@@ -186,7 +186,6 @@ internal sealed class MainForm : Form
     private readonly CenteredCaptionButton btnReplace = new();
     private readonly CenteredCaptionButton btnClearEdit = new();
     private readonly CenteredCaptionButton btnExport = new();
-    private readonly CenteredCaptionButton btnRestore = new();
     private readonly CheckBox chkPixelPerfect = new();
     private readonly Label lblGraphicsVariant = new();
     private readonly ComboBox cmbGraphicsScope = new();
@@ -276,7 +275,7 @@ internal sealed class MainForm : Form
         btnExportTranslations.Enabled && btnImportTranslations.Enabled;
     internal bool HasNeutralGraphicsPresentationForTest =>
         _activeProject is null && _currentVga is null && _table is null &&
-        !btnReload.Enabled && !btnReplace.Enabled && !btnExport.Enabled && !btnRestore.Enabled &&
+        !btnReload.Enabled && !btnReplace.Enabled && !btnExport.Enabled &&
         !btnReloadPreview.Enabled &&
         cmbGraphicsScope.SelectedIndex < 0 && !cmbGraphicsScope.Enabled &&
         lblGraphicsVariant.Text == UiText.Get("Graphics.ProjectUnavailable") + ": —" &&
@@ -301,7 +300,7 @@ internal sealed class MainForm : Form
         HasNeutralGraphicsPresentationForTest &&
         !lblTextOverview.Text.Contains(GamePcOriginalService.OriginalFileName, StringComparison.OrdinalIgnoreCase);
     internal string NeutralStartupDiagnosticForTest =>
-        $"project={_activeProject is not null};variant={_activeVariant is not null};detected='{lblDetectedGame.Text}';status='{lblStatus.Text}';graphics='{lblGraphicsVariant.Text}';palette='{lblPaletteMode.Text}';actions={btnReload.Enabled}/{btnReplace.Enabled}/{btnExport.Enabled}/{btnRestore.Enabled}/{btnReloadPreview.Enabled};text='{lblTextOverview.Text}'";
+        $"project={_activeProject is not null};variant={_activeVariant is not null};detected='{lblDetectedGame.Text}';status='{lblStatus.Text}';graphics='{lblGraphicsVariant.Text}';palette='{lblPaletteMode.Text}';actions={btnReload.Enabled}/{btnReplace.Enabled}/{btnExport.Enabled}/{btnReloadPreview.Enabled};text='{lblTextOverview.Text}'";
     internal string UiStateDiagnosticForTest =>
         $"neutral={HasNeutralStartupPresentationForTest};text={HasNeutralTextActionStateForTest};variantAdd={btnVariantAdd.Enabled};" +
         $"textActions={btnOpenDataFile.Enabled}/{btnReloadTexts.Enabled}/{btnSaveTexts.Enabled}/{btnSaveAsDataFile.Enabled}/{btnCreateDataVariant.Enabled}/{btnExportTranslations.Enabled}/{btnImportTranslations.Enabled}; " +
@@ -3207,7 +3206,6 @@ internal sealed class MainForm : Form
         btnReload.Text = UiText.Get("Refresh");
         btnReplace.Text = UiText.Get("ReplacePng");
         btnExport.Text = UiText.Get("ExportPng");
-        btnRestore.Text = UiText.Get("RestoreOriginal");
         btnReloadTexts.Text = UiText.Get("ReloadTexts");
         btnSaveTexts.Text = UiText.Get("SaveToProject");
         btnOpenDataFile.Text = UiText.Get("OpenDataFile");
@@ -3939,24 +3937,21 @@ internal sealed class MainForm : Form
         btnReplace.Text = UiText.Get("ReplacePng");
         btnClearEdit.Text = UiText.Get("CancelEdit");
         btnExport.Text = UiText.Get("ExportPng");
-        btnRestore.Text = UiText.Get("RestoreOriginal");
 
         btnReplace.Width = 120;
         btnClearEdit.Width = 100;
         btnExport.Width = 110;
-        btnRestore.Width = 130;
         // Unified with the other action buttons: EN widths stay minima so the
-        // SK captions ("Exportovať PNG...", "Obnoviť pôvodný obrázok") grow
+        // SK captions ("Exportovať PNG...") grow
         // in width instead of truncating; height stays pinned at 32 px.
-        foreach (Button button in new[] { btnReplace, btnClearEdit, btnExport, btnRestore })
+        foreach (Button button in new[] { btnReplace, btnClearEdit, btnExport })
             ConfigureCenteredButton(button, allowWidthGrowth: true);
 
         btnReplace.Click += (_, _) => ReplaceSelected();
         btnClearEdit.Click += (_, _) => ClearSelectedEdit();
         btnExport.Click += (_, _) => ExportSelected();
-        btnRestore.Click += (_, _) => RestoreOriginal();
 
-        buttons.Controls.AddRange(new Control[] { btnReplace, btnClearEdit, btnExport, btnRestore });
+        buttons.Controls.AddRange(new Control[] { btnReplace, btnClearEdit, btnExport });
 
         previewViewport.Dock = DockStyle.Fill;
         previewViewport.Padding = Padding.Empty;
@@ -4718,7 +4713,6 @@ internal sealed class MainForm : Form
         btnReloadPreview.Enabled = selected;
         btnReplace.Enabled = selected && editableProject;
         btnExport.Enabled = selected;
-        btnRestore.Enabled = selected && _currentVga is not null && File.Exists(SafeDeployer.OriginalBackupPath(_currentVga));
         btnClearEdit.Enabled = selected && editableProject && _edits.ContainsKey(SelectedEntry()!.ImageId);
         if (!imageReady)
         {
@@ -5306,40 +5300,6 @@ internal sealed class MainForm : Form
         return true;
     }
 
-    private void RestoreOriginal()
-    {
-        if (string.IsNullOrWhiteSpace(_currentVga))
-            return;
-
-        string originalBackup = SafeDeployer.OriginalBackupPath(_currentVga);
-
-        if (!File.Exists(originalBackup))
-        {
-            MessageBox.Show(
-                UiText.Get("OriginalBackupMissing"),
-                UiText.Get("Warning"),
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            return;
-        }
-
-        try
-        {
-            SafeDeployer.RestoreOriginal(_currentVga);
-            _edits.Clear();
-            LoadSelectedZone();
-            ShowSelectedPreview();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                ex.Message,
-                UiText.Get("Warning"),
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-        }
-    }
-
     private void NavigateToActiveBuildTarget()
     {
         if (_activeProject is null || _activeVariant is null) return;
@@ -5682,7 +5642,7 @@ internal sealed class MainForm : Form
         (Button Button, string Name)[] buttons =
         [
             (btnReplace, nameof(btnReplace)), (btnClearEdit, nameof(btnClearEdit)),
-            (btnExport, nameof(btnExport)), (btnRestore, nameof(btnRestore)),
+            (btnExport, nameof(btnExport)),
             (btnVerifyPristine, nameof(btnVerifyPristine)),
             (btnRestoreBaselineLauncher, nameof(btnRestoreBaselineLauncher)),
             (btnRebuildOwnedVariant, nameof(btnRebuildOwnedVariant)),

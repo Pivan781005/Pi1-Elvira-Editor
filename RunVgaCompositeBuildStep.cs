@@ -52,7 +52,7 @@ internal sealed class RunVgaCompositeBuildStep : ICompositeBuildStep
             // The bootstrap keeps enforcing the reserved 0x81 glyph, and the
             // pristine GameRoot source is only read, never written.
             IReadOnlyList<GlyphModel> glyphs = FontVariantService.ResolveBootstrapGlyphs(project, _projectCode, variant);
-            RunVgaBootstrapResult built = RunVgaBootstrapService.CreateExtendedCp852(source, output, glyphs);
+            RunVgaBootstrapResult built = RunVgaBootstrapService.CreateExtendedCp852(source, output, glyphs, project.GameRoot);
             FontLoadResult loaded = RunVgaFontService.LoadRunVga(built.OutputPath);
             if (RunVgaBootstrapService.DetectState(built.OutputPath) != RunVgaBootstrapState.ExtendedCp852V5 ||
                 loaded.Layout != RunVgaFontLayout.ExtendedCp852V5 || loaded.LoadedGlyphCount != 256 ||

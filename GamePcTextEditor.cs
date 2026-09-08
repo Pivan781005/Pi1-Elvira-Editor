@@ -420,6 +420,7 @@ internal static class GameDataFileService
     {
         GamePcOriginalService.RejectProtectedPath(sourcePath);
         GamePcOriginalService.RejectProtectedPath(destinationPath);
+        GameRootWriteGuard.RejectProtectedFileName(destinationPath);
         ValidateNewVariantDestination(sourcePath, destinationPath);
         byte[] data = GamePcTextEditor.BuildEditedData(sourcePath, edits, entries, enc, profile, baseEntries);
         WriteNew(destinationPath, data, entries.Count, profile);
@@ -428,6 +429,11 @@ internal static class GameDataFileService
 
     public static void WriteCurrent(string dataFilePath, byte[] data, int expectedEntryCount, ElviraGameProfile profile)
     {
+        // Dormant in normal production UI, but a future caller must never reach
+        // a protected GameRoot asset through this writer. In-place GAMEPC
+        // replacement is obsolete: the SafeDeployer primitive was deleted, so
+        // any residual GAMEPC targeting fails here instead of deploying.
+        GameRootWriteGuard.RejectProtectedFileName(dataFilePath);
         GamePcOriginalService.RejectProtectedPath(dataFilePath);
         if (!File.Exists(dataFilePath)) throw new FileNotFoundException("Current data file is missing.", dataFilePath);
         string temp = TemporaryPath(dataFilePath, "save");
@@ -435,10 +441,7 @@ internal static class GameDataFileService
         {
             File.WriteAllBytes(temp, data);
             GamePcTextEditor.ValidateSerializedData(temp, expectedEntryCount, profile);
-            if (Path.GetFileName(dataFilePath).Equals("GAMEPC", StringComparison.OrdinalIgnoreCase))
-                SafeDeployer.ReplaceActiveWithPrepared(dataFilePath, temp);
-            else
-                ReplaceWorkingVariant(dataFilePath, temp);
+            ReplaceWorkingVariant(dataFilePath, temp);
         }
         finally
         {

@@ -917,6 +917,23 @@ internal sealed class FontEditorForm : Form
         };
     }
 
+    /// <summary>Best-known game installation root for destination guarding, or
+    /// null when the editor cannot attribute the loaded source to one.</summary>
+    private string? KnownGameRoot()
+    {
+        if (_fontProject is not null) return _fontProject.GameRoot;
+        if (_boundVariantPath is not null)
+        {
+            try { return Path.GetDirectoryName(Path.GetFullPath(_boundVariantPath)); } catch { }
+        }
+        if (!string.IsNullOrWhiteSpace(_initialGameDirectory)) return _initialGameDirectory;
+        if (_loaded is not null)
+        {
+            try { return Path.GetDirectoryName(Path.GetFullPath(_loaded.SourcePath)); } catch { }
+        }
+        return null;
+    }
+
     private void SaveCopy()
     {
         if (_loaded is null || !_loaded.CanApply || !_glyphs.Any(g => g.HasEdited)) return;
@@ -931,7 +948,7 @@ internal sealed class FontEditorForm : Form
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         try
         {
-            RunVgaFontService.SaveCopy(_loaded, dlg.FileName);
+            RunVgaFontService.SaveCopy(_loaded, dlg.FileName, KnownGameRoot());
             MessageBox.Show(this, string.Format(UiText.Get("FontCopySaved"), dlg.FileName), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
@@ -983,7 +1000,7 @@ internal sealed class FontEditorForm : Form
         try
         {
             Cursor = Cursors.WaitCursor;
-            RunVgaBootstrapResult result = RunVgaBootstrapService.CreateExtendedCp852(_loaded.SourcePath, dlg.FileName, _glyphs);
+            RunVgaBootstrapResult result = RunVgaBootstrapService.CreateExtendedCp852(_loaded.SourcePath, dlg.FileName, _glyphs, KnownGameRoot());
             LoadRunVga(result.OutputPath, showErrors: true);
             MessageBox.Show(this,
                 string.Format(UiText.Get("Font.V5Created"), result.OutputPath, result.Sha256, result.UsedEditedFont ? UiText.Get("Font.CurrentEditedGlyphs") : UiText.Get("Font.DefaultGlyphSlots")),
@@ -1027,7 +1044,7 @@ internal sealed class FontEditorForm : Form
         try
         {
             Cursor = Cursors.WaitCursor;
-            RunItBootstrapResult result = RunItBootstrapService.CreateExtendedCp852(_loaded.SourcePath, dlg.FileName, _glyphs);
+            RunItBootstrapResult result = RunItBootstrapService.CreateExtendedCp852(_loaded.SourcePath, dlg.FileName, _glyphs, KnownGameRoot());
             LoadRunVga(result.OutputPath, showErrors: true);
             MessageBox.Show(this, string.Format(UiText.Get("Font.RunItCreated"), result.OutputPath, result.Sha256),
                 UiText.Get("Font.CreateRunItTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1133,6 +1150,7 @@ internal sealed class FontEditorForm : Form
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         try
         {
+            GameRootWriteGuard.RejectProtectedExistingOriginal(KnownGameRoot(), dlg.FileName);
             string hash = RunVgaFontService.ExportEditedFont(_loaded, dlg.FileName);
             SetStatusText(string.Format(UiText.Get("ExportedFontStatus"), dlg.FileName, hash), Path.GetFileName(dlg.FileName));
             MessageBox.Show(this, string.Format(UiText.Get("FontExported"), dlg.FileName, hash), UiText.Get("ExportFontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);

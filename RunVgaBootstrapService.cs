@@ -39,11 +39,12 @@ internal static class RunVgaBootstrapService
         return IsV5(data) ? RunVgaBootstrapState.ExtendedCp852V5 : RunVgaBootstrapState.Unsupported;
     }
 
-    public static RunVgaBootstrapResult CreateExtendedCp852(string sourcePath, string destinationPath, IReadOnlyList<GlyphModel> glyphs)
+    public static RunVgaBootstrapResult CreateExtendedCp852(string sourcePath, string destinationPath, IReadOnlyList<GlyphModel> glyphs, string? gameRoot = null)
     {
         // R9D: a missing source is a different result from an unsupported one.
         if (!File.Exists(sourcePath))
             throw new FileNotFoundException("RUNVGA source is missing; bootstrap was blocked. No files were changed.", sourcePath);
+        GameRootWriteGuard.RejectGameFormatOutputInGameRoot(gameRoot, destinationPath);
         RunVgaBootstrapState state = DetectState(sourcePath);
         if (state == RunVgaBootstrapState.ExtendedCp852V5)
             throw new InvalidOperationException("This RUNVGA is already an Extended CP852 / V5 executable; bootstrap is intentionally disabled.");

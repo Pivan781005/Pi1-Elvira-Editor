@@ -725,9 +725,9 @@ internal static class Program
             try
             {
                 RunVgaBackupSmoke(args[1], args[2]);
-                Console.WriteLine("VGA O-backup workflow: PASS"); Environment.ExitCode = 0;
+                Console.WriteLine("VGA backup firewall: PASS"); Environment.ExitCode = 0;
             }
-            catch (Exception ex) { Console.Error.WriteLine("VGA O-backup workflow: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            catch (Exception ex) { Console.Error.WriteLine("VGA backup firewall: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
         if (args.Length == 2 && args[0].Equals("--runit-patched-preview", StringComparison.OrdinalIgnoreCase))
@@ -779,9 +779,9 @@ internal static class Program
             try
             {
                 RunGamePcBackupSmoke(args[1], args[2]);
-                Console.WriteLine("GAMEPC O-backup workflow: PASS"); Environment.ExitCode = 0;
+                Console.WriteLine("GAMEPC backup firewall: PASS"); Environment.ExitCode = 0;
             }
-            catch (Exception ex) { Console.Error.WriteLine("GAMEPC O-backup workflow: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            catch (Exception ex) { Console.Error.WriteLine("GAMEPC backup firewall: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
         if (args.Length == 4 && args[0].Equals("--data-file-variant-smoke", StringComparison.OrdinalIgnoreCase))
@@ -1165,6 +1165,12 @@ internal static class Program
         {
             try { RunFontVariantMaterializationSmoke(args[1], args[2]); Console.WriteLine("Font variant materialization: PASS"); Environment.ExitCode = 0; }
             catch (Exception ex) { Console.Error.WriteLine("Font variant materialization: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--protected-gameroot-write-firewall-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { RunProtectedGameRootWriteFirewallSmoke(args[1], args[2]); Console.WriteLine("Protected GameRoot write firewall: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Protected GameRoot write firewall: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
         if (args.Length == 1 && args[0].Equals("--version-smoke", StringComparison.OrdinalIgnoreCase))
@@ -1667,19 +1673,24 @@ internal static class Program
             !source.AsSpan(oldTextEnd).SequenceEqual(output.AsSpan(newTextEnd)))
             throw new InvalidDataException($"{name}: header preservation or current-source suffix preservation failed.");
 
-        GamePcTextEditor.SaveInPlace(working, edits, entries, enc, profile);
-        List<GamePcStringEntry> saved = GamePcTextEditor.LoadEntries(working, profile);
-        if (Hash(working) == sourceHash || saved.Count != expectedCount || !saved[longIndex].Decode(enc).Equals(longText, StringComparison.Ordinal) ||
-            !File.Exists(Path.Combine(directory, "GAMEPCO")))
-            throw new InvalidDataException($"{name}: transactional in-place repack or original backup behavior failed.");
+        // Transactional save targets a variant-named working copy: in-place
+        // GAMEPC writes are obsolete and blocked, and no O-file may appear.
+        string workCopy = Path.Combine(directory, "GAMEPCWK");
+        File.Copy(working, workCopy);
+        List<GamePcStringEntry> workEntries = GamePcTextEditor.LoadEntries(workCopy, profile);
+        GamePcTextEditor.SaveInPlace(workCopy, edits, workEntries, enc, profile);
+        List<GamePcStringEntry> saved = GamePcTextEditor.LoadEntries(workCopy, profile);
+        if (Hash(workCopy) == sourceHash || saved.Count != expectedCount || !saved[longIndex].Decode(enc).Equals(longText, StringComparison.Ordinal) ||
+            Directory.EnumerateFiles(directory, "GAMEPCO").Any())
+            throw new InvalidDataException($"{name}: transactional variant-named repack failed or created an O-file.");
 
-        string afterValidSave = Hash(working);
+        string afterValidSave = Hash(workCopy);
         foreach (string badText in new[] { "emoji 😀", "embedded\0nul" })
         {
             bool rejected = false;
-            try { _ = GamePcTextEditor.BuildEditedData(working, new Dictionary<int, string> { [longIndex] = badText }, saved, enc, profile); }
+            try { _ = GamePcTextEditor.BuildEditedData(workCopy, new Dictionary<int, string> { [longIndex] = badText }, saved, enc, profile); }
             catch (InvalidOperationException) { rejected = true; }
-            if (!rejected || Hash(working) != afterValidSave)
+            if (!rejected || Hash(workCopy) != afterValidSave)
                 throw new InvalidDataException($"{name}: invalid CP852/NUL validation was not transactional.");
         }
 
@@ -1689,10 +1700,12 @@ internal static class Program
         catch (InvalidDataException) { corruptRejected = true; }
         if (!corruptRejected) throw new InvalidDataException($"{name}: corrupt GAMEPC source was accepted by the repacker.");
         bool destinationRejected = false;
-        try { _ = GameDataFileService.SaveAsNew(working, Path.Combine(directory, "TOO_LONG_NAME"), new Dictionary<int, string>(), saved, enc, profile); }
+        try { _ = GameDataFileService.SaveAsNew(workCopy, Path.Combine(directory, "TOO_LONG_NAME"), new Dictionary<int, string>(), saved, enc, profile); }
         catch (InvalidOperationException) { destinationRejected = true; }
-        if (!destinationRejected || Hash(working) != afterValidSave)
+        if (!destinationRejected || Hash(workCopy) != afterValidSave)
             throw new InvalidDataException($"{name}: invalid Save As destination changed the source.");
+        if (Hash(working) != sourceHash)
+            throw new InvalidDataException($"{name}: repack verification modified the pristine source copy.");
     }
 
     private static string WriteTemporary(string directory, string name, byte[] data)
@@ -2042,6 +2055,129 @@ internal static class Program
                 new VariantLauncherService(directories, new CompositeBuildService(new DisposableVariantBuildService(directories), directories, CompleteFixtureStages(null, null))));
             if (status.Inspect(e1, e1Vga).Status == VariantBuildStatus.Invalid)
                 throw new InvalidDataException("Font-built variant was reported Invalid.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void RunProtectedGameRootWriteFirewallSmoke(string elvira1Source, string elvira2Source)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "Pi1ProtectedFirewall", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            ProjectContext e2 = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
+            Dictionary<string, string> beforeE1 = SnapshotGameRootContent(e1.GameRoot);
+            Dictionary<string, string> beforeE2 = SnapshotGameRootContent(e2.GameRoot);
+            if (Type.GetType("Pi1ElviraEditor.SafeDeployer") is not null)
+                throw new InvalidDataException("SafeDeployer still exists; no production replace primitive may remain.");
+
+            // A loadable V5 source built from the fixture packed original (temp).
+            // The bootstrap destination is outside any GameRoot, so it stays
+            // allowed while proving external-temp outputs are not blocked.
+            string workExe = Path.Combine(root, "WORK_RUNVGA.EXE");
+            File.Copy(Path.Combine(e1.GameRoot, "RUNVGA.EXE"), workExe);
+            string v5Source = workExe + ".v5";
+            RunVgaBootstrapService.CreateExtendedCp852(workExe, v5Source, GlyphRepository.CreateAllCp852Slots(), e1.GameRoot);
+            FontLoadResult loaded = RunVgaFontService.LoadRunVga(v5Source);
+            loaded.Glyphs[0x41].ReplaceEdited(Convert.FromHexString("A0B0C0D0E0F00000"));
+
+            static void RequireBlocked(Action action, string what)
+            {
+                bool blocked = false;
+                try { action(); }
+                catch (InvalidOperationException) { blocked = true; }
+                if (!blocked)
+                    throw new InvalidDataException("Protected GameRoot write was not blocked: " + what);
+            }
+
+            // Every protected in-GameRoot destination is rejected before mutation.
+            foreach ((string target, string gameRoot) in new[]
+            {
+                (Path.Combine(e1.GameRoot, "RUNVGA.EXE"), e1.GameRoot),
+                (Path.Combine(e1.GameRoot, "RUNVGAO.EXE"), e1.GameRoot),
+                (Path.Combine(e1.GameRoot, "RUNEGA.EXE"), e1.GameRoot),
+                (Path.Combine(e2.GameRoot, "RUNIT.EXE"), e2.GameRoot),
+                (Path.Combine(e1.GameRoot, "SOMETHING.EXE"), e1.GameRoot),
+                (Path.Combine(e1.GameRoot, "012.VGA"), e1.GameRoot),
+            })
+                RequireBlocked(() => RunVgaFontService.SaveCopy(loaded, target, gameRoot), target);
+            RequireBlocked(() => GamePcTextEditor.SaveInPlace(
+                Path.Combine(e1.GameRoot, "GAMEPC"), new Dictionary<int, string>(),
+                GamePcTextEditor.LoadEntries(Path.Combine(e1.GameRoot, "GAMEPC"), ElviraGameProfile.Elvira1),
+                GamePcTextEditor.GetEncoding("CP852"), ElviraGameProfile.Elvira1), "GAMEPC SaveInPlace");
+            RequireBlocked(() => GameDataFileService.SaveAsNew(
+                Path.Combine(e1.GameRoot, "GAMEPC"), Path.Combine(e1.GameRoot, "012.VGA"),
+                new Dictionary<int, string>(), GamePcTextEditor.LoadEntries(Path.Combine(e1.GameRoot, "GAMEPC"), ElviraGameProfile.Elvira1),
+                GamePcTextEditor.GetEncoding("CP852"), ElviraGameProfile.Elvira1), "012.VGA SaveAsNew");
+            RequireGameRootContentEqual(beforeE1, e1.GameRoot, "blocked game-format writes");
+            RequireGameRootContentEqual(beforeE2, e2.GameRoot, "blocked game-format writes");
+
+            // Original EN has no Save-to-project persistence (font + graphics).
+            var fonts = new FontVariantService();
+            if (fonts.Save(e1, "EN", FontProjectState.Empty(ElviraGameProfile.Elvira1)).Succeeded)
+                throw new InvalidDataException("Font project save succeeded for Original EN.");
+            var graphicsSvc = new GraphicsVariantService();
+            if (graphicsSvc.Save(e1, "EN", GraphicsProjectState.Empty(ElviraGameProfile.Elvira1)).Succeeded)
+                throw new InvalidDataException("Graphics project save succeeded for Original EN.");
+            RequireGameRootContentEqual(beforeE1, e1.GameRoot, "EN save refusal");
+
+            // Graphics "restore" is project-state only: save an override, remove
+            // it, and prove the GameRoot VGA never changed.
+            string vgaHash = HashFile(Path.Combine(e1.GameRoot, "012.VGA"));
+            GraphicsProjectState gState = graphicsSvc.SetEdit(e1, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1),
+                new GraphicsProjectEdit(new GraphicsProjectIdentity("012.VGA", 5), Path.Combine(root, "x.png"), GraphicsEditScope.Shared, null));
+            if (!graphicsSvc.Save(e1, "SK", gState).Succeeded)
+                throw new InvalidDataException("Graphics SK project save failed.");
+            GraphicsProjectState reloaded = graphicsSvc.Load(e1, "SK").State ?? throw new InvalidDataException("Graphics SK reload failed.");
+            if (reloaded.Edits.Count != 1)
+                throw new InvalidDataException("Graphics SK override did not persist.");
+            GraphicsProjectState removed = graphicsSvc.RemoveEdit(e1, reloaded, new GraphicsProjectIdentity("012.VGA", 5));
+            if (!graphicsSvc.Save(e1, "SK", removed).Succeeded)
+                throw new InvalidDataException("Graphics SK override removal failed.");
+            if ((graphicsSvc.Load(e1, "SK").State ?? throw new InvalidDataException("Graphics SK reread failed.")).Edits.Count != 0)
+                throw new InvalidDataException("Graphics SK override removal did not persist.");
+            if (HashFile(Path.Combine(e1.GameRoot, "012.VGA")) != vgaHash)
+                throw new InvalidDataException("Graphics project-state restore modified the GameRoot VGA.");
+
+            // Font SaveCopy outside GameRoot still works and carries the edit.
+            string external = Path.Combine(root, "RUNVGA_TEST.EXE");
+            RunVgaFontService.SaveCopy(loaded, external, e1.GameRoot);
+            FontLoadResult reopened = RunVgaFontService.LoadRunVga(external);
+            if (!reopened.Glyphs[0x41].Original.SequenceEqual(Convert.FromHexString("A0B0C0D0E0F00000")))
+                throw new InvalidDataException("External SaveCopy lost the edited glyph.");
+            RequireGameRootContentEqual(beforeE1, e1.GameRoot, "external SaveCopy");
+
+            // Build Variant still writes owned VARIANTS output.
+            var directories = new VariantDirectoryService();
+            var translations = new TranslationProjectService();
+            var graphics = new GraphicsVariantService();
+            var runtimeUi = new RuntimeUiTextService();
+            TranslationProjectState textState = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(e1, textState, "Slovak", "SK", new Dictionary<int, string>());
+            translations.Save(e1, translations.Add(textState, sk));
+            VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "SK"), VariantDirectoryOperationStatus.Created, "firewall fixture directory");
+            var build = new CompositeBuildService(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(sk, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1),
+                        RuntimeUiTextState.Empty(ElviraGameProfile.Elvira1), FontProjectState.Empty(ElviraGameProfile.Elvira1))),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => sk.Code);
+            CompositeBuildResult result = build.Build(e1, e1Vga, CompositeBuildMode.Full);
+            if (result.Status != CompositeBuildStatus.Success)
+                throw new InvalidDataException("Firewall fixture composite build failed: " + result.Status);
+            if (!File.Exists(Path.Combine(directories.GetVariantEditionDirectoryPath(e1, e1Vga, "SK"), ActiveProjectBuildIdentity.ExecutableName(e1Vga, sk))))
+                throw new InvalidDataException("Build Variant did not write the owned executable.");
+            RequireGameRootContentEqual(beforeE1, e1.GameRoot, "composite build");
+
+            // Launcher BAT generation remains the one bounded existing-file mutation.
+            var catalog = new VariantCatalog(e2.GameRoot, ElviraGameProfile.Elvira2,
+                [new VariantEntry("Slovak", "GAMEPCSK", true, 1, "SK", "RUNITSK.EXE")], false);
+            LauncherService.Generate(ElviraGameProfile.Elvira2, catalog, new LauncherSettings("CERBERUS.BAT", "Smoke", "GAMEPCSK"), UiLanguage.English, false);
+            RequireGameRootContentEqual(beforeE2, e2.GameRoot, "launcher BAT generation",
+                allowedChanged: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "CERBERUS.BAT" },
+                allowedAdded: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "CERBERUS.BAK", "PI1MENU.COM" });
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
@@ -2448,15 +2584,19 @@ internal static class Program
         }
 
         // The writer remains fixed-slot only. Exercise an entry beyond the former
-        // cutoff on disposable copies and verify the header/tail are untouched.
-        byte[] beforeSave = File.ReadAllBytes(english);
-        GamePcStringEntry late = en[688];
-        GamePcTextEditor.SaveInPlace(english, new Dictionary<int, string> { [late.Index] = new string('X', late.ByteLength) }, en, encoding, ElviraGameProfile.Elvira1);
-        byte[] afterSave = File.ReadAllBytes(english);
+        // cutoff on a disposable non-protected copy and verify the header/tail
+        // are untouched. In-place GAMEPC writes are obsolete and blocked.
+        string englishWork = Path.Combine(root, "GAMEPCWK");
+        File.Copy(english, englishWork);
+        List<GamePcStringEntry> enWork = GamePcTextEditor.LoadEntries(englishWork, ElviraGameProfile.Elvira1);
+        byte[] beforeSave = File.ReadAllBytes(englishWork);
+        GamePcStringEntry late = enWork[688];
+        GamePcTextEditor.SaveInPlace(englishWork, new Dictionary<int, string> { [late.Index] = new string('X', late.ByteLength) }, enWork, encoding, ElviraGameProfile.Elvira1);
+        byte[] afterSave = File.ReadAllBytes(englishWork);
         if (afterSave.Length != beforeSave.Length || !afterSave.AsSpan(0, 0x14).SequenceEqual(beforeSave.AsSpan(0, 0x14)) ||
             !afterSave.AsSpan(0x48D6).SequenceEqual(beforeSave.AsSpan(0x48D6)) ||
-            GamePcTextEditor.LoadEntries(english, ElviraGameProfile.Elvira1).Count != 689)
-            throw new InvalidDataException("Elvira I in-place save altered the header, binary tail, or logical string count.");
+            GamePcTextEditor.LoadEntries(englishWork, ElviraGameProfile.Elvira1).Count != 689)
+            throw new InvalidDataException("Elvira I fixed-slot save altered the header, binary tail, or logical string count.");
 
         string savedAs = GameDataFileService.SaveAsNew(slovak, Path.Combine(root, "GPCSAVE"), new Dictionary<int, string>(), sk, encoding, ElviraGameProfile.Elvira1);
         string variant = GameDataFileService.SaveAsNew(slovak, Path.Combine(root, "GPCVAR"), new Dictionary<int, string>(), sk, encoding, ElviraGameProfile.Elvira1);
@@ -2501,15 +2641,17 @@ internal static class Program
             throw new InvalidDataException("Elvira II UI-model smoke failed for formerly omitted or long header-counted entries.");
 
         // Fixed-slot writes remain unchanged: exercise a formerly omitted slot
-        // on a disposable copy and verify the header and binary tail survive.
-        byte[] beforeSave = File.ReadAllBytes(gamePc);
-        GamePcStringEntry late = entries[1052];
-        GamePcTextEditor.SaveInPlace(gamePc, new Dictionary<int, string> { [late.Index] = new string('X', late.ByteLength) }, entries, encoding, ElviraGameProfile.Elvira2);
-        byte[] afterSave = File.ReadAllBytes(gamePc);
+        // on the disposable non-protected copy and verify the header and
+        // binary tail survive. In-place GAMEPC writes are obsolete/blocked.
+        List<GamePcStringEntry> workEntries = GamePcTextEditor.LoadEntries(workingSource, ElviraGameProfile.Elvira2);
+        byte[] beforeSave = File.ReadAllBytes(workingSource);
+        GamePcStringEntry late = workEntries[1052];
+        GamePcTextEditor.SaveInPlace(workingSource, new Dictionary<int, string> { [late.Index] = new string('X', late.ByteLength) }, workEntries, encoding, ElviraGameProfile.Elvira2);
+        byte[] afterSave = File.ReadAllBytes(workingSource);
         if (afterSave.Length != beforeSave.Length || !afterSave.AsSpan(0, 0x14).SequenceEqual(beforeSave.AsSpan(0, 0x14)) ||
             !afterSave.AsSpan(0x6897).SequenceEqual(beforeSave.AsSpan(0x6897)) ||
-            GamePcTextEditor.LoadEntries(gamePc, ElviraGameProfile.Elvira2).Count != 1053)
-            throw new InvalidDataException("Elvira II in-place save altered the header, binary tail, or logical string count.");
+            GamePcTextEditor.LoadEntries(workingSource, ElviraGameProfile.Elvira2).Count != 1053)
+            throw new InvalidDataException("Elvira II fixed-slot save altered the header, binary tail, or logical string count.");
 
         string savedAs = GameDataFileService.SaveAsNew(workingSource, Path.Combine(root, "GPCSAVE"), new Dictionary<int, string>(), entries, encoding, ElviraGameProfile.Elvira2);
         if (!File.ReadAllBytes(savedAs).SequenceEqual(File.ReadAllBytes(workingSource)))
@@ -3244,61 +3386,53 @@ internal static class Program
 
     private static void RunVgaBackupSmoke(string sourceVga, string root)
     {
+        // Frozen architecture: no production path replaces the active VGA or
+        // creates an O-file. Read-only parsing must create nothing, and the
+        // retired SafeDeployer helper must not exist anymore.
+        if (Type.GetType("Pi1ElviraEditor.SafeDeployer") is not null)
+            throw new InvalidDataException("SafeDeployer still exists; the GameRoot replace primitive was not removed.");
         if (Directory.Exists(root)) throw new IOException($"Isolated VGA test directory already exists: {root}");
         Directory.CreateDirectory(root);
         string active = Path.Combine(root, Path.GetFileName(sourceVga));
         File.Copy(sourceVga, active);
-        string originalHash = Hash(active), oFile = SafeDeployer.OriginalBackupPath(active);
-        if (File.Exists(oFile)) throw new InvalidDataException("Unexpected O-file before modification.");
+        string originalHash = Hash(active);
         _ = new VgaImageTableParser(File.ReadAllBytes(active)).Parse(); // read/preview-equivalent: no O-file creation
-        if (File.Exists(oFile)) throw new InvalidDataException("Read-only VGA parse created an O-file.");
-
-        InstallHarmlessValidatedVgaVariant(active, 0xA5);
-        if (!File.Exists(oFile) || Hash(oFile) != originalHash) throw new InvalidDataException("First VGA O-file does not equal the original active file.");
-        string oHash = Hash(oFile);
-        InstallHarmlessValidatedVgaVariant(active, 0x5A);
-        if (Hash(oFile) != oHash) throw new InvalidDataException("Second VGA save overwrote the O-file.");
-
-        string unsafeDir = Path.Combine(root, "unsafe_target_backup");
-        Directory.CreateDirectory(unsafeDir);
-        string unsafeActive = Path.Combine(unsafeDir, Path.GetFileName(sourceVga));
-        File.Copy(sourceVga, unsafeActive);
-        File.WriteAllBytes(SafeDeployer.OriginalBackupPath(unsafeActive), []);
-        string unsafePrepared = unsafeActive + ".prepared";
-        File.Copy(unsafeActive, unsafePrepared);
-        bool blocked = false;
-        try { SafeDeployer.ReplaceActiveWithPrepared(unsafeActive, unsafePrepared); } catch (InvalidDataException) { blocked = true; }
-        finally { if (File.Exists(unsafePrepared)) File.Delete(unsafePrepared); }
-        if (!blocked) throw new InvalidDataException("Unsafe empty VGA target backup was accepted.");
-    }
-
-    private static void InstallHarmlessValidatedVgaVariant(string active, byte marker)
-    {
-        byte[] bytes = File.ReadAllBytes(active);
-        Array.Resize(ref bytes, bytes.Length + 1); bytes[^1] = marker; // parsers tolerate inert tail data; active hash changes for transaction coverage.
-        string prepared = active + ".prepared";
-        File.WriteAllBytes(prepared, bytes);
-        _ = new VgaImageTableParser(File.ReadAllBytes(prepared)).Parse();
-        SafeDeployer.ReplaceActiveWithPrepared(active, prepared);
+        if (Directory.EnumerateFiles(root, "*O.VGA").Any() || Directory.EnumerateFiles(root, "*.tmp").Any())
+            throw new InvalidDataException("Read-only VGA parse created an O-file or temp artifact.");
+        if (Hash(active) != originalHash)
+            throw new InvalidDataException("Read-only VGA parse modified the active file.");
     }
 
     private static void RunGamePcBackupSmoke(string sourceGamePc, string root)
     {
+        // Frozen architecture: in-place GAMEPC mutation is obsolete. The
+        // firewall refuses GAMEPC-named targets anywhere, and no O-file may
+        // be created. Repack verification itself uses variant-named copies.
         if (Directory.Exists(root)) throw new IOException($"Isolated GAMEPC test directory already exists: {root}");
         Directory.CreateDirectory(root);
         string active = Path.Combine(root, "GAMEPC"); File.Copy(sourceGamePc, active);
-        string originalHash = Hash(active), oFile = SafeDeployer.OriginalBackupPath(active);
+        string originalHash = Hash(active);
         List<GamePcStringEntry> entries = GamePcTextEditor.LoadEntries(active, ElviraGameProfile.Elvira1);
         GamePcStringEntry entry = entries.First(e => e.ByteLength > 0);
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
         var enc = GamePcTextEditor.GetEncoding("CP852");
-        GamePcTextEditor.SaveInPlace(active, new Dictionary<int, string> { [entry.Index] = new string('X', entry.ByteLength) }, entries, enc, ElviraGameProfile.Elvira1);
-        if (!File.Exists(oFile) || Hash(oFile) != originalHash) throw new InvalidDataException("GAMEPCO does not equal first active GAMEPC.");
-        string oHash = Hash(oFile);
-        entries = GamePcTextEditor.LoadEntries(active, ElviraGameProfile.Elvira1);
-        entry = entries.First(e => e.ByteLength > 0);
-        GamePcTextEditor.SaveInPlace(active, new Dictionary<int, string> { [entry.Index] = new string('Y', entry.ByteLength) }, entries, enc, ElviraGameProfile.Elvira1);
-        if (Hash(oFile) != oHash) throw new InvalidDataException("Repeated GAMEPC save overwrote GAMEPCO.");
+        bool blocked = false;
+        try { GamePcTextEditor.SaveInPlace(active, new Dictionary<int, string> { [entry.Index] = new string('X', entry.ByteLength) }, entries, enc, ElviraGameProfile.Elvira1); }
+        catch (InvalidOperationException) { blocked = true; }
+        if (!blocked)
+            throw new InvalidDataException("In-place GAMEPC save was not blocked by the protected-asset firewall.");
+        if (Hash(active) != originalHash)
+            throw new InvalidDataException("Blocked GAMEPC save modified the active file.");
+        if (Directory.EnumerateFiles(root, "GAMEPCO").Any() || Directory.EnumerateFiles(root, "*.tmp").Any())
+            throw new InvalidDataException("Blocked GAMEPC save created an O-file or temp artifact.");
+        // Repack to a variant-named copy still works and round-trips.
+        string variant = GameDataFileService.SaveAsNew(active, Path.Combine(root, "GAMEPCWK"), new Dictionary<int, string> { [entry.Index] = new string('X', entry.ByteLength) }, entries, enc, ElviraGameProfile.Elvira1);
+        List<GamePcStringEntry> reopened = GamePcTextEditor.LoadEntries(variant, ElviraGameProfile.Elvira1);
+        var cp852 = GamePcTextEditor.GetEncoding("CP852");
+        if (!reopened[entry.Index].Decode(cp852).Equals(new string('X', entry.ByteLength), StringComparison.Ordinal))
+            throw new InvalidDataException("Variant-named GAMEPC repack did not round-trip.");
+        if (Hash(active) != originalHash)
+            throw new InvalidDataException("Variant-named repack modified the source file.");
     }
 
     private static void RunDataFileVariantSmoke(string game, string fixture, string root)

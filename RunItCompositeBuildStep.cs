@@ -31,7 +31,7 @@ internal sealed class RunItCompositeBuildStep : ICompositeBuildStep
         // image is validated structurally instead of against the default-font
         // golden hash; without edits the frozen golden image still applies.
         IReadOnlyList<GlyphModel> glyphs=FontVariantService.ResolveBootstrapGlyphs(project,_projectCode,variant);
-        RunItBootstrapResult built=RunItBootstrapService.CreateExtendedCp852(source,output,glyphs);byte[] image=File.ReadAllBytes(built.OutputPath);RunItBootstrapService.ValidateExtended(image);if(image.Length!=RunItBootstrapService.ExtendedSize)return "Generated RUNITSK.EXE has an unexpected image size.";if(!glyphs.Any(g=>g.HasEdited)&&built.Sha256!=Elvira2ProductionProfile.DeterministicFontEnabled.Sha256)return "Generated RUNITSK.EXE diverged from the frozen V2 image.";return null;}
+        RunItBootstrapResult built=RunItBootstrapService.CreateExtendedCp852(source,output,glyphs,project.GameRoot);byte[] image=File.ReadAllBytes(built.OutputPath);RunItBootstrapService.ValidateExtended(image);if(image.Length!=RunItBootstrapService.ExtendedSize)return "Generated RUNITSK.EXE has an unexpected image size.";if(!glyphs.Any(g=>g.HasEdited)&&built.Sha256!=Elvira2ProductionProfile.DeterministicFontEnabled.Sha256)return "Generated RUNITSK.EXE diverged from the frozen V2 image.";return null;}
         catch(Exception ex)when(ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException){return "RUNIT bootstrap failed: "+ex.Message;}
     }
 }
