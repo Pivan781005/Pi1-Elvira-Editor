@@ -30,7 +30,12 @@ internal sealed class SystemVariantProcessRunner : IVariantProcessRunner
 }
 
 /// <summary>Executes only an already-resolved, LaunchReady semantic target.
-/// It never invokes CompositeBuildService and never searches game-root files.</summary>
+/// R9F V8.6e P0 rule: a DOS game executable is a DOS TARGET and is never
+/// passed to Windows CreateProcess as the host executable. Run always goes
+/// through a DOS runtime launch plan whose FileName is the probed DOS host;
+/// the legacy direct-DOS Run path fails closed. Debug keeps its explicit
+/// developer host. It never invokes CompositeBuildService and never searches
+/// game-root files.</summary>
 internal sealed class VariantExecutionService
 {
     private readonly IVariantProcessRunner _runner;
@@ -42,11 +47,19 @@ internal sealed class VariantExecutionService
         _debug = debug ?? VariantDebugConfiguration.Unavailable;
     }
 
-    public bool IsAvailable(VariantLaunchTarget target, VariantExecutionMode mode) =>
-        target.Readiness == VariantLaunchReadiness.LaunchReady && (mode == VariantExecutionMode.Run || _debug.IsConfigured);
+    /// <summary>Build-side availability only. Run additionally requires a
+    /// valid selected DOS host (see DosRuntimeExecutionReadiness); Debug
+    /// additionally requires its configured developer host.</summary>
+    public bool IsAvailable(VariantLaunchTarget target, VariantExecutionMode mode)
+    {
+        if (target.Readiness != VariantLaunchReadiness.LaunchReady) return false;
+        return mode == VariantExecutionMode.Debug ? _debug.IsConfigured : true;
+    }
 
     public VariantExecutionResult Execute(VariantLaunchTarget target, VariantExecutionMode mode)
     {
+        if (mode == VariantExecutionMode.Run)
+            throw new InvalidOperationException("Run requires a DOS runtime launch plan. A DOS executable must never be started directly by Windows.");
         if (!IsAvailable(target, mode))
         {
             string reason = target.Readiness != VariantLaunchReadiness.LaunchReady
@@ -66,19 +79,62 @@ internal sealed class VariantExecutionService
         }
     }
 
+    /// <summary>Authoritative Run entry point: starts the DOS host from the
+    /// plan. ProcessStartInfo.FileName is always the host executable.</summary>
+    public VariantExecutionResult ExecutePlan(DosRuntimeLaunchPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        try
+        {
+            ProcessStartInfo start = CreatePlanStartInfo(plan);
+            _runner.Start(start);
+            return new(true, VariantLaunchReadiness.LaunchReady, "Started in " + plan.HostDisplayName + ".", start);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            return new(false, VariantLaunchReadiness.BuildIncomplete, "Unable to start variant: " + ex.Message);
+        }
+    }
+
+    public ProcessStartInfo CreatePlanStartInfo(DosRuntimeLaunchPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (string.IsNullOrWhiteSpace(plan.HostExecutable) || !Path.IsPathRooted(plan.HostExecutable) || !File.Exists(plan.HostExecutable))
+            throw new InvalidOperationException("DOS runtime host executable is missing.");
+        if (string.IsNullOrWhiteSpace(plan.VariantWorkingDirectory) || !Directory.Exists(plan.VariantWorkingDirectory))
+            throw new InvalidOperationException("Variant working directory is missing.");
+        if (!GameDataFileService.IsDos83FileName(plan.DosExecutable + ".EXE") || !GameDataFileService.IsDos83FileName(plan.DataFile))
+            throw new InvalidOperationException("Launch plan DOS names are invalid.");
+        string dosPath = SafeChild(plan.VariantWorkingDirectory, plan.DosExecutable + ".EXE");
+        string dataPath = SafeChild(plan.VariantWorkingDirectory, plan.DataFile);
+        if (!File.Exists(dosPath)) throw new FileNotFoundException("Generated variant executable is missing.", dosPath);
+        if (!File.Exists(dataPath)) throw new FileNotFoundException("Generated variant data file is missing.", dataPath);
+        foreach (string argument in plan.HostArguments)
+        {
+            if (string.IsNullOrWhiteSpace(argument) || argument.Any(char.IsControl))
+                throw new ArgumentException("DOS runtime launch argument is invalid.");
+        }
+        var start = new ProcessStartInfo
+        {
+            FileName = plan.HostExecutable,
+            WorkingDirectory = plan.VariantWorkingDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        foreach (string argument in plan.HostArguments)
+            start.ArgumentList.Add(argument);
+        return start;
+    }
+
     public ProcessStartInfo CreateStartInfo(VariantLaunchTarget target, VariantExecutionMode mode)
     {
+        if (mode == VariantExecutionMode.Run)
+            throw new InvalidOperationException("Run requires a DOS runtime launch plan. A DOS executable must never be started directly by Windows.");
         ValidateTarget(target);
         string executablePath = SafeChild(target.WorkingDirectory, target.ExecutableFile);
         string dataPath = SafeChild(target.WorkingDirectory, target.DataFile);
         if (!File.Exists(executablePath)) throw new FileNotFoundException("Generated variant executable is missing.", executablePath);
         if (!File.Exists(dataPath)) throw new FileNotFoundException("Generated variant data file is missing.", dataPath);
-        if (mode == VariantExecutionMode.Run)
-        {
-            var run = new ProcessStartInfo { FileName = executablePath, WorkingDirectory = target.WorkingDirectory, UseShellExecute = false };
-            run.ArgumentList.Add(target.DataFile);
-            return run;
-        }
         if (!_debug.IsConfigured) throw new InvalidOperationException("Debug host is not configured.");
         if (!File.Exists(_debug.HostExecutable)) throw new FileNotFoundException("Configured debug host is missing.", _debug.HostExecutable);
         var debug = new ProcessStartInfo { FileName = _debug.HostExecutable, WorkingDirectory = target.WorkingDirectory, UseShellExecute = false };

@@ -52,9 +52,12 @@ internal sealed class FontEditorForm : Form
     private FontProjectState? _fontProjectState;
     private string _fontProjectCode = ProjectVariantOwnership.OriginalCode;
 
+    /// <summary>Raised after font project state is successfully saved, so the
+    /// host can refresh global workflow status. Handlers must not block.</summary>
+    internal event EventHandler? ProjectSaved;
+
     // Narrow diagnostics used by the non-interactive regression smoke only.
-    internal int SourceLoadCount { get; private set; }
-    internal int PreviewRebuildCount { get; private set; }
+    internal int SourceLoadCount { get; private set; }    internal int PreviewRebuildCount { get; private set; }
     internal int ControlTreeCount => CountControls(this);
     internal string? CurrentSourcePath => _loaded?.SourcePath;
     internal string? BoundVariantExecutablePath => _boundVariantPath;
@@ -701,7 +704,7 @@ internal sealed class FontEditorForm : Form
             : $"0x{_current.ByteValue:X2} / {_current.ByteValue}   {slot}   {sourceState}";
         _toolTip.SetToolTip(_selected, reserved ? UiText.Get("ReservedHudEraseGlyphTip") : string.Empty);
         _toolTip.SetToolTip(_editedMatrix, reserved ? UiText.Get("ReservedHudEraseGlyphTip") : string.Empty);
-        _reset.Enabled = _current.IsLoadedFromSource && !reserved;
+        _reset.Enabled = CanBeginEditingCurrentGlyph();
         _clearGlyph.Enabled = CanBeginEditingCurrentGlyph();
         _copyHex.Enabled = _current.HasEdited;
         SetShiftButtonsEnabled(CanBeginEditingCurrentGlyph());
@@ -752,12 +755,25 @@ internal sealed class FontEditorForm : Form
         RefreshListItem(_current.ByteValue);
     }
 
-    /// <summary>V8.3 editability model: the EDITED matrix accepts a first
+    /// <summary>R9F V8.6e editability model: the EDITED matrix accepts a first
     /// mutation when a source bitmap exists, the slot is supported and not
-    /// reserved. HasEdited is deliberately not part of this predicate.</summary>
+    /// reserved. Built-in CP852 defaults are editable project input on
+    /// non-Original editions whose runtime has a proven font writer (E1 VGA,
+    /// E2 VGA); EGA stays fail-closed because no writer exists there.
+    /// HasEdited is deliberately not part of this predicate.</summary>
     private bool CanBeginEditingCurrentGlyph() =>
         _current is not null && !IsReservedHudEraseGlyph(_current) &&
-        _loaded is not null && _loaded.CanInitializeEdited && _current.IsLoadedFromSource;
+        _loaded is not null && _loaded.CanInitializeEdited &&
+        (_current.IsLoadedFromSource || IsBuiltInDefaultEditable());
+
+    internal bool IsCurrentGlyphEditableForTest => CanBeginEditingCurrentGlyph();
+
+    private bool IsBuiltInDefaultEditable() =>
+        _current is not null && _current.HasKnownFallbackBitmap &&
+        _fontProject is not null && _fontVariant is not null &&
+        !ProjectVariantOwnership.IsOriginal(_fontProjectCode) &&
+        IsLoadedGameForProject() &&
+        _fontVariant.RuntimeKind is VariantRuntimeKind.Elvira1Vga or VariantRuntimeKind.Elvira2Vga;
 
     private void UpdateFontProjectPresentation()
     {
@@ -853,29 +869,47 @@ internal sealed class FontEditorForm : Form
     /// state. Original game executables are never modified: the state
     /// materializes into owned VARIANTS executables through Build Variant.
     /// Edits are scoped to the bound variant runtime so other runtimes keep
-    /// building deterministically.</summary>
+    /// building deterministically. Glyphs edited from built-in CP852 defaults
+    /// persist like source-loaded edits; the reserved 0x81 glyph never does.</summary>
     private void SaveFontProjectState()
     {
-        if (_fontProject is null || _fontVariant is null || _fontProjectState is null) return;
-        if (ProjectVariantOwnership.IsOriginal(_fontProjectCode))
+        if (TrySaveFontProjectState(out int saved, out string? failure, out bool isError))
         {
-            MessageBox.Show(this, UiText.Get("Workflow.OriginalReadOnly"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            SetStatusText(string.Format(UiText.Get("Font.ProjectSaved"), saved));
+            MessageBox.Show(this, string.Format(UiText.Get("Font.ProjectSaved"), saved), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        if (_loaded is null) return;
+        if (failure is not null)
+            MessageBox.Show(this, failure, UiText.Get("FontTitle"), MessageBoxButtons.OK, isError ? MessageBoxIcon.Error : MessageBoxIcon.Information);
+    }
+
+    /// <summary>Dialog-free save core shared by the UI action and the
+    /// headless regression hook. Returns false with a ready-made message
+    /// when the UI should inform the user instead of saving.</summary>
+    private bool TrySaveFontProjectState(out int saved, out string? failure, out bool isError)
+    {
+        saved = 0;
+        failure = null;
+        isError = false;
+        if (_fontProject is null || _fontVariant is null || _fontProjectState is null) return false;
+        if (ProjectVariantOwnership.IsOriginal(_fontProjectCode))
+        {
+            failure = UiText.Get("Workflow.OriginalReadOnly");
+            return false;
+        }
+        if (_loaded is null) return false;
         if (!IsLoadedGameForProject())
         {
-            MessageBox.Show(this, UiText.Get("Font.GameMismatch"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
+            failure = UiText.Get("Font.GameMismatch");
+            return false;
         }
 
         try
         {
             FontProjectState state = _fontProjectState;
-            int saved = 0;
             foreach (GlyphModel glyph in _glyphs)
             {
-                if (!glyph.HasEdited || !glyph.IsLoadedFromSource) continue;
+                if (!glyph.HasEdited) continue;
                 if (glyph.ByteValue == FontSlotMetadata.HudEraseGlyph) continue;
                 var edit = FontProjectEdit.Create(new(glyph.ByteValue), glyph.Edited, FontEditScope.RuntimeSpecific, _fontVariant.RuntimeKind);
                 state = _fontVariants.SetEdit(_fontProject, state, edit);
@@ -883,28 +917,38 @@ internal sealed class FontEditorForm : Form
             }
             if (saved == 0)
             {
-                MessageBox.Show(this, UiText.Get("NoGlyphChanges"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                failure = UiText.Get("NoGlyphChanges");
+                return false;
             }
             FontProjectSaveResult result = _fontVariants.Save(_fontProject, _fontProjectCode, state);
             if (!result.Succeeded)
             {
-                MessageBox.Show(this, result.Detail ?? UiText.Get("Font.ProjectSaveFailed"), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
+                failure = result.Detail ?? UiText.Get("Font.ProjectSaveFailed");
+                isError = true;
+                saved = 0;
+                return false;
             }
             _fontProjectState = state;
-            SetStatusText(string.Format(UiText.Get("Font.ProjectSaved"), saved));
-            MessageBox.Show(this, string.Format(UiText.Get("Font.ProjectSaved"), saved), UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             RefreshEditedActionState();
             UpdateFontProjectPresentation();
             _list.Invalidate();
             SelectGlyph();
+            ProjectSaved?.Invoke(this, EventArgs.Empty);
+            SetStatusText(string.Format(UiText.Get("Font.ProjectSaved"), saved));
+            return true;
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, UiText.Get("FontTitle"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+            failure = ex.Message;
+            isError = true;
+            saved = 0;
+            return false;
         }
     }
+
+    /// <summary>Headless save used by regressions: performs the exact
+    /// production save core without dialogs and returns the saved count.</summary>
+    internal int SaveProjectStateForTest() => TrySaveFontProjectState(out int saved, out _, out _) ? saved : 0;
 
     private bool IsLoadedGameForProject()
     {

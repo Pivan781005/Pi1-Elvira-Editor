@@ -176,21 +176,27 @@ internal sealed class VariantLauncherService
 
     /// <summary>Explicit-edition redirection plan. Same identity as
     /// ResolveEdition; the implicit overload resolves the composite code.</summary>
-    public LauncherRedirectionPlan CreateRedirectionPlan(ProjectContext project, VariantContext variant, string editionCode)
+    public LauncherRedirectionPlan CreateRedirectionPlan(ProjectContext project, VariantContext variant, string editionCode) =>
+        CreateRedirectionPlan(project, variant, ResolveEdition(project, variant, editionCode));
+
+    /// <summary>R9F V8.6e per-refresh reuse: builds the plan from an already
+    /// resolved target instead of resolving the same runtime+edition again.</summary>
+    internal LauncherRedirectionPlan CreateRedirectionPlan(ProjectContext project, VariantContext variant, VariantLaunchTarget resolvedTarget)
     {
-        VariantLaunchTarget target = ResolveEdition(project, variant, editionCode);
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(resolvedTarget);
         string launcher = project.GameProfile == ElviraGameProfile.Elvira1 ? "ELVIRA.BAT" : "CERBERUS.BAT";
         PristineManifestFile? manifestFile = project.PristineManifest.Files.SingleOrDefault(file => file.RelativePath.Equals(launcher, StringComparison.OrdinalIgnoreCase));
         string active = Path.Combine(project.GameRoot, launcher);
         string restore = Path.Combine(project.StorageLayout.MutableBackupsRoot, launcher);
         bool classified = manifestFile?.Classification == PristineFileClassification.MutableBackedUp;
         bool backup = classified && File.Exists(restore);
-        bool authorized = target.Readiness == VariantLaunchReadiness.LaunchReady && classified && backup;
+        bool authorized = resolvedTarget.Readiness == VariantLaunchReadiness.LaunchReady && classified && backup;
         string detail = !classified ? "Launcher is not declared MutableBackedUp in the pristine manifest."
             : !backup ? "Pristine mutable launcher backup is missing."
             : !authorized ? "Variant is not launch-ready."
             : "Future launcher redirection is authorized; R6Q does not write it.";
-        return new(launcher, active, restore, manifestFile?.Classification ?? PristineFileClassification.Immutable, target, authorized, detail);
+        return new(launcher, active, restore, manifestFile?.Classification ?? PristineFileClassification.Immutable, resolvedTarget, authorized, detail);
     }
 
     private VariantLaunchTarget ResolveMissingEdition(ProjectContext project, VariantContext variant, string projectCode)

@@ -64,6 +64,6 @@ Pokud hra není rozpoznána, vyberte správnou VGA instalaci; nepodporované EXE
 ## [about] O programu / Credits
 **π1 Elvira Editor v1.0** podporuje VGA/EGA grafiku, textové/datové varianty kompatibilní s GAMEPC, rozšířené fonty kompatibilní s CP852, Mody a spouštěč a přenosný DOS helper. Glyph `0x81` je chráněný glyph pro mazání HUD. RUNEGA font/CP852 mutace není podporována; EGA/RUNEGA zůstává podporovaný runtime cíl.
 
-Projekt: `https://github.com/Pivan781005/Pi1-Elvira-I-II-Editor`
+Projekt: `https://github.com/Pivan781005/Pi1-Elvira-Editor`
 
 Remember these crews? :) Phrozen Crew, UCF, CORE, PARADOX, Razor 1911, Fairlight, TRSi, INC, Hybrid, Prestige, CLASS, MYTH, Drink Or Die, DREAD, ORiON, ECLiPSE. Malá pocta scéně, která tvořila DOS historii; bez afiliace nebo podpory.

@@ -140,6 +140,16 @@ internal sealed class MainForm : Form
     private readonly Label lblLauncherReadiness = new();
     private readonly CenteredCaptionButton btnRunVariant = new();
     private readonly CenteredCaptionButton btnDebugVariant = new();
+    private readonly Label lblDosRuntimeTitle = new();
+    private readonly Label lblDosRuntimeSelected = new();
+    private readonly CenteredCaptionButton btnDosRuntimeChange = new();
+    private readonly CenteredCaptionButton btnDosRuntimeRefresh = new();
+    private readonly Label lblRunReadiness = new();
+    private readonly DosRuntimeDiscoveryService _dosDiscovery = new();
+    private readonly DosRuntimeSettingsStore _dosSettings = new();
+    private IReadOnlyList<DosRuntimeCandidate> _dosCandidates = [];
+    private DosRuntimeCandidate? _dosSelected;
+    private bool _testBypassConfirm;
     private readonly Label lblRecoveryTitle = new();
     private readonly Label lblRecoveryStatus = new();
     private readonly CenteredCaptionButton btnVerifyPristine = new();
@@ -421,6 +431,7 @@ internal sealed class MainForm : Form
         FitDefaultVariantCombo();
     }
     internal void SaveRuntimeUiForTest() => SaveRuntimeUiText();
+    internal void SaveGraphicsForTest() => SaveGraphicsProjectState();
     internal void ReloadRuntimeUiForTest() => LoadRuntimeUiText();
     internal bool IsVariantEntryAvailableForTest(string dataFile)
     {
@@ -1146,6 +1157,36 @@ internal sealed class MainForm : Form
         btnRunVariant.Text = UiText.Get("Execution.Run"); btnDebugVariant.Text = UiText.Get("Execution.Debug");
         btnRunVariant.Click += (_, _) => ExecuteActiveVariant(VariantExecutionMode.Run);
         btnDebugVariant.Click += (_, _) => ExecuteActiveVariant(VariantExecutionMode.Debug);
+        lblDosRuntimeTitle.AutoSize = true;
+        lblDosRuntimeTitle.Dock = DockStyle.Top;
+        lblDosRuntimeTitle.Text = UiText.Get("DosRuntime.Title"); lblDosRuntimeTitle.Font = new Font(Font, FontStyle.Bold);
+        lblDosRuntimeTitle.Margin = new Padding(0, 8, 0, 0);
+        lblDosRuntimeSelected.AutoSize = true;
+        lblDosRuntimeSelected.Dock = DockStyle.Top;
+        lblDosRuntimeSelected.TextAlign = ContentAlignment.MiddleLeft;
+        lblDosRuntimeSelected.Margin = new Padding(0, 4, 0, 0);
+        var dosFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        btnDosRuntimeChange.Size = new Size(145, 30);
+        btnDosRuntimeChange.Margin = new Padding(0, 4, 6, 0);
+        btnDosRuntimeRefresh.Size = new Size(145, 30);
+        btnDosRuntimeRefresh.Margin = new Padding(0, 4, 0, 0);
+        btnDosRuntimeChange.Text = UiText.Get("DosRuntime.Change"); btnDosRuntimeRefresh.Text = UiText.Get("DosRuntime.Refresh");
+        btnDosRuntimeChange.Click += (_, _) => ChangeDosRuntime();
+        btnDosRuntimeRefresh.Click += (_, _) => RefreshDosRuntimeDiscovery();
+        dosFlow.Controls.AddRange(new Control[] { btnDosRuntimeChange, btnDosRuntimeRefresh });
+        lblRunReadiness.AutoSize = true;
+        lblRunReadiness.Dock = DockStyle.Top;
+        lblRunReadiness.TextAlign = ContentAlignment.MiddleLeft;
+        lblRunReadiness.Margin = new Padding(0, 6, 0, 0);
         lblLauncherReadiness.AutoSize = true;
         lblLauncherReadiness.Dock = DockStyle.Top;
         lblLauncherReadiness.TextAlign = ContentAlignment.MiddleLeft;
@@ -1229,7 +1270,7 @@ internal sealed class MainForm : Form
         variantManagerGrid.SelectionChanged += (_, _) => SelectVariantManagerRow();
         // One shared configuration: EN widths stay minima, longer SK/CZ
         // captions grow in width only; wrapping flows reflow the extra width.
-        foreach (Button button in new[] { btnSelectLauncherFile, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher, btnRunVariant, btnDebugVariant, btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview })
+        foreach (Button button in new[] { btnSelectLauncherFile, btnPreviewLauncher, btnGenerateLauncher, btnRestoreLauncher, btnRunVariant, btnDebugVariant, btnDosRuntimeChange, btnDosRuntimeRefresh, btnVerifyPristine, btnRestoreBaselineLauncher, btnRebuildOwnedVariant, btnRemoveOwnedVariant, btnReverseAllPreview })
             ConfigureCenteredButton(button, allowWidthGrowth: true);
         btnSelectLauncherFile.Click += (_, _) => SelectLauncherFile();
         btnPreviewLauncher.Click += (_, _) => PreviewLauncher();
@@ -1237,14 +1278,18 @@ internal sealed class MainForm : Form
         btnRestoreLauncher.Click += (_, _) => RestoreLauncher();
         SetModsLauncherControls(active: false);
         // Dock.Top stacking: last added docks first at the very top, so add
-        // bottom-up to obtain file/default/launcher/run/readiness/recovery/
-        // status/manager-header/grid visual order.
+        // bottom-up to obtain file/default/launcher/run/dos/readiness/
+        // recovery/status/manager-header/grid visual order.
         authoring.Controls.Add(variantManagerGrid);
         authoring.Controls.Add(managerHeaderFlow);
         authoring.Controls.Add(lblRecoveryStatus);
         authoring.Controls.Add(recoveryFlow);
         authoring.Controls.Add(lblRecoveryTitle);
         authoring.Controls.Add(lblLauncherReadiness);
+        authoring.Controls.Add(lblRunReadiness);
+        authoring.Controls.Add(dosFlow);
+        authoring.Controls.Add(lblDosRuntimeSelected);
+        authoring.Controls.Add(lblDosRuntimeTitle);
         authoring.Controls.Add(runFlow);
         authoring.Controls.Add(launcherFlow);
         authoring.Controls.Add(defaultFlow);
@@ -1378,65 +1423,135 @@ internal sealed class MainForm : Form
         return true;
     }
 
-    private bool IsVariantEntryAvailable(VariantEntry entry)
+    private VariantEntryPresentationState GetVariantEntryPresentationState(VariantEntry entry, VariantLaunchTarget? activeTarget)
     {
-        // Translated project editions resolve to the same explicit
-        // runtime+edition directory the launcher uses. For the SELECTED
-        // edition, Available means the top summary is also Ready (owned,
-        // manifest-valid, both artifacts hash-verified). For coexistence
-        // rows (non-selected editions such as S1 while SK is active),
-        // Available means that edition's own owned output exists with its
-        // data file present and manifest code matching — never a bare
-        // filename in the runtime parent or GameRoot, never foreign/corrupt.
         if (_activeProject is not null && _activeVariant is not null &&
             TryGetProjectTranslation(entry, out TranslationProjectVariant translation) &&
             !translation.Code.Equals("EN", StringComparison.OrdinalIgnoreCase))
         {
-            if (translation.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase))
-            {
-                VariantLaunchTarget target = _variantLauncher.ResolveEdition(_activeProject, _activeVariant, translation.Code);
-                if (target.Readiness != VariantLaunchReadiness.LaunchReady)
-                    return false;
-                return TryResolveVariantEntryPath(entry, out string fullPath) && File.Exists(fullPath);
-            }
-            if (_variantDirectories.ValidateOwnedVariantEditionDirectory(_activeProject, _activeVariant, translation.Code).Status != VariantDirectoryOperationStatus.AlreadyValid)
-                return false;
-            if (!TryResolveVariantEntryPath(entry, out string editionPath) || !File.Exists(editionPath))
-                return false;
+            VariantLaunchTarget? target = translation.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase)
+                ? activeTarget
+                : null;
             try
             {
-                string editionRoot = _variantDirectories.GetVariantEditionDirectoryPath(_activeProject, _activeVariant, translation.Code);
-                VariantManifest manifest = VariantManifestService.Read(editionRoot);
-                if (!manifest.ProjectCode.Equals(translation.Code, StringComparison.OrdinalIgnoreCase))
-                    return false;
+                target ??= _variantLauncher.ResolveEdition(_activeProject, _activeVariant, translation.Code);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
+            catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException)
             {
-                return false;
+                return VariantEntryPresentationState.Invalid;
             }
-            return true;
+            if (target.Ownership != VariantDirectoryOperationStatus.AlreadyValid)
+                return target.Ownership == VariantDirectoryOperationStatus.NotFound
+                    ? VariantEntryPresentationState.Missing
+                    : VariantEntryPresentationState.Invalid;
+            if (translation.Code.Equals(_activeTranslationCode, StringComparison.OrdinalIgnoreCase))
+            {
+                if (target.Readiness == VariantLaunchReadiness.LaunchReady)
+                    return TryResolveVariantEntryPath(entry, out string readyPath) && File.Exists(readyPath)
+                        ? VariantEntryPresentationState.Available
+                        : VariantEntryPresentationState.Missing;
+                return OwnedEditionStateAfterResolve(entry, translation);
+            }
+            // Coexistence rows (non-selected editions such as S1 while SK is
+            // active) intentionally avoid ResolveEdition: the shared composite
+            // names artifacts for the ACTIVE translation, so it would look
+            // for SK files inside the S1 directory. Edition-correct checks
+            // below use this row's own data/exe names plus manifest identity
+            // and the content fingerprint, so stale coexistence outputs read
+            // RebuildRequired instead of Available.
+            if (_variantDirectories.ValidateOwnedVariantEditionDirectory(_activeProject, _activeVariant, translation.Code).Status != VariantDirectoryOperationStatus.AlreadyValid)
+                return VariantEntryPresentationState.Invalid;
+            if (!TryResolveVariantEntryPath(entry, out string editionPath) || !File.Exists(editionPath))
+                return VariantEntryPresentationState.Missing;
+            string editionExe;
+            try { editionExe = ActiveProjectBuildIdentity.ExecutableName(_activeVariant, translation); }
+            catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
+            {
+                return VariantEntryPresentationState.Invalid;
+            }
+            string? editionDirectory = Path.GetDirectoryName(editionPath);
+            if (editionDirectory is null || !File.Exists(Path.Combine(editionDirectory, editionExe)))
+                return VariantEntryPresentationState.Missing;
+            try
+            {
+                VariantManifest manifest = VariantManifestService.Read(editionDirectory);
+                if (!manifest.ProjectCode.Equals(translation.Code, StringComparison.OrdinalIgnoreCase))
+                    return VariantEntryPresentationState.Invalid;
+                string current = ProjectBuildFingerprintService.Compute(_activeProject, _activeVariant, translation.Code);
+                if (string.IsNullOrWhiteSpace(manifest.InputFingerprint) ||
+                    !manifest.InputFingerprint.Equals(current, StringComparison.OrdinalIgnoreCase))
+                    return VariantEntryPresentationState.RebuildRequired;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException or ArgumentException)
+            {
+                return VariantEntryPresentationState.RebuildRequired;
+            }
+            return VariantEntryPresentationState.Available;
         }
-        return TryResolveVariantEntryPath(entry, out string legacyPath) && File.Exists(legacyPath);
+        return TryResolveVariantEntryPath(entry, out string legacyPath) && File.Exists(legacyPath)
+            ? VariantEntryPresentationState.Available
+            : VariantEntryPresentationState.Missing;
     }
 
-    private void RefreshVariantGrid(string? selectDataFile = null)
+    private VariantEntryPresentationState OwnedEditionStateAfterResolve(VariantEntry entry, TranslationProjectVariant translation)
+    {
+        // Owned but not launch-ready: stale output still on disk means
+        // rebuild-required; genuinely absent artifacts mean missing.
+        if (_activeProject is null || _activeVariant is null)
+            return VariantEntryPresentationState.Missing;
+        if (TryResolveVariantEntryPath(entry, out string stalePath) && File.Exists(stalePath))
+        {
+            try
+            {
+                string? directory = Path.GetDirectoryName(stalePath);
+                string exeName = ActiveProjectBuildIdentity.ExecutableName(_activeVariant, translation);
+                if (directory is not null && File.Exists(Path.Combine(directory, exeName)))
+                    return VariantEntryPresentationState.RebuildRequired;
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
+            {
+            }
+        }
+        return VariantEntryPresentationState.Missing;
+    }
+
+    private static string VariantEntryStateText(VariantEntryPresentationState state) => state switch
+    {
+        VariantEntryPresentationState.Available => UiText.Get("VariantAvailable"),
+        VariantEntryPresentationState.RebuildRequired => UiText.Get("VariantRebuildRequired"),
+        VariantEntryPresentationState.Invalid => UiText.Get("VariantInvalid"),
+        _ => UiText.Get("VariantMissing")
+    };
+
+    private bool IsVariantEntryAvailable(VariantEntry entry) =>
+        GetVariantEntryPresentationState(entry, null) == VariantEntryPresentationState.Available;
+
+    private void RefreshVariantGrid(string? selectDataFile = null, ModsLauncherRefreshSnapshot? snapshot = null)
     {
         VariantCatalog catalog = EnsureVariantCatalog();
         string? selected = selectDataFile ?? SelectedVariant?.DataFile;
         variantGrid.Rows.Clear();
         DataGridViewRow? selectedRow = null;
-        foreach (VariantEntry entry in GetVariantGridEntries(catalog))
+        foreach (VariantEntry entry in snapshot?.GridEntries ?? GetVariantGridEntries(catalog))
         {
-            VariantEntryStatus status = catalog.GetStatus(entry) with { IsAvailable = IsVariantEntryAvailable(entry) };
+            VariantEntryPresentationState state = GetVariantEntryPresentationState(entry, snapshot?.ActiveTarget);
+            bool available = state == VariantEntryPresentationState.Available;
+            VariantEntryStatus status = catalog.GetStatus(entry) with { IsAvailable = available };
             int rowIndex = variantGrid.Rows.Add(entry.Order, entry.DisplayName, entry.DataFile,
-                status.IsAvailable ? UiText.Get("VariantAvailable") : UiText.Get("VariantMissing"),
+                VariantEntryStateText(state),
                 entry.Enabled ? UiText.Get("VariantYes") : UiText.Get("VariantNo"));
             DataGridViewRow row = variantGrid.Rows[rowIndex];
             row.Tag = entry;
-            // V8.2: cache the computed availability so locale switches can
+            // V8.6e: cache the presentation state so locale switches can
             // relocalize the Status cell without re-hashing variant outputs.
-            row.Cells["Status"].Tag = status.IsAvailable;
-            if (!status.IsAvailable)
+            row.Cells["Status"].Tag = state;
+            if (state is VariantEntryPresentationState.RebuildRequired)
+            {
+                row.Cells["Status"].Style.ForeColor = Color.DarkOrange;
+                _variantMissingFont ??= new Font(variantGrid.Font, FontStyle.Bold);
+                row.Cells["Status"].Style.Font = _variantMissingFont;
+            }
+            else if (!available)
             {
                 row.DefaultCellStyle.BackColor = Color.LemonChiffon;
                 row.Cells["Status"].Style.ForeColor = Color.DarkOrange;
@@ -1456,6 +1571,26 @@ internal sealed class MainForm : Form
         UpdateVariantActions();
     }
 
+    /// <summary>R9F V8.6e: one Mods refresh cycle resolves each required
+    /// authoritative runtime+edition projection exactly once. Test overrides
+    /// let regressions count resolutions deterministically.</summary>
+    private ModsLauncherRefreshSnapshot BuildModsSnapshot(VariantCatalog catalog)
+    {
+        _modsSnapshotBuildCount++;
+        ProjectContext project = _activeProject ?? throw new InvalidOperationException("No game installation is active.");
+        VariantContext active = _activeVariant ?? throw new InvalidOperationException("No game installation is active.");
+        var inspect = ModsInspectOverrideForTest ?? ((p, v, e) => { ModsInspectCallCountForTest++; return _variantBuildStatus.InspectEdition(p, v, e); });
+        var resolve = ModsResolveOverrideForTest ?? ((p, v, e) => { ModsResolveCallCountForTest++; return _variantLauncher.ResolveEdition(p, v, e); });
+        return ModsLauncherRefreshSnapshotBuilder.Build(
+            project, _availableActiveVariants, active, _activeTranslationCode,
+            inspect, resolve,
+            (p, v, t) => _variantLauncher.CreateRedirectionPlan(p, v, t),
+            () => GetVariantGridEntries(catalog).ToArray());
+    }
+    internal int ModsInspectCallCountForTest { get; private set; }
+    internal int ModsResolveCallCountForTest { get; private set; }
+    internal int DosProbeCountForTest => _dosDiscovery.ProbeCountForTest;
+
     private void OpenModsLauncher()
     {
         ModsRefreshCount++;
@@ -1473,11 +1608,13 @@ internal sealed class MainForm : Form
             SetModsLauncherControls(active: false);
             SetRecoverySafetyControls(active: false);
             UpdateVariantActions();
+            UpdateDosRuntimePresentation(null);
             return;
         }
         VariantCatalog catalog = EnsureVariantCatalog();
         _modsVariant = _activeVariant;
-        RefreshVariantManager();
+        ModsLauncherRefreshSnapshot snapshot = BuildModsSnapshot(catalog);
+        RefreshVariantManager(snapshot);
         SetModsLauncherControls(active: true);
         txtLauncherFile.Text = catalog.LauncherAuthoring.LauncherFile;
         txtModderName.Text = catalog.LauncherAuthoring.ModderName;
@@ -1486,13 +1623,12 @@ internal sealed class MainForm : Form
         VariantEntry? defaultEntry = catalog.FindByDataFile(catalog.LauncherAuthoring.DefaultVariant);
         if (defaultEntry is not null) cmbDefaultVariant.SelectedItem = defaultEntry;
         FitDefaultVariantCombo();
-        RefreshVariantGrid(CurrentTranslationDataFileForPresentation());
-        // R9F V7: one authoritative runtime+edition target. The top summary,
-        // launcher plan, Run/Debug gating and Variant Manager all resolve
-        // VARIANTS\<RuntimeKey>\<EditionCode> for the SAME explicit
-        // (_activeVariant, _activeTranslationCode) pair.
-        VariantLaunchTarget target = _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
-        LauncherRedirectionPlan plan = _variantLauncher.CreateRedirectionPlan(_activeProject, _activeVariant, _activeTranslationCode);
+        RefreshVariantGrid(CurrentTranslationDataFileForPresentation(), snapshot);
+        // R9F V8.6e: one authoritative runtime+edition target, resolved once
+        // per refresh and reused by the top summary, Run/Debug gating and the
+        // Variant Manager above. The runtime parent is never a runnable output.
+        VariantLaunchTarget target = snapshot.ActiveTarget;
+        LauncherRedirectionPlan plan = snapshot.ActivePlan;
         _lastLauncherTarget = target;
         _lastLauncherPlan = plan;
         lblLauncherReadiness.Text = string.Format(UiText.Get("Launcher.Readiness"), target.GameId, target.VariantId, target.Ownership,
@@ -1501,7 +1637,8 @@ internal sealed class MainForm : Form
         // R6Q presents the plan but cannot write either real launcher.
         btnGenerateLauncher.Enabled = false;
         btnRestoreLauncher.Enabled = false;
-        btnRunVariant.Enabled = _variantExecution.IsAvailable(target, VariantExecutionMode.Run);
+        EnsureDosRuntimeSelection();
+        UpdateDosRuntimePresentation(target);
         btnDebugVariant.Enabled = _variantExecution.IsAvailable(target, VariantExecutionMode.Debug);
         UpdateRecoverySafetyPresentation();
     }
@@ -1531,7 +1668,13 @@ internal sealed class MainForm : Form
         if (cmbDefaultVariant.DropDownWidth != drop) cmbDefaultVariant.DropDownWidth = drop;
     }
 
-    private void RefreshVariantManager()
+    /// <summary>R9F V8.6e lower-grid presentation: a stale owned output
+    /// (files exist but the project fingerprint moved) is RebuildRequired,
+    /// never Missing. Missing means genuinely absent; Invalid means
+    /// foreign/invalid ownership.</summary>
+    internal enum VariantEntryPresentationState { Available, RebuildRequired, Missing, Invalid }
+
+    private void RefreshVariantManager(ModsLauncherRefreshSnapshot? snapshot = null)
     {
         _refreshingVariantManager = true;
         try
@@ -1546,10 +1689,12 @@ internal sealed class MainForm : Form
             variantManagerGrid.Enabled = true;
             foreach (VariantContext variant in _availableActiveVariants)
             {
-                // R9F V7: every row is the same explicit edition applied to a
+                // R9F V8.6e: every row reuses the single per-refresh
+                // projection; the SAME explicit edition applied to a
                 // different runtime (VARIANTS\E1VGA\SK vs VARIANTS\E1EGA\SK).
                 // Selection never flips another runtime's stored status.
-                VariantBuildStatusProjection status = _variantBuildStatus.InspectEdition(_activeProject, variant, _activeTranslationCode);
+                VariantBuildStatusProjection? status = snapshot?.StatusFor(variant.VariantId);
+                status ??= _variantBuildStatus.InspectEdition(_activeProject, variant, _activeTranslationCode);
                 VariantLaunchTarget target = status.Target;
                 var row = new VariantManagerRow(variant, target.Ownership, target.Readiness, target.VariantRoot,
                     status.Status, status.ConfiguredCapabilities, status.CapabilityCount);
@@ -1600,6 +1745,8 @@ internal sealed class MainForm : Form
         btnRestoreLauncher.Enabled = false;
         btnRunVariant.Enabled = false;
         btnDebugVariant.Enabled = false;
+        btnDosRuntimeChange.Enabled = active;
+        btnDosRuntimeRefresh.Enabled = active;
     }
 
     private void SetRecoverySafetyControls(bool active)
@@ -1644,7 +1791,17 @@ internal sealed class MainForm : Form
 
     private void RebuildOwnedVariant()
     {
-        if (_activeProject is null || _activeVariant is null || MessageBox.Show(this, UiText.Get("Recovery.ConfirmRebuildVariant"), UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        if (_activeProject is null || _activeVariant is null) return;
+        if (!_testBypassConfirm && MessageBox.Show(this, UiText.Get("Recovery.ConfirmRebuildVariant"), UiText.Get("Recovery.Title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        RebuildOwnedVariantCore();
+    }
+
+    /// <summary>Shared authoritative rebuild routine: the Mods Rebuild button
+    /// and the top Build Variant action execute exactly this. It never
+    /// duplicates build logic.</summary>
+    private bool RebuildOwnedVariantCore()
+    {
+        if (_activeProject is null || _activeVariant is null) return false;
         RecoverySafetyOperationResult result = _recoverySafety.RebuildOwnedVariant(_activeProject, _activeVariant, _activeTranslationCode);        if (result.Succeeded)
             SetWorkflowStatus(WorkflowStatusSeverity.Success, string.Format(UiText.Get("Workflow.BuiltEditionReady"), ActiveEditionDisplayName()));
         else
@@ -1653,6 +1810,7 @@ internal sealed class MainForm : Form
         // consumer so no SK -> EN -> SK dance is needed to see the result.
         OpenModsLauncher();
         RefreshWorkflowStatus();
+        return result.Succeeded;
     }
 
     /// <summary>Build input is deliberately taken from the active project
@@ -1763,13 +1921,136 @@ internal sealed class MainForm : Form
 
     private void ExecuteActiveVariant(VariantExecutionMode mode)
     {
-        // R9F V7: Run/Debug execute only the same explicit runtime+edition
-        // target the top summary reports; never a runtime-parent guess.
+        // R9F V8.6e: Run/Debug execute only the same explicit runtime+edition
+        // target the top summary reports; never a runtime-parent guess. Run
+        // additionally routes through the selected DOS runtime host: a DOS
+        // executable is never started directly by Windows.
+        if (mode == VariantExecutionMode.Run)
+        {
+            ExecuteActiveVariantInDosHost();
+            return;
+        }
         VariantLaunchTarget target = _activeProject is null || _activeVariant is null
             ? _variantLauncher.Resolve(null, null)
             : _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
         VariantExecutionResult result = _variantExecution.Execute(target, mode);
         if (!result.Started) SetStatus(result.Detail, true);
+    }
+
+    private void ExecuteActiveVariantInDosHost()
+    {
+        if (_activeProject is null || _activeVariant is null)
+        {
+            SetStatus(UiText.Get("App.NoGameSelected") + " " + UiText.Get("App.FindOrBrowse"), true);
+            return;
+        }
+        VariantLaunchTarget target = _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
+        if (target.Readiness != VariantLaunchReadiness.LaunchReady)
+        {
+            SetStatus(UiText.Get("Workflow.BuildIncomplete"), true);
+            return;
+        }
+        if (_dosSelected is null || !_dosSelected.IsRunnable)
+        {
+            SetStatus(UiText.Get("DosRuntime.NeedHost"), true);
+            return;
+        }
+        DosRuntimeLaunchPlan plan;
+        try { plan = DosRuntimeLaunchPlanner.BuildPlan(_dosSelected, target, _activeProject.GameRoot); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            SetStatus(ex.Message, true);
+            return;
+        }
+        VariantExecutionResult result = _variantExecution.ExecutePlan(plan);
+        if (!result.Started) SetStatus(result.Detail, true);
+    }
+
+    /// <summary>R9F V8.6e DOS host selection: remembered path revalidated on
+    /// every Mods refresh; discovery itself is session-cached and never walks
+    /// VARIANTS. Never silently switches hosts: the UI always shows the
+    /// effective selection.</summary>
+    private void EnsureDosRuntimeSelection()
+    {
+        if (_activeProject is null)
+        {
+            _dosCandidates = [];
+            _dosSelected = null;
+            return;
+        }
+        _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot);
+        DosRuntimeSelectedHost? saved = _dosSettings.Load();
+        if (saved is not null)
+        {
+            if (!File.Exists(saved.ExecutablePath))
+            {
+                _dosSelected = null;
+                return;
+            }
+            DosRuntimeCandidate? match = _dosCandidates.FirstOrDefault(item =>
+                item.ExecutablePath.Equals(saved.ExecutablePath, StringComparison.OrdinalIgnoreCase));
+            if (match is not null && match.IsRunnable)
+            {
+                _dosSelected = match;
+                return;
+            }
+            DosRuntimeCandidate probed = _dosDiscovery.ProbeUserSelection(saved.ExecutablePath);
+            _dosSelected = probed.IsRunnable ? probed with { Source = DosRuntimeSource.RememberedSelection } : null;
+            return;
+        }
+        _dosSelected = _dosCandidates
+            .Where(item => item.IsRunnable)
+            .OrderBy(item => item.Source == DosRuntimeSource.GogBundled ? 0 : 1)
+            .ThenBy(item => item.Kind)
+            .ThenBy(item => item.ExecutablePath, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+    }
+
+    private void UpdateDosRuntimePresentation(VariantLaunchTarget? target)
+    {
+        lblDosRuntimeTitle.Text = UiText.Get("DosRuntime.Title");
+        btnDosRuntimeChange.Text = UiText.Get("DosRuntime.Change");
+        btnDosRuntimeRefresh.Text = UiText.Get("DosRuntime.Refresh");
+        lblDosRuntimeSelected.Text = UiText.Get("DosRuntime.Selected") + " " +
+            (_dosSelected is null
+                ? UiText.Get("DosRuntime.NotConfigured")
+                : _dosSelected.DisplayName + " " + _dosSelected.Version + " — " + _dosSelected.ExecutablePath);
+        DosRuntimeExecutionReadiness readiness = DosRuntimeReadiness.Evaluate(
+            target?.Readiness ?? VariantLaunchReadiness.NoActiveInstallation,
+            _dosSelected?.IsRunnable == true);
+        lblRunReadiness.Text = UiText.Get("DosRuntime.RunReadiness") + " " + readiness switch
+        {
+            DosRuntimeExecutionReadiness.Runnable => UiText.Get("DosRuntime.Ready"),
+            DosRuntimeExecutionReadiness.BuildNotReady => UiText.Get("DosRuntime.BuildNotReady"),
+            _ => UiText.Get("DosRuntime.NeedHost")
+        };
+        btnRunVariant.Enabled = readiness == DosRuntimeExecutionReadiness.Runnable;
+    }
+
+    private void ChangeDosRuntime()
+    {
+        if (_activeProject is null) return;
+        using var dialog = new DosRuntimeSelectionDialog(_dosCandidates, _dosSelected,
+            refresh: () =>
+            {
+                _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot, refresh: true);
+                return _dosCandidates;
+            },
+            probePath: path => _dosDiscovery.ProbeUserSelection(path));
+        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Selected is null) return;
+        _dosSelected = dialog.Selected;
+        _dosSettings.Save(dialog.Selected.ExecutablePath, dialog.Selected.Kind);
+        if (_activeProject is not null)
+            _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot);
+        UpdateDosRuntimePresentation(_lastLauncherTarget);
+    }
+
+    private void RefreshDosRuntimeDiscovery()
+    {
+        if (_activeProject is null) return;
+        _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot, refresh: true);
+        EnsureDosRuntimeSelection();
+        UpdateDosRuntimePresentation(_lastLauncherTarget);
     }
 
     private ElviraGameProfile LauncherGameProfile()
@@ -1795,12 +2076,42 @@ internal sealed class MainForm : Form
     {
         try
         {
-            string text = LauncherService.BuildPreview(LauncherGameProfile(), EnsureVariantCatalog(), CurrentLauncherSettings(), UiText.Language, DateTime.Now);
+            string text = BuildLauncherPreviewForTest();
+            if (text.StartsWith("BLOCKED:", StringComparison.Ordinal))
+            {
+                MessageBox.Show(this, text["BLOCKED:".Length..], UiText.Get("PreviewLauncher"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
             using var dialog = new Form { Text = UiText.Get("PreviewLauncher"), StartPosition = FormStartPosition.CenterParent, Size = new Size(850, 650) };
             dialog.Controls.Add(new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, Font = new Font(FontFamily.GenericMonospace, 9), Text = text });
             dialog.ShowDialog(this);
         }
         catch (Exception ex) { ShowVariantError(ex.Message); }
+    }
+
+    /// <summary>Headless preview content: returns the BAT text, or
+    /// BLOCKED:&lt;message&gt; when project-built targets make a root preview
+    /// misleading. Throws like the UI action when no preview is possible.</summary>
+    internal string BuildLauncherPreviewForTest()
+    {
+        VariantCatalog catalog = EnsureVariantCatalog();
+        // R9F V8.6e §21: a root BAT preview assumes GameRoot-flat
+        // RUNxx/GAMEPCxx files. Project-built runtime+edition outputs
+        // live in VARIANTS\<runtime>\<edition> and are never copied to
+        // GameRoot, so previewing them would be misleading. Fail closed
+        // with an honest message instead of restoring flat deployment.
+        TranslationProjectVariant? projectBuilt = catalog.Entries
+            .Where(item => item.Enabled)
+            .Select(item => TryGetProjectTranslation(item, out TranslationProjectVariant translation) &&
+                !translation.Code.Equals(ProjectVariantOwnership.OriginalCode, StringComparison.OrdinalIgnoreCase)
+                ? translation : null)
+            .FirstOrDefault(item => item is not null);
+        if (projectBuilt is not null && _activeProject is not null && _activeVariant is not null)
+        {
+            string editionRoot = _variantDirectories.GetVariantEditionDirectoryPath(_activeProject, _activeVariant, projectBuilt.Code);
+            return "BLOCKED:" + string.Format(UiText.Get("LauncherPreviewProjectBlocked"), projectBuilt.DataFile, editionRoot);
+        }
+        return LauncherService.BuildPreview(LauncherGameProfile(), catalog, CurrentLauncherSettings(), UiText.Language, DateTime.Now);
     }
 
     private void GenerateLauncher()
@@ -1834,7 +2145,12 @@ internal sealed class MainForm : Form
     {
         VariantCatalog catalog = EnsureVariantCatalog();
         VariantConfigurationService.Save(catalog);
-        RefreshVariantGrid(selectDataFile);
+        // Reuse one per-refresh snapshot so catalog metadata edits do not
+        // re-resolve the same runtime+edition projection per grid row.
+        ModsLauncherRefreshSnapshot? snapshot = _activeProject is not null && _activeVariant is not null
+            ? BuildModsSnapshot(catalog)
+            : null;
+        RefreshVariantGrid(selectDataFile, snapshot);
     }
 
     private void AddVariant()
@@ -2954,7 +3270,9 @@ internal sealed class MainForm : Form
                 continue;
             // Cached at full-refresh time; rows predating the cache keep
             // their existing text rather than triggering filesystem IO.
-            if (row.Cells["Status"].Tag is bool available)
+            if (row.Cells["Status"].Tag is VariantEntryPresentationState state)
+                row.Cells["Status"].Value = VariantEntryStateText(state);
+            else if (row.Cells["Status"].Tag is bool available)
                 row.Cells["Status"].Value = available ? UiText.Get("VariantAvailable") : UiText.Get("VariantMissing");
             row.Cells["Enabled"].Value = entry.Enabled ? UiText.Get("VariantYes") : UiText.Get("VariantNo");
         }
@@ -3078,6 +3396,10 @@ internal sealed class MainForm : Form
         // rebuild only replaces rows.
         QueueRuntimeUiGridRefresh();
         btnRunVariant.Text = UiText.Get("Execution.Run"); btnDebugVariant.Text = UiText.Get("Execution.Debug");
+        UpdateDosRuntimePresentation(_lastLauncherTarget);
+        UpdateVariantGridLocalization();
+        UpdateVariantManagerLocalization();
+        UpdateLauncherReadinessLocalization();
         lblRecoveryTitle.Text = UiText.Get("Recovery.Title");
         btnVerifyPristine.Text = UiText.Get("Recovery.VerifyPristine"); btnRestoreBaselineLauncher.Text = UiText.Get("Recovery.RestoreLauncher");
         btnRebuildOwnedVariant.Text = UiText.Get("Recovery.RebuildVariant"); btnRemoveOwnedVariant.Text = UiText.Get("Recovery.RemoveVariant"); btnReverseAllPreview.Text = UiText.Get("Recovery.ReverseAll");
@@ -3915,6 +4237,11 @@ internal sealed class MainForm : Form
             MinimumSize = Size.Empty,
             StartPosition = FormStartPosition.Manual
         };
+        // R9F V8.6e §15: a font project save invalidates the current build
+        // like any other domain save, so the global workflow status must
+        // leave "Built — ready" immediately, exactly like Text/Graphics/UI.
+        _embeddedFontEditor.ProjectSaved += (_, _) =>
+            SetWorkflowStatus(WorkflowStatusSeverity.Warning, UiText.Get("Workflow.SavedBuildRequired"));
         // The root layout gives the global header and the active page separate rows.
         // The embedded editor can therefore occupy the page row without compensating padding.
         var fontHost = new Panel
@@ -5185,11 +5512,15 @@ internal sealed class MainForm : Form
 
     private void NavigateToActiveBuildTarget()
     {
+        // R9F V8.6e: the top Build Variant action performs the real
+        // authoritative build for the selected runtime+edition through the
+        // same shared routine (including its confirmation) as Rebuild
+        // Variant, then focuses Mods & Launcher for inspection.
         if (_activeProject is null || _activeVariant is null) return;
-        OpenModsLauncher();
+        RebuildOwnedVariant();
+        if (IsDisposed) return;
         SwitchMode(tabMods);
         if (btnRebuildOwnedVariant.Enabled) btnRebuildOwnedVariant.Focus();
-        SetWorkflowStatus(WorkflowStatusSeverity.Info, string.Format(UiText.Get("Workflow.BuildTarget"), _activeVariant.DisplayName, ActiveEditionDisplayName()));
     }
 
     private string ActiveEditionDisplayName()
@@ -5666,6 +5997,44 @@ internal sealed class MainForm : Form
     }
 
     internal void OpenModsForTest() => OpenModsLauncher();
+
+    internal FontEditorForm? EmbeddedFontEditorForTest => _embeddedFontEditor;
+
+    /// <summary>Headless entry to the shared rebuild routine without the
+    /// interactive confirmation. Production callers always confirm.</summary>
+    internal bool RebuildActiveVariantCoreForTest() => RebuildOwnedVariantCore();
+
+    /// <summary>Headless entry to the exact top Build Variant action with the
+    /// interactive confirmation bypassed for tests only.</summary>
+    internal void InvokeTopBuildVariantForTest()
+    {
+        _testBypassConfirm = true;
+        try { NavigateToActiveBuildTarget(); }
+        finally { _testBypassConfirm = false; }
+    }
+
+    internal Func<ProjectContext, VariantContext, string, VariantBuildStatusProjection>? ModsInspectOverrideForTest { get; set; }
+    internal Func<ProjectContext, VariantContext, string, VariantLaunchTarget>? ModsResolveOverrideForTest { get; set; }
+    internal int ModsSnapshotBuildCountForTest => _modsSnapshotBuildCount;
+    private int _modsSnapshotBuildCount;
+    internal IReadOnlyList<DosRuntimeCandidate> DosCandidatesForTest => _dosCandidates;
+    internal string? DosSelectedPathForTest => _dosSelected?.ExecutablePath;
+    internal string RunReadinessForTest => lblRunReadiness.Text ?? string.Empty;
+    internal string DosSelectedLabelForTest => lblDosRuntimeSelected.Text ?? string.Empty;
+    internal void RefreshDosDiscoveryForTest()
+    {
+        if (_activeProject is null) return;
+        _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot, refresh: true);
+        EnsureDosRuntimeSelection();
+        UpdateDosRuntimePresentation(_lastLauncherTarget);
+    }
+    internal void SetDosSelectedHostForTest(DosRuntimeCandidate? selected)
+    {
+        // Non-persisting: headless tests must never touch the real per-user
+        // settings file. Production selection always persists via the dialog.
+        _dosSelected = selected;
+        UpdateDosRuntimePresentation(_lastLauncherTarget);
+    }
 
     internal ContextSafetyDiagnostics RunContextSafetyStressForTest(GameInstallation elvira1, GameInstallation elvira2)
     {

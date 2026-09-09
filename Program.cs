@@ -1179,6 +1179,72 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("Add Variant persistence: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 3 && args[0].Equals("--dos-runtime-discovery-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyDosRuntimeDiscoverySmoke(args[1], args[2]); Console.WriteLine("DOS runtime discovery: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("DOS runtime discovery: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--dos-launch-plan-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyDosLaunchPlanSmoke(args[1], args[2]); Console.WriteLine("DOS launch plan: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("DOS launch plan: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--dos-gog-config-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyDosGogConfigSmoke(args[1], args[2]); Console.WriteLine("DOS GOG config: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("DOS GOG config: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--run-plan-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyRunPlanSmoke(args[1], args[2]); Console.WriteLine("Run plan execution: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Run plan execution: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--execution-readiness-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyExecutionReadinessSmoke(args[1], args[2]); Console.WriteLine("Execution readiness: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Execution readiness: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--mods-refresh-perf-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyModsRefreshPerfSmoke(args[1], args[2]); Console.WriteLine("Mods refresh performance: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Mods refresh performance: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--workflow-status-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyWorkflowStatusSmoke(args[1], args[2]); Console.WriteLine("Workflow status: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Workflow status: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--variant-grid-stale-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyVariantGridStaleSmoke(args[1], args[2]); Console.WriteLine("Variant grid stale: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Variant grid stale: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--top-build-button-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyTopBuildButtonSmoke(args[1], args[2]); Console.WriteLine("Top build button: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Top build button: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--cp852-default-edit-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyCp852DefaultEditSmoke(args[1], args[2]); Console.WriteLine("CP852 default edit: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("CP852 default edit: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--launcher-preview-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyLauncherPreviewSmoke(args[1], args[2]); Console.WriteLine("Launcher preview: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Launcher preview: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 1 && args[0].Equals("--version-smoke", StringComparison.OrdinalIgnoreCase))
         {
             try { RunVersionSmoke(); Console.WriteLine("Product version: PASS"); Environment.ExitCode = 0; }
@@ -2460,6 +2526,887 @@ internal static class Program
                 throw new InvalidDataException("Add Variant persistence smoke modified a real GameRoot.");
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static TranslationProjectVariant SeedSkTranslationForSmoke(ProjectContext project, string displayName = "Slovencina")
+    {
+        var translations = new TranslationProjectService();
+        TranslationProjectState state = TranslationProjectState.Empty(project.GameProfile);
+        TranslationProjectVariant sk = translations.Create(project, state, displayName, "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text." });
+        translations.Save(project, translations.Add(state, sk));
+        return translations.Load(project).State!.Variants.Single(item => item.Code == "SK");
+    }
+
+    private static void BuildSkServiceVariantForSmoke(ProjectContext project, VariantContext variant, TranslationProjectVariant sk, VariantDirectoryService directories)
+    {
+        var translations = new TranslationProjectService();
+        var graphics = new GraphicsVariantService();
+        var runtimeUi = new RuntimeUiTextService();
+        var fonts = new FontVariantService();
+        GraphicsProjectState g = graphics.Load(project, sk.Code).State ?? throw new InvalidDataException("SK graphics state did not load.");
+        RuntimeUiTextState u = runtimeUi.Load(project, sk.Code).State ?? throw new InvalidDataException("SK runtime UI state did not load.");
+        FontProjectState f = fonts.Load(project, sk.Code).State ?? throw new InvalidDataException("SK font state did not load.");
+        var composite = new CompositeBuildService(new DisposableVariantBuildService(directories), directories,
+            stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                new ActiveProjectBuildInput(sk, g, u, f)),
+            runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+            projectVariantProvider: (_, _) => sk.Code);
+        VariantDirectoryOperationResult prepared = directories.EnsureVariantEditionDirectory(project, variant, sk.Code);
+        if (prepared.Status is not (VariantDirectoryOperationStatus.Created or VariantDirectoryOperationStatus.AlreadyValid))
+            throw new InvalidDataException("SK fixture directory could not be prepared: " + prepared.Status);
+        CompositeBuildResult result = composite.Build(project, variant, CompositeBuildMode.Full);
+        if (result.Status != CompositeBuildStatus.Success)
+            throw new InvalidDataException("SK fixture build failed: " + result.Status + " / " + result.Stages.Last().Detail);
+    }
+
+    private sealed class FakeDosRuntimeFileSystem : IDosRuntimeFileSystem
+    {
+        public readonly HashSet<string> Files = new(StringComparer.OrdinalIgnoreCase);
+        public string PathVariable = string.Empty;
+        public string ProgramFiles = @"C:\FakePF";
+        public string ProgramFilesX86 = @"C:\FakePFx86";
+        public string LocalAppData = @"C:\FakeLocal";
+        public readonly List<DosRuntimeUninstallEntry> Uninstall = [];
+        public bool FileExists(string path) => Files.Contains(path);
+        public IEnumerable<string> EnumerateTopFiles(string directory, string pattern)
+        {
+            string prefix = pattern.EndsWith("*.exe", StringComparison.OrdinalIgnoreCase) ? pattern[..^5] : pattern;
+            return Files.Where(path =>
+                Path.GetDirectoryName(path)!.Equals(directory, StringComparison.OrdinalIgnoreCase) &&
+                Path.GetFileName(path).StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                Path.GetFileName(path).EndsWith(".exe", StringComparison.OrdinalIgnoreCase)).ToArray();
+        }
+        public string? GetEnvironmentVariable(string name) => name == "PATH" ? PathVariable : null;
+        public string GetProgramFiles() => ProgramFiles;
+        public string GetProgramFilesX86() => ProgramFilesX86;
+        public string GetLocalAppData() => LocalAppData;
+        public IEnumerable<DosRuntimeUninstallEntry> GetUninstallEntries() => Uninstall.ToArray();
+    }
+
+    private sealed class FakeDosRuntimeProbeRunner : IDosRuntimeProbeRunner
+    {
+        public readonly Dictionary<string, DosRuntimeProbeResult> Results = new(StringComparer.OrdinalIgnoreCase);
+        public int Calls;
+        public DosRuntimeProbeResult Probe(string executable, IReadOnlyList<string> arguments, int timeoutMilliseconds)
+        {
+            Calls++;
+            return Results.TryGetValue(executable, out DosRuntimeProbeResult? result) ? result : new(false, string.Empty, "not installed", -1);
+        }
+    }
+
+    private static void VerifyDosRuntimeDiscoverySmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        var files = new FakeDosRuntimeFileSystem
+        {
+            PathVariable = @"C:\tools\bin;C:\TOOLS\bin;C:\bad"
+        };
+        files.Files.Add(@"C:\g\DOSBOX\DOSBox.exe");
+        files.Files.Add(@"C:\tools\bin\dosbox.exe");
+        files.Files.Add(@"C:\x\dosbox-x.exe");
+        files.Files.Add(@"C:\FakePF\DOSBox Staging\dosbox.exe");
+        files.Files.Add(@"C:\bad\dosbox.exe");
+        files.Files.Add(@"C:\g\VARIANTS\E1EGA\DOSBOX\dosbox.exe");
+        files.Uninstall.Add(new("DOSBox-X", @"C:\x", null));
+        var evidence = new Dictionary<string, DosRuntimeHostEvidence>(StringComparer.OrdinalIgnoreCase)
+        {
+            [@"C:\g\DOSBOX\DOSBox.exe"] = new("DOSBox.exe", "DOSBox", "0.74.3"),
+            [@"C:\tools\bin\dosbox.exe"] = new("dosbox.exe", "DOSBox Staging", "0.82.2"),
+            [@"C:\x\dosbox-x.exe"] = new("dosbox-x.exe", "DOSBox-X", "2024.03.01"),
+            [@"C:\FakePF\DOSBox Staging\dosbox.exe"] = new("dosbox.exe", "DOSBox Staging", "0.82.2"),
+            [@"C:\bad\dosbox.exe"] = new("dosbox.exe", "EvilSoft Player", "1.0"),
+            [@"C:\g\VARIANTS\E1EGA\DOSBOX\dosbox.exe"] = new("dosbox.exe", "DOSBox", "0.74.3")
+        };
+        var prober = new FakeDosRuntimeProbeRunner();
+        prober.Results[@"C:\g\DOSBOX\DOSBox.exe"] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+        prober.Results[@"C:\tools\bin\dosbox.exe"] = new(true, "dosbox-staging 0.82.2", string.Empty, 0);
+        prober.Results[@"C:\x\dosbox-x.exe"] = new(true, "DOSBox-X version 2024.03.01", string.Empty, 0);
+        prober.Results[@"C:\FakePF\DOSBox Staging\dosbox.exe"] = new(true, "dosbox-staging 0.82.2", string.Empty, 0);
+        var discovery = new DosRuntimeDiscoveryService(files, prober, path => evidence[path]);
+        IReadOnlyList<DosRuntimeCandidate> found = discovery.Discover(@"C:\g");
+        DosRuntimeCandidate classic = found.SingleOrDefault(item => item.ExecutablePath.Equals(@"C:\g\DOSBOX\DOSBox.exe", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidDataException("GOG-bundled Classic candidate was not discovered.");
+        if (classic is not { Kind: DosRuntimeKind.DosBoxClassic, Source: DosRuntimeSource.GogBundled, Compatibility: DosRuntimeCompatibility.Compatible })
+            throw new InvalidDataException("GOG-bundled Classic candidate misclassified.");
+        DosRuntimeCandidate staging = found.SingleOrDefault(item => item.ExecutablePath.Equals(@"C:\tools\bin\dosbox.exe", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidDataException("Staging candidate was not discovered.");
+        if (staging is not { Kind: DosRuntimeKind.DosBoxStaging, Source: DosRuntimeSource.SystemPath, Compatibility: DosRuntimeCompatibility.Compatible })
+            throw new InvalidDataException("Staging candidate misclassified.");
+        DosRuntimeCandidate x = found.SingleOrDefault(item => item.ExecutablePath.Equals(@"C:\x\dosbox-x.exe", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidDataException("DOSBox-X candidate was not discovered.");
+        if (x is not { Kind: DosRuntimeKind.DosBoxX, Source: DosRuntimeSource.Registry, Compatibility: DosRuntimeCompatibility.Compatible })
+            throw new InvalidDataException("DOSBox-X candidate misclassified.");
+        DosRuntimeCandidate pf = found.SingleOrDefault(item => item.ExecutablePath.Equals(@"C:\FakePF\DOSBox Staging\dosbox.exe", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidDataException("Program Files candidate was not discovered.");
+        if (pf.Source != DosRuntimeSource.ProgramFiles || pf.Compatibility != DosRuntimeCompatibility.Compatible)
+            throw new InvalidDataException("Program Files candidate misclassified.");
+        // IsRunnable is a live filesystem property (production paths are
+        // real): prove it with a real temp executable, not a fake path.
+        string runnableProbe = Path.Combine(Path.GetTempPath(), "Pi1DosRunnableProbe", Guid.NewGuid().ToString("N"), "dosbox.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(runnableProbe)!);
+        File.WriteAllBytes(runnableProbe, [0x4D, 0x5A]);
+        try
+        {
+            var runnable = new DosRuntimeCandidate(DosRuntimeKind.DosBoxClassic, "DOSBox Classic", "0.74", runnableProbe, DosRuntimeSource.UserBrowse, DosRuntimeCompatibility.Compatible, string.Empty);
+            if (!runnable.IsRunnable)
+                throw new InvalidDataException("Existing compatible host does not count as runnable.");
+        }
+        finally { try { Directory.Delete(Path.GetDirectoryName(runnableProbe)!, true); } catch { } }
+        if (found.Count(item => item.ExecutablePath.Equals(@"C:\tools\bin\dosbox.exe", StringComparison.OrdinalIgnoreCase)) != 1)
+            throw new InvalidDataException("Duplicate PATH entries were not deduplicated.");
+        DosRuntimeCandidate bad = found.SingleOrDefault(item => item.ExecutablePath.Equals(@"C:\bad\dosbox.exe", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidDataException("Invalid executable was silently dropped instead of reported.");
+        if (bad.IsRunnable || bad.Compatibility == DosRuntimeCompatibility.Compatible)
+            throw new InvalidDataException("Invalid executable was reported runnable.");
+        if (found.Any(item => item.ExecutablePath.Contains("VARIANTS", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("Automatic discovery walked foreign VARIANTS residue.");
+        int probesAfterFirst = prober.Calls;
+        _ = discovery.Discover(@"C:\g");
+        if (prober.Calls != probesAfterFirst)
+            throw new InvalidDataException("Session discovery cache was not reused on repeated discovery.");
+        _ = discovery.Discover(@"C:\g", refresh: true);
+        if (prober.Calls <= probesAfterFirst)
+            throw new InvalidDataException("Explicit refresh did not re-probe.");
+        string pickedDir = Path.Combine(Path.GetTempPath(), "Pi1DosPickedHost", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(pickedDir);
+        string pickedPath = Path.Combine(pickedDir, "dosbox.exe");
+        File.WriteAllBytes(pickedPath, [0x4D, 0x5A]);
+        try
+        {
+            files.Files.Add(pickedPath);
+            evidence[pickedPath] = new("dosbox.exe", "DOSBox", "0.74.3");
+            prober.Results[pickedPath] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            DosRuntimeCandidate picked = discovery.ProbeUserSelection(pickedPath);
+            if (!picked.IsRunnable || picked.Source != DosRuntimeSource.UserBrowse)
+                throw new InvalidDataException("Compatible manual Browse host was not accepted.");
+        }
+        finally { try { Directory.Delete(pickedDir, true); } catch { } }
+        DosRuntimeCandidate rejected = discovery.ProbeUserSelection(@"C:\weird\player.exe");
+        if (rejected.IsRunnable)
+            throw new InvalidDataException("Unsupported Browse candidate was accepted.");
+        files.Files.Add(@"C:\weird\player.exe");
+        evidence[@"C:\weird\player.exe"] = new("player.exe", "Media Player", "9.9");
+        if (discovery.ProbeUserSelection(@"C:\weird\player.exe").IsRunnable)
+            throw new InvalidDataException("Unrecognized executable became runnable.");
+        var missing = new DosRuntimeCandidate(DosRuntimeKind.DosBoxClassic, "DOSBox Classic", "0.74", @"C:\gone\dosbox.exe", DosRuntimeSource.RememberedSelection, DosRuntimeCompatibility.Compatible, string.Empty);
+        if (missing.IsRunnable)
+            throw new InvalidDataException("Missing selected path counts as runnable.");
+        string settingsPath = Path.Combine(Path.GetTempPath(), "Pi1DosRuntimeSettingsSmoke", Guid.NewGuid().ToString("N"), "dos-runtime.json");
+        try
+        {
+            var store = new DosRuntimeSettingsStore(settingsPath);
+            if (store.Load() is not null) throw new InvalidDataException("Empty settings store did not load null.");
+            store.Save(@"C:\g\DOSBOX\DOSBox.exe", DosRuntimeKind.DosBoxClassic);
+            DosRuntimeSelectedHost? reloaded = store.Load();
+            if (reloaded is null || !reloaded.ExecutablePath.Equals(@"C:\g\DOSBOX\DOSBox.exe", StringComparison.OrdinalIgnoreCase) || reloaded.Kind != DosRuntimeKind.DosBoxClassic)
+                throw new InvalidDataException("Selected host did not persist/reload.");
+        }
+        finally { try { Directory.Delete(Path.GetDirectoryName(settingsPath)!, true); } catch { } }
+        if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+            !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+            throw new InvalidDataException("DOS runtime discovery smoke modified a real GameRoot.");
+    }
+
+    private static void VerifyDosLaunchPlanSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1DosLaunchPlanSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            ProjectContext e2 = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
+            TranslationProjectVariant sk1 = SeedSkTranslationForSmoke(e1);
+            TranslationProjectVariant sk2 = SeedSkTranslationForSmoke(e2);
+            var directories = new VariantDirectoryService();
+            VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            VariantContext e2Vga = VariantContextCatalog.CreateBuiltIns(e2).Single();
+            BuildSkServiceVariantForSmoke(e1, e1Vga, sk1, directories);
+            BuildSkServiceVariantForSmoke(e2, e2Vga, sk2, directories);
+            string fakeHost = Path.Combine(root, "dosbox.exe"); File.WriteAllBytes(fakeHost, [0x4D, 0x5A]);
+            var composite1 = new CompositeBuildService(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, new TranslationProjectService(), new GraphicsVariantService(),
+                    new ActiveProjectBuildInput(sk1, new GraphicsVariantService().Load(e1, "SK").State!, new RuntimeUiTextService().Load(e1, "SK").State!, new FontVariantService().Load(e1, "SK").State!)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk1), sk1.DataFile],
+                projectVariantProvider: (_, _) => "SK");
+            var launcher1 = new VariantLauncherService(directories, composite1);
+            VariantLaunchTarget target1 = launcher1.ResolveEdition(e1, e1Vga, "SK");
+            if (target1.Readiness != VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("E1VGA/SK fixture was not launch-ready: " + target1.Detail);
+            bool fixtureHasBaseConf = File.Exists(Path.Combine(e1.GameRoot, "dosbox_elvira.conf"));
+
+            void RequirePlan(DosRuntimeKind kind, string expectConfFlag, string expectExitFlag, bool expectNoLocal)
+            {
+                var host = new DosRuntimeCandidate(kind, kind.ToString(), "9.9", fakeHost, DosRuntimeSource.SystemPath, DosRuntimeCompatibility.Compatible, string.Empty);
+                DosRuntimeLaunchPlan plan = DosRuntimeLaunchPlanner.BuildPlan(host, target1, e1.GameRoot);
+                if (plan.HostExecutable != fakeHost || plan.DosExecutable != "RUNVGASK" || !plan.DataFile.Equals("GAMEPCSK", StringComparison.OrdinalIgnoreCase) ||
+                    !plan.VariantWorkingDirectory.Equals(target1.WorkingDirectory, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"{kind} plan misroutes the E1VGA/SK target.");
+                string joined = string.Join(" ", plan.HostArguments);
+                if ((fixtureHasBaseConf != plan.HostArguments.Contains(expectConfFlag)) || !plan.HostArguments.Contains("-c") ||
+                    !joined.Contains("mount C \"" + target1.WorkingDirectory + "\"", StringComparison.Ordinal) ||
+                    !joined.Contains("RUNVGASK GAMEPCSK /s", StringComparison.OrdinalIgnoreCase) ||
+                    !plan.HostArguments.Contains(expectExitFlag) || plan.HostArguments[^1] != expectExitFlag)
+                    throw new InvalidDataException($"{kind} plan arguments are not host-correct: {joined}.");
+                if (expectNoLocal && (plan.HostArguments.Contains("--noprimaryconf") is false || plan.HostArguments.Contains("--nolocalconf") is false))
+                    throw new InvalidDataException($"{kind} plan does not isolate user/local configs.");
+                string? baseConf = plan.BaseConfigFiles.SingleOrDefault();
+                if (baseConf is not null && !baseConf.EndsWith("dosbox_elvira.conf", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"{kind} plan uses a wrong base config: {baseConf}.");
+                if (plan.BaseConfigFiles.Any(path => path.EndsWith("single.conf", StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidDataException($"{kind} plan includes the GOG menu autoexec config.");
+            }
+
+            RequirePlan(DosRuntimeKind.DosBoxClassic, "-conf", "-exit", false);
+            RequirePlan(DosRuntimeKind.DosBoxStaging, "--conf", "--exit", true);
+            RequirePlan(DosRuntimeKind.DosBoxX, "-conf", "-exit", false);
+
+            var composite2 = new CompositeBuildService(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, new TranslationProjectService(), new GraphicsVariantService(),
+                    new ActiveProjectBuildInput(sk2, new GraphicsVariantService().Load(e2, "SK").State!, new RuntimeUiTextService().Load(e2, "SK").State!, new FontVariantService().Load(e2, "SK").State!)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk2), sk2.DataFile],
+                projectVariantProvider: (_, _) => "SK");
+            VariantLaunchTarget target2 = new VariantLauncherService(directories, composite2).ResolveEdition(e2, e2Vga, "SK");
+            if (target2.Readiness != VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("E2VGA/SK fixture was not launch-ready: " + target2.Detail);
+            var xHost = new DosRuntimeCandidate(DosRuntimeKind.DosBoxX, "DOSBox-X", "9.9", fakeHost, DosRuntimeSource.SystemPath, DosRuntimeCompatibility.Compatible, string.Empty);
+            DosRuntimeLaunchPlan plan2 = DosRuntimeLaunchPlanner.BuildPlan(xHost, target2, e2.GameRoot);
+            if (!string.Join(" ", plan2.HostArguments).Contains("RUNITSK GAMEPCSK /s", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("E2/RUNIT launch plan is RUNVGA-specific.");
+
+            TranslationProjectState loaded1 = new TranslationProjectService().Load(e1).State!;
+            TranslationProjectVariant cz = new TranslationProjectService().Create(e1, loaded1, "Cestina", "CZ", new Dictionary<int, string>());
+            new TranslationProjectService().Save(e1, new TranslationProjectService().Add(loaded1, cz));
+            BuildSkServiceVariantForSmoke(e1, e1Vga, cz, directories);
+            var compositeCz = new CompositeBuildService(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, new TranslationProjectService(), new GraphicsVariantService(),
+                    new ActiveProjectBuildInput(cz, new GraphicsVariantService().Load(e1, "CZ").State!, new RuntimeUiTextService().Load(e1, "CZ").State!, new FontVariantService().Load(e1, "CZ").State!)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, cz), cz.DataFile],
+                projectVariantProvider: (_, _) => "CZ");
+            VariantLaunchTarget targetCz = new VariantLauncherService(directories, compositeCz).ResolveEdition(e1, e1Vga, "CZ");
+            if (targetCz.Readiness != VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("E1VGA/CZ fixture was not launch-ready: " + targetCz.Detail);
+            DosRuntimeLaunchPlan planCz = DosRuntimeLaunchPlanner.BuildPlan(
+                new DosRuntimeCandidate(DosRuntimeKind.DosBoxClassic, "DOSBox Classic", "0.74", fakeHost, DosRuntimeSource.SystemPath, DosRuntimeCompatibility.Compatible, string.Empty),
+                targetCz, e1.GameRoot);
+            if (!string.Join(" ", planCz.HostArguments).Contains("RUNVGACZ GAMEPCCZ /s", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Non-SK launch plan is hardcoded to SK.");
+
+            // Planning purity: snapshot after all builds, then plan again.
+            string[] fixtureBefore = SnapshotRootFiles(e1.GameRoot).Concat(SnapshotRootFiles(e2.GameRoot)).ToArray();
+            RequirePlan(DosRuntimeKind.DosBoxClassic, "-conf", "-exit", false);
+            RequirePlan(DosRuntimeKind.DosBoxStaging, "--conf", "--exit", true);
+
+            if (DosRuntimeLaunchPlanner.ResolveSoundSwitch(e1.GameRoot) != "/s")
+                throw new InvalidDataException("Default sound switch is not the GOG-derived /s.");
+            string sndRoot = Path.Combine(root, "snd");
+            Directory.CreateDirectory(sndRoot);
+            File.WriteAllText(Path.Combine(sndRoot, "PI1SND.BAT"), "SET PI1SND=/a\r\n");
+            if (DosRuntimeLaunchPlanner.ResolveSoundSwitch(sndRoot) != "/a")
+                throw new InvalidDataException("PI1SND.BAT sound choice was not honored.");
+            File.WriteAllText(Path.Combine(sndRoot, "PI1SND.BAT"), "SET PI1SND=/evil;rm -rf\r\n");
+            if (DosRuntimeLaunchPlanner.ResolveSoundSwitch(sndRoot) != "/s")
+                throw new InvalidDataException("Malicious PI1SND.BAT value was not rejected to /s.");
+
+            if (!SnapshotRootFiles(e1.GameRoot).Concat(SnapshotRootFiles(e2.GameRoot)).ToArray().SequenceEqual(fixtureBefore, StringComparer.Ordinal))
+                throw new InvalidDataException("Launch planning wrote into a fixture GameRoot.");
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("DOS launch plan smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyDosGogConfigSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1DosGogConfigSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            string fakeGame = Path.Combine(root, "game");
+            Directory.CreateDirectory(Path.Combine(fakeGame, "DOSBOX"));
+            string bundled = Path.Combine(fakeGame, "DOSBOX", "DOSBox.exe"); File.WriteAllBytes(bundled, [0x4D, 0x5A]);
+            string settingsConf = Path.Combine(fakeGame, "dosbox_elvira.conf");
+            File.WriteAllText(settingsConf, "[sdl]\nfullscreen=false\n[autoexec]\nmount c ..\n");
+            string singleConf = Path.Combine(fakeGame, "dosbox_elvira_single.conf");
+            File.WriteAllText(singleConf, "[autoexec]\ncall ELVIRA.BAT\n");
+            var files = new SystemDosRuntimeFileSystem();
+            var prober = new FakeDosRuntimeProbeRunner();
+            prober.Results[bundled] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            var discovery = new DosRuntimeDiscoveryService(files, prober, _ => new DosRuntimeHostEvidence("DOSBox.exe", "DOSBox", "0.74.3"));
+            DosRuntimeCandidate gog = discovery.Discover(fakeGame).SingleOrDefault(item => item.ExecutablePath.Equals(bundled, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidDataException("GOG-bundled DOSBox was not identified.");
+            if (gog is not { Kind: DosRuntimeKind.DosBoxClassic, Source: DosRuntimeSource.GogBundled, Compatibility: DosRuntimeCompatibility.Compatible })
+                throw new InvalidDataException("GOG-bundled host misclassified.");
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var directories = new VariantDirectoryService();
+            var stages = CompleteFixtureStages(null, null);
+            var launcher = new VariantLauncherService(directories, new CompositeBuildService(new DisposableVariantBuildService(directories), directories, stages));
+            VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "EN"), VariantDirectoryOperationStatus.Created, "GOG fixture directory");
+            string editionRoot = directories.GetVariantEditionDirectoryPath(e1, e1Vga, "EN");
+            File.Copy(Path.Combine(e1.GameRoot, e1Vga.SourceExecutableName), Path.Combine(editionRoot, e1Vga.GeneratedExecutableName), overwrite: true);
+            File.Copy(Path.Combine(e1.GameRoot, e1Vga.LogicalDataFileName), Path.Combine(editionRoot, e1Vga.LogicalDataFileName), overwrite: true);
+            VariantManifestService.Write(e1, e1Vga, directories, CompositeBuildMode.PristineOnly,
+                [e1Vga.GeneratedExecutableName, e1Vga.LogicalDataFileName], "EN");
+            VariantLaunchTarget target = launcher.Resolve(e1, e1Vga);
+            if (target.Readiness != VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("GOG fixture target was not launch-ready: " + target.Detail);
+            string confHash = HashFile(settingsConf);
+            string singleHash = HashFile(singleConf);
+            DosRuntimeLaunchPlan plan = DosRuntimeLaunchPlanner.BuildPlan(gog, target, fakeGame);
+            if (!plan.BaseConfigFiles.Contains(settingsConf) || plan.BaseConfigFiles.Any(path => path.EndsWith("single.conf", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("GOG config base selection is wrong.");
+            if (!plan.HostArguments.Contains(settingsConf))
+                throw new InvalidDataException("GOG base config is not passed to the host.");
+            if (HashFile(settingsConf) != confHash || HashFile(singleConf) != singleHash)
+                throw new InvalidDataException("GOG configuration file was modified by launch planning.");
+            if (Directory.EnumerateFiles(fakeGame, "*", SearchOption.AllDirectories).Count() != 3)
+                throw new InvalidDataException("Launch planning wrote files into the game directory.");
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("DOS GOG config smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyRunPlanSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1RunPlanSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = SeedSkTranslationForSmoke(e1);
+            var directories = new VariantDirectoryService();
+            VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            BuildSkServiceVariantForSmoke(e1, e1Vga, sk, directories);
+            var composite = new CompositeBuildService(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, new TranslationProjectService(), new GraphicsVariantService(),
+                    new ActiveProjectBuildInput(sk, new GraphicsVariantService().Load(e1, "SK").State!, new RuntimeUiTextService().Load(e1, "SK").State!, new FontVariantService().Load(e1, "SK").State!)),
+                runtimeArtifactProvider: (_, runtime) => [ActiveProjectBuildIdentity.ExecutableName(runtime, sk), sk.DataFile],
+                projectVariantProvider: (_, _) => "SK");
+            var launcher = new VariantLauncherService(directories, composite);
+            var runner = new RecordingVariantProcessRunner();
+            var execution = new VariantExecutionService(runner);
+            VariantLaunchTarget target = launcher.ResolveEdition(e1, e1Vga, "SK");
+            if (target.Readiness != VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("E1VGA/SK fixture was not launch-ready: " + target.Detail);
+            // The legacy direct-DOS Run path must fail even when fully ready.
+            try { execution.Execute(target, VariantExecutionMode.Run); throw new InvalidDataException("Direct DOS execution was not rejected."); }
+            catch (InvalidOperationException) { }
+            if (runner.Starts.Count != 0)
+                throw new InvalidDataException("Rejected direct run started a process.");
+            string fakeHost = Path.Combine(root, "dosbox.exe"); File.WriteAllBytes(fakeHost, [0x4D, 0x5A]);
+            var host = new DosRuntimeCandidate(DosRuntimeKind.DosBoxClassic, "DOSBox Classic", "0.74", fakeHost, DosRuntimeSource.SystemPath, DosRuntimeCompatibility.Compatible, string.Empty);
+            DosRuntimeLaunchPlan plan = DosRuntimeLaunchPlanner.BuildPlan(host, target, e1.GameRoot);
+            VariantExecutionResult result = execution.ExecutePlan(plan);
+            if (!result.Started || result.StartInfo is not { UseShellExecute: false } start || start.FileName != fakeHost ||
+                !start.WorkingDirectory.Equals(target.WorkingDirectory, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Host-based run did not start the DOS host executable.");
+            string commandLine = string.Join(" ", start.ArgumentList);
+            if (!commandLine.Contains("RUNVGASK", StringComparison.OrdinalIgnoreCase) ||
+                !commandLine.Contains("GAMEPCSK", StringComparison.OrdinalIgnoreCase) ||
+                !commandLine.Contains(target.WorkingDirectory, StringComparison.Ordinal))
+                throw new InvalidDataException("Host launch does not reference the authoritative runtime+edition target.");
+            if (start.FileName.Equals(Path.Combine(target.WorkingDirectory, "RUNVGASK.EXE"), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Run started the DOS executable directly instead of the DOS host.");
+            // A stale build cannot produce a plan even with a valid host.
+            var fonts = new FontVariantService();
+            FontProjectState stale = fonts.SetEdit(e1, fonts.Load(e1, "SK").State!,
+                FontProjectEdit.Create(new(0x42), Convert.FromHexString("0102030405060708"), FontEditScope.Shared, null));
+            if (!fonts.Save(e1, "SK", stale).Succeeded)
+                throw new InvalidDataException("Run-plan font mutation did not save.");
+            VariantLaunchTarget staleTarget = launcher.ResolveEdition(e1, e1Vga, "SK");
+            if (staleTarget.Readiness == VariantLaunchReadiness.LaunchReady)
+                throw new InvalidDataException("Mutated project still resolves launch-ready.");
+            bool planBlocked = false;
+            try { DosRuntimeLaunchPlanner.BuildPlan(host, staleTarget, e1.GameRoot); }
+            catch (InvalidOperationException) { planBlocked = true; }
+            if (!planBlocked || runner.Starts.Count != 1)
+                throw new InvalidDataException("Stale build produced a launch plan or started a process.");
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Run plan smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyExecutionReadinessSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        if (DosRuntimeReadiness.Evaluate(VariantLaunchReadiness.LaunchReady, true) != DosRuntimeExecutionReadiness.Runnable ||
+            DosRuntimeReadiness.Evaluate(VariantLaunchReadiness.LaunchReady, false) != DosRuntimeExecutionReadiness.HostNotConfigured ||
+            DosRuntimeReadiness.Evaluate(VariantLaunchReadiness.BuildIncomplete, true) != DosRuntimeExecutionReadiness.BuildNotReady ||
+            DosRuntimeReadiness.Evaluate(VariantLaunchReadiness.VariantMissing, false) != DosRuntimeExecutionReadiness.BuildNotReady ||
+            DosRuntimeReadiness.Evaluate(VariantLaunchReadiness.ForeignOrInvalidVariant, true) != DosRuntimeExecutionReadiness.BuildNotReady ||
+            DosRuntimeReadiness.IsRunEnabled(null, null))
+            throw new InvalidDataException("Execution readiness truth table regressed.");
+        string priorLocale = UiText.LocaleId;
+        string root = Path.Combine(Path.GetTempPath(), "Pi1ExecutionReadinessSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            UiText.SetLocale("en");
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            SeedSkTranslationForSmoke(fixture);
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Readiness fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            if (form.ActiveVariantForTest?.RuntimeKind != VariantRuntimeKind.Elvira1Vga)
+                form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            form.SelectTranslationForTest("SK");
+            if (!form.RebuildActiveVariantCoreForTest())
+                throw new InvalidDataException("Readiness fixture build failed.");
+            if (!form.VariantLaunchReadinessForTest().Equals("LaunchReady", StringComparison.Ordinal))
+                throw new InvalidDataException("Readiness fixture was not launch-ready.");
+            form.OpenModsForTest();
+            string fakeHost = Path.Combine(root, "dosbox.exe");
+            var host = new DosRuntimeCandidate(DosRuntimeKind.DosBoxClassic, "DOSBox Classic", "0.74", fakeHost, DosRuntimeSource.UserBrowse, DosRuntimeCompatibility.Compatible, string.Empty);
+            // A: build Ready, no host -> Run disabled with host reason.
+            form.SetDosSelectedHostForTest(null);
+            if (form.RunEnabledForTest || !form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.NeedHost"), StringComparison.Ordinal))
+                throw new InvalidDataException("Run is enabled without a DOS host.");
+            // B: build Ready, valid host -> Run enabled.
+            File.WriteAllBytes(fakeHost, [0x4D, 0x5A]);
+            form.SetDosSelectedHostForTest(host);
+            if (!form.RunEnabledForTest || !form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.Ready"), StringComparison.Ordinal))
+                throw new InvalidDataException("Run is disabled with a Ready build and valid host.");
+            // C: stale build, valid host -> Run disabled with build reason.
+            var fonts = new FontVariantService();
+            FontProjectState stale = fonts.SetEdit(form.ActiveProjectForTest!, fonts.Load(form.ActiveProjectForTest!, "SK").State!,
+                FontProjectEdit.Create(new(0x42), Convert.FromHexString("0102030405060708"), FontEditScope.Shared, null));
+            if (!fonts.Save(form.ActiveProjectForTest!, "SK", stale).Succeeded)
+                throw new InvalidDataException("Readiness font mutation did not save.");
+            form.OpenModsForTest();
+            form.SetDosSelectedHostForTest(host);
+            if (form.RunEnabledForTest || !form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.BuildNotReady"), StringComparison.Ordinal))
+                throw new InvalidDataException("Run is enabled for a stale build.");
+            // D: host becomes invalid -> Run disabled.
+            File.Delete(fakeHost);
+            form.SetDosSelectedHostForTest(host);
+            if (form.RunEnabledForTest)
+                throw new InvalidDataException("Run is enabled with an invalid host.");
+            // E: rebuild to Ready, reselect valid host -> Run enabled.
+            if (!form.RebuildActiveVariantCoreForTest())
+                throw new InvalidDataException("Readiness rebuild failed.");
+            File.WriteAllBytes(fakeHost, [0x4D, 0x5A]);
+            form.SetDosSelectedHostForTest(host);
+            if (!form.RunEnabledForTest)
+                throw new InvalidDataException("Run stayed disabled after reselecting a valid host on a Ready build.");
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Execution readiness smoke modified a real GameRoot.");
+        }
+        finally
+        {
+            UiText.SetLocale(priorLocale);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void VerifyModsRefreshPerfSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1ModsRefreshPerfSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            IReadOnlyList<VariantContext> variants = VariantContextCatalog.CreateBuiltIns(fixture);
+            int inspects = 0, resolves = 0, redirections = 0, grids = 0;
+            VariantBuildStatusProjection Inspect(ProjectContext project, VariantContext variant, string edition)
+            {
+                inspects++;
+                var target = new VariantLaunchTarget("Elvira1", variant.VariantId, variant.RuntimeKind, "/tmp", "/tmp",
+                    variant.GeneratedExecutableName, variant.LogicalDataFileName, VariantDirectoryOperationStatus.AlreadyValid,
+                    true, VariantLaunchReadiness.LaunchReady, "test");
+                return new VariantBuildStatusProjection(VariantBuildStatus.Ready, target, 5, 5);
+            }
+            VariantLaunchTarget Resolve(ProjectContext project, VariantContext variant, string edition)
+            {
+                resolves++;
+                return new VariantLaunchTarget("Elvira1", variant.VariantId, variant.RuntimeKind, "/tmp", "/tmp",
+                    variant.GeneratedExecutableName, variant.LogicalDataFileName, VariantDirectoryOperationStatus.AlreadyValid,
+                    true, VariantLaunchReadiness.LaunchReady, "test");
+            }
+            LauncherRedirectionPlan Redirect(ProjectContext project, VariantContext variant, VariantLaunchTarget target) { redirections++; return new LauncherRedirectionPlan("ELVIRA.BAT", "/tmp/a", "/tmp/b", PristineFileClassification.MutableBackedUp, target, false, "test"); }
+            VariantContext active = variants.Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            ModsLauncherRefreshSnapshot snapshot = ModsLauncherRefreshSnapshotBuilder.Build(
+                fixture, variants, active, "SK", Inspect, Resolve, Redirect, () => { grids++; return []; });
+            if (inspects != variants.Count || resolves != 1 || redirections != 1 || grids != 1)
+                throw new InvalidDataException($"Snapshot resolved {inspects}/{resolves}/{redirections}/{grids} instead of {variants.Count}/1/1/1.");
+            foreach (VariantContext variant in variants)
+            {
+                _ = snapshot.StatusFor(variant.VariantId);
+                _ = snapshot.StatusFor(variant.VariantId);
+            }
+            _ = snapshot.ActiveTarget; _ = snapshot.ActiveTarget;
+            _ = snapshot.ActivePlan; _ = snapshot.ActivePlan;
+            _ = snapshot.GridEntries; _ = snapshot.GridEntries;
+            if (inspects != variants.Count || resolves != 1 || redirections != 1 || grids != 1)
+                throw new InvalidDataException("Repeated snapshot consumers recomputed projections.");
+            SeedSkTranslationForSmoke(fixture);
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Perf fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            form.SelectTranslationForTest("SK");
+            int snapshotsBefore = form.ModsSnapshotBuildCountForTest;
+            int inspectsBefore = form.ModsInspectCallCountForTest;
+            int resolvesBefore = form.ModsResolveCallCountForTest;
+            form.OpenModsForTest();
+            if (form.ModsSnapshotBuildCountForTest != snapshotsBefore + 1)
+                throw new InvalidDataException("Mods open did not build exactly one refresh snapshot.");
+            if (form.ModsInspectCallCountForTest - inspectsBefore != 2 || form.ModsResolveCallCountForTest - resolvesBefore != 1)
+                throw new InvalidDataException($"Mods open resolved {form.ModsInspectCallCountForTest - inspectsBefore} inspections and {form.ModsResolveCallCountForTest - resolvesBefore} targets instead of 2/1.");
+            if (form.VariantManagerRowsForTest.Count != 2)
+                throw new InvalidDataException("Variant Manager did not present both runtime rows from one snapshot.");
+            int probesBefore = form.DosProbeCountForTest;
+            form.OpenModsForTest();
+            if (form.ModsSnapshotBuildCountForTest != snapshotsBefore + 2)
+                throw new InvalidDataException("Second Mods open reused a stale snapshot instead of refreshing.");
+            if (form.DosProbeCountForTest != probesBefore)
+                throw new InvalidDataException("Session DOS discovery results were not reused across Mods opens.");
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Mods refresh perf smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyWorkflowStatusSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string priorLocale = UiText.LocaleId;
+        string root = Path.Combine(Path.GetTempPath(), "Pi1WorkflowStatusSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            UiText.SetLocale("en");
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            SeedSkTranslationForSmoke(fixture);
+            string source382 = Path.Combine(fixture.GameRoot, "382.VGA");
+            ParsedTable table382 = new VgaImageTableParser(File.ReadAllBytes(source382)).Parse();
+            VgaImageEntry image382 = table382.Entries.Single(entry => entry.ImageId == 1 && entry.DataOffset > 0);
+            byte[] pixels382 = ElviraImageDecoder.Decode(File.ReadAllBytes(source382), image382);
+            string palette382Path = Path.Combine(fixture.GameRoot, "381.VGA");
+            IReadOnlyList<ElviraPaletteBank> banks382 = ElviraPaletteLoader.Load(palette382Path);
+            int bank382 = Elvira1PaletteResolver.EffectivePaletteBank(null, new Elvira1PaletteResolver().Resolve(palette382Path, source382, image382.ImageId), banks382.Count);
+            System.Drawing.Color[] palette382 = banks382[bank382].Colors;
+            string pngA = Path.Combine(root, "seed-a.png");
+            using (System.Drawing.Bitmap bitmap = PaletteTools.ToBitmap(image382.PixelWidth, image382.Height, pixels382, palette382, transparentZero: false))
+            {
+                bitmap.SetPixel(0, 0, palette382[(pixels382[0] + 1) & 0x0F]);
+                bitmap.Save(pngA, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            string pngB = Path.Combine(root, "seed-b.png");
+            using (System.Drawing.Bitmap bitmap = PaletteTools.ToBitmap(image382.PixelWidth, image382.Height, pixels382, palette382, transparentZero: false))
+            {
+                bitmap.SetPixel(0, 0, palette382[(pixels382[0] + 2) & 0x0F]);
+                bitmap.Save(pngB, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            var graphics = new GraphicsVariantService();
+            GraphicsProjectState seeded = graphics.SetEdit(fixture, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1),
+                new GraphicsProjectEdit(new GraphicsProjectIdentity("382.VGA", 1), pngA, GraphicsEditScope.Shared, null));
+            if (!graphics.Save(fixture, "SK", seeded).Succeeded)
+                throw new InvalidDataException("Workflow graphics seed did not save.");
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Workflow fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            if (form.ActiveVariantForTest?.RuntimeKind != VariantRuntimeKind.Elvira1Vga)
+                form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            form.SelectTranslationForTest("SK");
+            if (!form.RebuildActiveVariantCoreForTest())
+                throw new InvalidDataException("Workflow fixture build failed.");
+            string builtReady = UiText.Get("Workflow.BuiltReady");
+            string buildRequired = UiText.Get("Workflow.SavedBuildRequired");
+            if (!form.WorkflowStatusForTest.Equals(builtReady, StringComparison.Ordinal))
+                throw new InvalidDataException("Built fixture did not report Built-ready: " + form.WorkflowStatusForTest);
+            form.ActivateFontForTest();
+            FontEditorForm? editor = form.EmbeddedFontEditorForTest ?? throw new InvalidDataException("Embedded font editor did not activate.");
+            if (!editor.SelectGlyphForTest(0x41))
+                throw new InvalidDataException("Fixture glyph 0x41 was not selectable.");
+            editor.ToggleCurrentPixelForTest(0, 0);
+            if (editor.SaveProjectStateForTest() < 1)
+                throw new InvalidDataException("Embedded font save did not persist.");
+            if (!form.WorkflowStatusForTest.Equals(buildRequired, StringComparison.Ordinal))
+                throw new InvalidDataException("Font save left global status Built-ready: " + form.WorkflowStatusForTest);
+            form.SetTextEditForTest(393, "Workflow status text edit.");
+            form.SaveTextProjectForTest();
+            if (!form.WorkflowStatusForTest.Equals(buildRequired, StringComparison.Ordinal))
+                throw new InvalidDataException("Text save left a stale global status: " + form.WorkflowStatusForTest);
+            // The saved graphics state references its replacement PNG by path;
+            // changing the PNG bytes is a genuine graphics project change, so
+            // the following save must report build-required on a stale build.
+            File.Copy(pngB, pngA, overwrite: true);
+            form.SaveGraphicsForTest();
+            if (!form.WorkflowStatusForTest.Equals(buildRequired, StringComparison.Ordinal))
+                throw new InvalidDataException("Graphics save left a stale global status: " + form.WorkflowStatusForTest);
+            if (!form.VariantLaunchReadinessForTest().Equals("BuildIncomplete", StringComparison.Ordinal))
+                throw new InvalidDataException("Changed graphics input did not stale the build.");
+            form.ApplySemanticEditForTest(RuntimeUiLogicalRecordId.PauseMenu, "Prestávka");
+            form.SaveRuntimeUiForTest();
+            if (!form.WorkflowStatusForTest.Equals(buildRequired, StringComparison.Ordinal))
+                throw new InvalidDataException("Runtime UI save left a stale global status: " + form.WorkflowStatusForTest);
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Workflow status smoke modified a real GameRoot.");
+        }
+        finally
+        {
+            UiText.SetLocale(priorLocale);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void VerifyVariantGridStaleSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string priorLocale = UiText.LocaleId;
+        string root = Path.Combine(Path.GetTempPath(), "Pi1VariantGridStaleSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            UiText.SetLocale("en");
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            SeedSkTranslationForSmoke(fixture);
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Grid fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            if (form.ActiveVariantForTest?.RuntimeKind != VariantRuntimeKind.Elvira1Vga)
+                form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            form.SelectTranslationForTest("SK");
+            if (!form.RebuildActiveVariantCoreForTest())
+                throw new InvalidDataException("Grid fixture build failed.");
+            form.OpenModsForTest();
+            if (!form.VariantGridRowStatusForTest("GAMEPCSK").Equals(UiText.Get("VariantAvailable"), StringComparison.Ordinal) ||
+                !form.IsVariantEntryAvailableForTest("GAMEPCSK"))
+                throw new InvalidDataException("Built SK entry is not Available.");
+            var fonts = new FontVariantService();
+            FontProjectState stale = fonts.SetEdit(form.ActiveProjectForTest!, fonts.Load(form.ActiveProjectForTest!, "SK").State!,
+                FontProjectEdit.Create(new(0x42), Convert.FromHexString("0102030405060708"), FontEditScope.Shared, null));
+            if (!fonts.Save(form.ActiveProjectForTest!, "SK", stale).Succeeded)
+                throw new InvalidDataException("Grid font mutation did not save.");
+            form.RefreshVariantGridForTest();
+            if (!form.VariantGridRowStatusForTest("GAMEPCSK").Equals(UiText.Get("VariantRebuildRequired"), StringComparison.Ordinal))
+                throw new InvalidDataException("Stale SK entry is not Rebuild required: " + form.VariantGridRowStatusForTest("GAMEPCSK"));
+            if (form.IsVariantEntryAvailableForTest("GAMEPCSK"))
+                throw new InvalidDataException("Stale SK entry is still Available.");
+            string exePath = form.VariantLaunchExecutablePathForTest();
+            if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+                throw new InvalidDataException("Grid fixture executable path did not resolve.");
+            File.Delete(exePath);
+            form.RefreshVariantGridForTest();
+            if (!form.VariantGridRowStatusForTest("GAMEPCSK").Equals(UiText.Get("VariantMissing"), StringComparison.Ordinal))
+                throw new InvalidDataException("Removed SK entry is not Missing.");
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Variant grid stale smoke modified a real GameRoot.");
+        }
+        finally
+        {
+            UiText.SetLocale(priorLocale);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void VerifyTopBuildButtonSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string priorLocale = UiText.LocaleId;
+        string root = Path.Combine(Path.GetTempPath(), "Pi1TopBuildButtonSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            UiText.SetLocale("en");
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            SeedSkTranslationForSmoke(fixture);
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Top-build fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            if (form.ActiveVariantForTest?.RuntimeKind != VariantRuntimeKind.Elvira1Vga)
+                form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            form.SelectTranslationForTest("SK");
+            if (!form.VariantLaunchReadinessForTest().Equals("VariantMissing", StringComparison.Ordinal) &&
+                !form.VariantLaunchReadinessForTest().Equals("BuildIncomplete", StringComparison.Ordinal))
+                throw new InvalidDataException("Unbuilt SK target is not missing/incomplete: " + form.VariantLaunchReadinessForTest());
+            form.InvokeTopBuildVariantForTest();
+            if (!form.VariantLaunchReadinessForTest().Equals("LaunchReady", StringComparison.Ordinal))
+                throw new InvalidDataException("Top Build Variant did not build: " + form.VariantLaunchReadinessForTest());
+            string exePath = form.VariantLaunchExecutablePathForTest();
+            string dataPath = form.VariantLaunchDataPathForTest();
+            if (!File.Exists(exePath) || !File.Exists(dataPath))
+                throw new InvalidDataException("Top Build Variant produced no runtime+edition artifacts.");
+            VariantManifest manifest = VariantManifestService.Read(Path.GetDirectoryName(exePath)!);
+            if (!manifest.ProjectCode.Equals("SK", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Top Build Variant manifest does not belong to SK.");
+            string firstHash = HashFile(exePath);
+            var fonts = new FontVariantService();
+            FontProjectState stale = fonts.SetEdit(form.ActiveProjectForTest!, fonts.Load(form.ActiveProjectForTest!, "SK").State!,
+                FontProjectEdit.Create(new(0x42), Convert.FromHexString("0102030405060708"), FontEditScope.Shared, null));
+            if (!fonts.Save(form.ActiveProjectForTest!, "SK", stale).Succeeded)
+                throw new InvalidDataException("Top-build font mutation did not save.");
+            if (!form.VariantLaunchReadinessForTest().Equals("BuildIncomplete", StringComparison.Ordinal))
+                throw new InvalidDataException("Mutated SK target is not stale.");
+            form.InvokeTopBuildVariantForTest();
+            if (!form.VariantLaunchReadinessForTest().Equals("LaunchReady", StringComparison.Ordinal) || HashFile(exePath) == firstHash)
+                throw new InvalidDataException("Top Build Variant did not rebuild the stale target.");
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Top build button smoke modified a real GameRoot.");
+        }
+        finally
+        {
+            UiText.SetLocale(priorLocale);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private static void VerifyCp852DefaultEditSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1Cp852DefaultEditSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            ProjectContext e2 = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
+            VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            VariantContext e1Ega = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Ega);
+            VariantContext e2Vga = VariantContextCatalog.CreateBuiltIns(e2).Single();
+            using var editor = new FontEditorForm();
+            editor.BindProjectVariant(e1, e1Vga, "SK");
+            editor.LoadExecutableForTest(Path.Combine(e1.GameRoot, "RUNVGA.EXE"));
+            if (!editor.SelectGlyphForTest(0xA0) || !editor.IsCurrentGlyphEditableForTest)
+                throw new InvalidDataException("Built-in CP852 default 0xA0 is not editable for E1 VGA / SK.");
+            byte[] fallback = editor.GlyphOriginalForTest(0xA0);
+            if (fallback.All(single => single == 0))
+                throw new InvalidDataException("Built-in CP852 default 0xA0 has no bitmap to start from.");
+            editor.ToggleCurrentPixelForTest(0, 0);
+            byte[] edited = editor.GlyphEditedForTest(0xA0);
+            if (edited.SequenceEqual(fallback) || edited.All(single => single == 0))
+                throw new InvalidDataException("Edited 0xA0 is not based on the built-in default bitmap.");
+            if (editor.SaveProjectStateForTest() != 1)
+                throw new InvalidDataException("Built-in default edit did not save exactly one glyph.");
+            FontProjectState reloaded = new FontVariantService().Load(e1, "SK").State ?? throw new InvalidDataException("SK font state did not reload.");
+            if (reloaded.Edits.Count != 1 || !reloaded.Edits[0].Bitmap.SequenceEqual(edited))
+                throw new InvalidDataException("Saved 0xA0 edit did not round-trip through project state.");
+            TranslationProjectVariant sk = SeedSkTranslationForSmoke(e1);
+            var directories = new VariantDirectoryService();
+            BuildSkServiceVariantForSmoke(e1, e1Vga, sk, directories);
+            string output = Path.Combine(directories.GetVariantEditionDirectoryPath(e1, e1Vga, "SK"), "RUNVGASK.EXE");
+            if (!RunVgaFontService.LoadRunVga(output).Glyphs[0xA0].Original.SequenceEqual(edited))
+                throw new InvalidDataException("Built RUNVGASK.EXE does not materialize the 0xA0 project edit.");
+            using var english = new FontEditorForm();
+            english.BindProjectVariant(e1, e1Vga, "EN");
+            english.LoadExecutableForTest(Path.Combine(e1.GameRoot, "RUNVGA.EXE"));
+            if (!english.SelectGlyphForTest(0x41))
+                throw new InvalidDataException("EN glyph 0x41 was not selectable.");
+            english.ToggleCurrentPixelForTest(0, 0);
+            if (english.SaveProjectStateForTest() != 0)
+                throw new InvalidDataException("Original EN accepted a project glyph save.");
+            if (!editor.SelectGlyphForTest(0x81) || editor.IsCurrentGlyphEditableForTest)
+                throw new InvalidDataException("Reserved glyph 0x81 lost its protection.");
+            editor.BindProjectVariant(e1, e1Ega, "SK");
+            if (!editor.SelectGlyphForTest(0xA0) || editor.IsCurrentGlyphEditableForTest)
+                throw new InvalidDataException("E1 EGA pretends to support built-in default editing without a writer.");
+            editor.BindProjectVariant(e1, e1Vga, "CZ");
+            if (!editor.SelectGlyphForTest(0xA0) || !editor.IsCurrentGlyphEditableForTest)
+                throw new InvalidDataException("Built-in default editing is hardcoded to SK.");
+            using var runit = new FontEditorForm();
+            runit.BindProjectVariant(e2, e2Vga, "SK");
+            runit.LoadExecutableForTest(Path.Combine(e2.GameRoot, "RUNIT.EXE"));
+            if (!runit.SelectGlyphForTest(0xA0) || !runit.IsCurrentGlyphEditableForTest)
+                throw new InvalidDataException("Built-in CP852 default 0xA0 is not editable for E2 VGA / SK.");
+            runit.ToggleCurrentPixelForTest(0, 0);
+            if (runit.SaveProjectStateForTest() != 1)
+                throw new InvalidDataException("E2 built-in default edit did not save.");
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("CP852 default edit smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyLauncherPreviewSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string priorLocale = UiText.LocaleId;
+        string root = Path.Combine(Path.GetTempPath(), "Pi1LauncherPreviewSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            UiText.SetLocale("en");
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            SeedSkTranslationForSmoke(fixture);
+            File.WriteAllText(Path.Combine(fixture.GameRoot, VariantConfigurationService.ConfigFileName),
+                "[Variants]\nCount=2\nLauncherFile=ELVIRA.BAT\nModderName=Smoke\nDefaultVariant=GAMEPCSK\n\n" +
+                "[Variant1]\nName=English\nCode=EN\nDataFile=GAMEPC\nExeFile=RUNVGA.EXE\nEnabled=true\nOrder=1\n\n" +
+                "[Variant2]\nName=Slovencina\nCode=SK\nDataFile=GAMEPCSK\nExeFile=RUNVGASK.EXE\nEnabled=true\nOrder=2\n");
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Preview fixture did not validate as an installation.");
+            using (var form = new MainForm())
+            {
+                form.InitializeInstallationStateForTest();
+                form.ActivateInstallationForTest(installation);
+                form.SelectTranslationForTest("SK");
+                form.OpenModsForTest();
+                string blocked = form.BuildLauncherPreviewForTest();
+                if (!blocked.StartsWith("BLOCKED:", StringComparison.Ordinal) || !blocked.Contains("GAMEPCSK", StringComparison.Ordinal) ||
+                    !blocked.Contains("VARIANTS", StringComparison.Ordinal) || blocked.Contains("RUNVGASK GAMEPCSK", StringComparison.Ordinal))
+                    throw new InvalidDataException("Project-built preview was not honestly blocked: " + blocked);
+            }
+            ProjectContext legacy = CreateBuildFixtureProjectContext(root, "legacy", elvira1Source, ElviraGameProfile.Elvira1);
+            if (!GameInstallationValidator.TryValidate(legacy.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? legacyInstallation) || legacyInstallation is null)
+                throw new InvalidDataException("Legacy preview fixture did not validate as an installation.");
+            using (var form = new MainForm())
+            {
+                form.InitializeInstallationStateForTest();
+                form.ActivateInstallationForTest(legacyInstallation);
+                form.OpenModsForTest();
+                string preview = form.BuildLauncherPreviewForTest();
+                if (preview.StartsWith("BLOCKED:", StringComparison.Ordinal))
+                    throw new InvalidDataException("Legacy-only preview was blocked.");
+                if (!preview.Contains("RUNVGA GAMEPC", StringComparison.Ordinal))
+                    throw new InvalidDataException("Legacy preview lost its root invocation line.");
+                if (!preview.Contains(AppInfo.RepositoryUrl, StringComparison.Ordinal) || preview.Contains("Pi1-Elvira-I-II-Editor", StringComparison.Ordinal))
+                    throw new InvalidDataException("Launcher preview does not carry the canonical repository URL.");
+            }
+            if (File.Exists(Path.Combine(fixture.GameRoot, "GAMEPCSK")) || File.Exists(Path.Combine(fixture.GameRoot, "RUNVGASK.EXE")) ||
+                File.Exists(Path.Combine(legacy.GameRoot, "GAMEPCSK")) || File.Exists(Path.Combine(legacy.GameRoot, "RUNVGASK.EXE")))
+                throw new InvalidDataException("Launcher preview materialized generated files into a GameRoot.");
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Launcher preview smoke modified a real GameRoot.");
+        }
+        finally
+        {
+            UiText.SetLocale(priorLocale);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
     }
 
 
@@ -8664,29 +9611,33 @@ internal static class Program
             var composite = new CompositeBuildService(new DisposableVariantBuildService(directories), directories, stages);
             var launcher = new VariantLauncherService(directories, composite);
             string debugHost = Path.Combine(root, "DEBUG.EXE"); File.WriteAllBytes(debugHost, [0x4D, 0x5A]);
+            string fakeDosHost = Path.Combine(root, "dosbox.exe"); File.WriteAllBytes(fakeDosHost, [0x4D, 0x5A]);
             var runner = new RecordingVariantProcessRunner();
             var execution = new VariantExecutionService(runner, new VariantDebugConfiguration(debugHost, ["-debug"]));
+            var blockedHost = new DosRuntimeCandidate(DosRuntimeKind.DosBoxClassic, "DOSBox Classic", "0.74", fakeDosHost, DosRuntimeSource.SystemPath, DosRuntimeCompatibility.Compatible, "smoke host");
 
-            AssertBlocked(execution.Execute(launcher.Resolve(null, null), VariantExecutionMode.Run), runner, runner.Starts.Count, "No active installation");
+            // R9F V8.6e P0: direct Windows execution of a DOS executable is
+            // rejected fail-closed, even for fully ready targets.
+            RequireDirectRunRejected(execution, launcher.Resolve(null, null), runner, "No active installation");
             VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(v => v.RuntimeKind == VariantRuntimeKind.Elvira1Vga);
             VariantContext e1Ega = VariantContextCatalog.CreateBuiltIns(e1).Single(v => v.RuntimeKind == VariantRuntimeKind.Elvira1Ega);
             VariantContext e2Vga = VariantContextCatalog.CreateBuiltIns(e2).Single();
-            AssertBlocked(execution.Execute(launcher.Resolve(e1, e1Vga), VariantExecutionMode.Run), runner, runner.Starts.Count, "Missing variant");
+            RequirePlanBlocked(execution, blockedHost, launcher.Resolve(e1, e1Vga), e1.GameRoot, runner, "Missing variant");
             RequireDirectoryStatus(directories.EnsureVariantDirectory(e1, e1Vga), VariantDirectoryOperationStatus.Created, "E1VGA owned directory");
             RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(e1, e1Vga, "EN"), VariantDirectoryOperationStatus.Created, "E1VGA baseline edition");
-            AssertBlocked(execution.Execute(launcher.Resolve(e1, e1Vga), VariantExecutionMode.Run), runner, runner.Starts.Count, "Incomplete variant");
+            RequirePlanBlocked(execution, blockedHost, launcher.Resolve(e1, e1Vga), e1.GameRoot, runner, "Incomplete variant");
 
             string foreign = directories.GetVariantDirectoryPath(e1, e1Ega); Directory.CreateDirectory(foreign); File.WriteAllBytes(Path.Combine(foreign, "FOREIGN.DAT"), new byte[] { 0x46 });
-            AssertBlocked(execution.Execute(launcher.Resolve(e1, e1Ega), VariantExecutionMode.Run), runner, runner.Starts.Count, "Foreign E1EGA directory");
+            RequirePlanBlocked(execution, blockedHost, launcher.Resolve(e1, e1Ega), e1.GameRoot, runner, "Foreign E1EGA directory");
             Directory.Delete(foreign, true);
             try { _ = VariantContextCatalog.Create(e2, BuiltInVariantId.Elvira1Ega); throw new InvalidDataException("Elvira II EGA was accepted."); }
             catch (ArgumentException) { }
             try { _ = VariantContext.ValidateDirectoryKey("..\\escape"); throw new InvalidDataException("Traversal key was accepted."); }
             catch (ArgumentException) { }
 
-            VerifyReadyVariant(e1, e1Vga, directories, launcher, execution, runner);
-            VerifyReadyVariant(e1, e1Ega, directories, launcher, execution, runner);
-            VerifyReadyVariant(e2, e2Vga, directories, launcher, execution, runner);
+            VerifyReadyVariant(e1, e1Vga, directories, launcher, execution, runner, fakeDosHost);
+            VerifyReadyVariant(e1, e1Ega, directories, launcher, execution, runner, fakeDosHost);
+            VerifyReadyVariant(e2, e2Vga, directories, launcher, execution, runner, fakeDosHost);
 
             VariantLaunchTarget staleE1 = launcher.Resolve(e1, e1Vga);
             VariantLaunchTarget switchedE2 = launcher.Resolve(e2, e2Vga);
@@ -8695,10 +9646,14 @@ internal static class Program
                 throw new InvalidDataException("E1 -> E2 -> E1 target resolution leaked stale state.");
             string e1Root = directories.GetVariantEditionDirectoryPath(e1, e1Vga, "EN");
             string output = Path.Combine(e1Root, e1Vga.GeneratedExecutableName); File.Delete(output);
-            AssertBlocked(execution.Execute(launcher.Resolve(e1, e1Vga), VariantExecutionMode.Run), runner, runner.Starts.Count, "Missing generated executable");
-            File.WriteAllBytes(output, [0x4D, 0x5A]);
+            RequirePlanBlocked(execution, blockedHost, launcher.Resolve(e1, e1Vga), e1.GameRoot, runner, "Missing generated executable");
+            File.Copy(Path.Combine(e1.GameRoot, e1Vga.SourceExecutableName), output, overwrite: true);
+            File.Copy(Path.Combine(e1.GameRoot, e1Vga.LogicalDataFileName), Path.Combine(e1Root, e1Vga.LogicalDataFileName), overwrite: true);
+            VariantManifestService.Write(e1, e1Vga, directories, CompositeBuildMode.PristineOnly,
+                [e1Vga.GeneratedExecutableName, e1Vga.LogicalDataFileName], "EN");
             runner.Failure = new System.ComponentModel.Win32Exception("fixture launch failure");
-            if (execution.Execute(launcher.Resolve(e1, e1Vga), VariantExecutionMode.Run).Started)
+            DosRuntimeLaunchPlan failingPlan = DosRuntimeLaunchPlanner.BuildPlan(blockedHost, launcher.Resolve(e1, e1Vga), e1.GameRoot);
+            if (execution.ExecutePlan(failingPlan).Started)
                 throw new InvalidDataException("Fake process failure was not contained.");
             runner.Failure = null;
             if (stages.Any(stage => stage.ExecuteCount != 0)) throw new InvalidDataException("Run/debug unexpectedly invoked a composite build.");
@@ -8834,8 +9789,38 @@ internal static class Program
 
     private static string RestorePlanSignature(RestorePlan plan) => string.Join("\n", plan.Items.Select(item => $"{item.Kind}|{item.RelativePath}|{item.Detail}|{item.VariantId}"));
 
+    private static void RequireDirectRunRejected(VariantExecutionService execution, VariantLaunchTarget target, RecordingVariantProcessRunner runner, string scenario)
+    {
+        int starts = runner.Starts.Count;
+        try { execution.Execute(target, VariantExecutionMode.Run); }
+        catch (InvalidOperationException) { }
+        if (runner.Starts.Count != starts)
+            throw new InvalidDataException(scenario + " started a direct DOS process.");
+    }
+
+    private static void RequirePlanBlocked(VariantExecutionService execution, DosRuntimeCandidate host, VariantLaunchTarget target, string gameRoot, RecordingVariantProcessRunner runner, string scenario)
+    {
+        int starts = runner.Starts.Count;
+        bool blocked = false;
+        try { DosRuntimeLaunchPlanner.BuildPlan(host, target, gameRoot); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException)
+        { blocked = true; }
+        if (!blocked)
+        {
+            try
+            {
+                if (execution.ExecutePlan(DosRuntimeLaunchPlanner.BuildPlan(host, target, gameRoot)).Started)
+                    throw new InvalidDataException(scenario + " launched a process.");
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException)
+            { blocked = true; }
+        }
+        if (!blocked || runner.Starts.Count != starts)
+            throw new InvalidDataException(scenario + " was not blocked from execution.");
+    }
+
     private static void VerifyReadyVariant(ProjectContext project, VariantContext variant, VariantDirectoryService directories,
-        VariantLauncherService launcher, VariantExecutionService execution, RecordingVariantProcessRunner runner)
+        VariantLauncherService launcher, VariantExecutionService execution, RecordingVariantProcessRunner runner, string dosHostExecutable)
     {
         VariantDirectoryOperationResult ensured = directories.EnsureVariantEditionDirectory(project, variant, "EN");
         if (ensured.Status is not (VariantDirectoryOperationStatus.Created or VariantDirectoryOperationStatus.AlreadyValid))
@@ -8851,11 +9836,29 @@ internal static class Program
         VariantLaunchTarget target = launcher.Resolve(project, variant);
         if (target.Readiness != VariantLaunchReadiness.LaunchReady || !execution.IsAvailable(target, VariantExecutionMode.Run) || !execution.IsAvailable(target, VariantExecutionMode.Debug))
             throw new InvalidDataException("Ready fixture variant was not launch-ready: " + target.Detail);
+        // R9F V8.6e P0: even a fully ready target must never be handed to
+        // Windows directly. The legacy direct Run path fails closed.
+        RequireDirectRunRejected(execution, target, runner, "Ready variant direct run");
+        // Host-based run: the Windows process is the DOS host, and the DOS
+        // target travels inside host arguments only.
+        var host = new DosRuntimeCandidate(DosRuntimeKind.DosBoxClassic, "DOSBox Classic", "0.74", dosHostExecutable, DosRuntimeSource.SystemPath, DosRuntimeCompatibility.Compatible, "smoke host");
+        DosRuntimeLaunchPlan plan = DosRuntimeLaunchPlanner.BuildPlan(host, target, project.GameRoot);
+        if (plan.HostExecutable != dosHostExecutable || plan.DosExecutable != Path.GetFileNameWithoutExtension(variant.GeneratedExecutableName) ||
+            !plan.DataFile.Equals(variant.LogicalDataFileName, StringComparison.OrdinalIgnoreCase) ||
+            !plan.VariantWorkingDirectory.Equals(root, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("DOS launch plan did not route the authoritative runtime+edition target.");
         int starts = runner.Starts.Count;
-        VariantExecutionResult run = execution.Execute(target, VariantExecutionMode.Run);
-        if (!run.Started || run.StartInfo is not { UseShellExecute: false } runInfo || runInfo.FileName != Path.Combine(root, variant.GeneratedExecutableName) ||
-            runInfo.WorkingDirectory != root || runInfo.ArgumentList.Count != 1 || runInfo.ArgumentList[0] != variant.LogicalDataFileName)
-            throw new InvalidDataException("Direct run command construction was not exact.");
+        VariantExecutionResult run = execution.ExecutePlan(plan);
+        if (!run.Started || run.StartInfo is not { UseShellExecute: false } runInfo || runInfo.FileName != dosHostExecutable ||
+            runInfo.WorkingDirectory != root)
+            throw new InvalidDataException("Host-based run command construction was not exact.");
+        string commandLine = string.Join(" ", runInfo.ArgumentList);
+        if (!commandLine.Contains(Path.GetFileNameWithoutExtension(variant.GeneratedExecutableName), StringComparison.OrdinalIgnoreCase) ||
+            !commandLine.Contains(variant.LogicalDataFileName, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Host launch arguments do not reference the DOS executable and data file.");
+        if (runInfo.FileName.Equals(Path.Combine(root, variant.GeneratedExecutableName), StringComparison.OrdinalIgnoreCase) ||
+            runner.Starts.Count != starts + 1)
+            throw new InvalidDataException("Run started the DOS executable directly instead of the DOS host.");
         VariantExecutionResult debug = execution.Execute(target, VariantExecutionMode.Debug);
         if (!debug.Started || debug.StartInfo is not { UseShellExecute: false } debugInfo || debugInfo.WorkingDirectory != root ||
             debugInfo.ArgumentList.Count != 3 || debugInfo.ArgumentList[1] != Path.Combine(root, variant.GeneratedExecutableName) || debugInfo.ArgumentList[2] != variant.LogicalDataFileName || runner.Starts.Count != starts + 2)
@@ -10021,8 +11024,8 @@ internal static class Program
             if (!blocked.Detail.Contains("unsupported or modified", StringComparison.OrdinalIgnoreCase) || !blocked.Detail.Contains("blocked", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Blocked readiness did not explain the unsupported binary: " + blocked.Detail);
             var execution = new VariantExecutionService(new RecordingVariantProcessRunner());
-            if (execution.Execute(blocked, VariantExecutionMode.Run).Started)
-                throw new InvalidDataException("A mutated generated executable started execution.");
+            try { execution.Execute(blocked, VariantExecutionMode.Run); throw new InvalidDataException("A mutated generated executable started execution."); }
+            catch (InvalidOperationException) { }
             File.WriteAllBytes(generated, generatedBytes);
 
             // Review: a changed DATA artifact must name the data file, never the executable.
@@ -10039,8 +11042,8 @@ internal static class Program
                 dataBlocked.Detail.Contains(e1Vga.GeneratedExecutableName, StringComparison.OrdinalIgnoreCase) ||
                 dataBlocked.Detail.Contains("unsupported or modified", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Data integrity failure misattributed the executable: " + dataBlocked.Detail);
-            if (execution.Execute(dataBlocked, VariantExecutionMode.Run).Started)
-                throw new InvalidDataException("A mutated data artifact started execution.");
+            try { execution.Execute(dataBlocked, VariantExecutionMode.Run); throw new InvalidDataException("A mutated data artifact started execution."); }
+            catch (InvalidOperationException) { }
             File.WriteAllBytes(variantData, dataBytes);
             if (launcher.Resolve(e1, e1Vga).Readiness != VariantLaunchReadiness.LaunchReady)
                 throw new InvalidDataException("Restored variant output did not return to launch-ready.");
