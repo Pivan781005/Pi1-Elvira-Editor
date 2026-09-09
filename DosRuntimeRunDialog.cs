@@ -77,6 +77,22 @@ internal sealed class DosRuntimeRunDialog : Form
             .Cast<DosRuntimeCandidate>()
             .ToArray();
 
+    /// <summary>R9F V8.6m minimal headless seam: the actually selected/current
+    /// grid candidate backing Run/detail state (internal for tests only).</summary>
+    internal DosRuntimeCandidate? CurrentForTest => _grid.CurrentRow?.Tag as DosRuntimeCandidate;
+
+    /// <summary>R9F V8.6m minimal headless seam: the actual inner-Run button
+    /// state (internal for tests only).</summary>
+    internal bool RunEnabledForTest => _btnRun.Enabled;
+
+    /// <summary>R9F V8.6m minimal headless seam: drives the real production
+    /// SelectPath (including immediate state sync) without synthetic events.</summary>
+    internal void SelectForTest(string? executablePath) => SelectPath(executablePath);
+
+    /// <summary>R9F V8.6m minimal headless seam: drives the real production
+    /// Refresh path (fresh automatic merge + preserved selection + sync).</summary>
+    internal void RefreshForTest() => RefreshAutomatic();
+
     internal DosRuntimeRunDialog(
         VariantLaunchTarget target,
         IReadOnlyList<DosRuntimeCandidate> candidates,
@@ -238,16 +254,24 @@ internal sealed class DosRuntimeRunDialog : Form
 
     private void SelectPath(string? executablePath)
     {
-        if (string.IsNullOrWhiteSpace(executablePath)) return;
-        foreach (DataGridViewRow row in _grid.Rows)
+        // R9F V8.6m: programmatic selection is authoritative immediately.
+        // Pre-show constructor/Refresh/Browse initialization cannot rely on
+        // DataGridView.SelectionChanged timing, so always synchronize Run and
+        // detail state here — including the not-found path, which must fail
+        // closed instead of leaving Run enabled for a stale row.
+        if (!string.IsNullOrWhiteSpace(executablePath))
         {
-            if ((row.Tag as DosRuntimeCandidate)?.ExecutablePath.Equals(executablePath, StringComparison.OrdinalIgnoreCase) == true)
+            foreach (DataGridViewRow row in _grid.Rows)
             {
-                row.Selected = true;
-                _grid.CurrentCell = row.Cells[0];
-                return;
+                if ((row.Tag as DosRuntimeCandidate)?.ExecutablePath.Equals(executablePath, StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    row.Selected = true;
+                    _grid.CurrentCell = row.Cells[0];
+                    break;
+                }
             }
         }
+        UpdateRunState();
     }
 
     private void UpdateRunState()

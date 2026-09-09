@@ -3461,6 +3461,77 @@ internal static class Program
             form.ConfirmRunDialogForTest(stagingHost);
             if (recorder.Starts.Count != startsBeforeNegative + 1 || !recorder.Starts[^1].FileName.Equals(stagingHost, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Same-path positive confirmation did not execute exactly P.");
+            int startsBeforeInitState = recorder.Starts.Count;
+
+            // R9F V8.6m initial programmatic selection state. Construct the REAL
+            // Run dialog (never shown) with a Compatible Classic preferred and
+            // assert selected-current/Run/detail state is synchronized with zero
+            // clicks, zero starts, and zero validation processes.
+            string initDir = Path.Combine(root, "initstate"); Directory.CreateDirectory(initDir);
+            string initClassic = Path.Combine(initDir, "dosbox.exe"); File.WriteAllBytes(initClassic, [0x4D, 0x5A]);
+            files.Files.Add(initClassic);
+            evidence[initClassic] = new("dosbox.exe", "DOSBox DOS Emulator", "0,74,2,1", "0,74,2,1", "dosbox.exe", "DOSBox DOS Emulator");
+            prober.ThrowPaths.Add(initClassic);
+            DosRuntimeCandidate initClassicRow = discovery.ProbeUserSelection(initClassic);
+            if (!initClassicRow.IsRunnable)
+                throw new InvalidDataException("Init-state Classic fixture was not accepted.");
+            DosRuntimeCandidate initStagingRow = discovery.ProbeUserSelection(stagingHost);
+            if (!initStagingRow.IsRunnable)
+                throw new InvalidDataException("Init-state Staging fixture was not accepted.");
+            string initMissing = Path.Combine(root, "gone", "dosbox.exe");
+            var initInvalidRow = new DosRuntimeCandidate(DosRuntimeKind.Unknown, "dosbox.exe", string.Empty,
+                initMissing, DosRuntimeSource.UserBrowse, DosRuntimeCompatibility.Incompatible, "Version probe timed out.");
+            VariantLaunchTarget initTarget = form.BeginRunDialogForTest().Target;
+            int validationCallsBeforeInit = prober.Calls;
+            using (var initDialog = new DosRuntimeRunDialog(initTarget,
+                new DosRuntimeCandidate[] { initClassicRow, initStagingRow, initInvalidRow },
+                initClassicRow,
+                refresh: () => discovery.Discover(fixture.GameRoot, refresh: true),
+                probePath: path => discovery.ProbeUserSelection(path)))
+            {
+                // §7 initial Ready: current == Classic and Run enabled at once.
+                if (initDialog.CurrentForTest is null || !initDialog.CurrentForTest.ExecutablePath.Equals(initClassic, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Initial dialog current candidate is not the preferred Classic host.");
+                if (!initDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run is disabled for the initially preselected Ready Classic host.");
+                if (prober.Calls != validationCallsBeforeInit || recorder.Starts.Count != startsBeforeInitState)
+                    throw new InvalidDataException("Dialog initialization started a validation or game process.");
+                // §8 Invalid transitions with no stale-enabled state.
+                initDialog.SelectForTest(initMissing);
+                if (initDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run stayed enabled for an Invalid selection.");
+                if (initDialog.CurrentForTest is null || !initDialog.CurrentForTest.ExecutablePath.Equals(initMissing, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Programmatic Invalid selection did not become current.");
+                initDialog.SelectForTest(stagingHost);
+                if (!initDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run did not enable for a Ready selection.");
+                initDialog.SelectForTest(initMissing);
+                if (initDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run stayed enabled after returning to Invalid.");
+                // §10 Browse-Ready equivalent: production BrowseHost ends in the
+                // same SelectPath, so selecting Ready enables Run immediately.
+                initDialog.SelectForTest(initClassic);
+                if (!initDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run did not enable for a Browse-equivalent Ready selection.");
+                if (prober.Calls != validationCallsBeforeInit)
+                    throw new InvalidDataException("Programmatic selection started validation processes.");
+                // §9 Refresh keeps Ready enabled without a click (initClassic is
+                // dialog-local here, so reselect Staging first: it is automatic).
+                initDialog.SelectForTest(stagingHost);
+                initDialog.RefreshForTest();
+                if (!initDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run did not stay enabled after Refresh kept Ready.");
+                if (initDialog.CurrentForTest is null || !initDialog.CurrentForTest.ExecutablePath.Equals(stagingHost, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Refresh lost the Ready current selection.");
+                // §9 fresh Invalid disables without a click.
+                evidence[stagingHost] = new("dosbox.exe", "Unrelated Application", "9.9", "9.9", "unrelated.exe", "Unrelated Application");
+                initDialog.RefreshForTest();
+                if (initDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run stayed enabled after Refresh turned current Invalid.");
+                evidence[stagingHost] = new("dosbox.exe", "DOSBox Staging", "0, 82, 3, 0", "0, 82, 3, 0", "dosbox.exe", "DOSBox Staging DOS Emulator");
+                if (prober.Calls != validationCallsBeforeInit || recorder.Starts.Count != startsBeforeInitState)
+                    throw new InvalidDataException("Dialog Refresh/selection started a validation or game process.");
+            }
             int startsBeforeGeneric = recorder.Starts.Count;
 
             // Generic routing: E1EGA + non-SK EN previews (zero starts).
