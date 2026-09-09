@@ -3532,6 +3532,74 @@ internal static class Program
                 if (prober.Calls != validationCallsBeforeInit || recorder.Starts.Count != startsBeforeInitState)
                     throw new InvalidDataException("Dialog Refresh/selection started a validation or game process.");
             }
+            // R9F V8.6o fail-closed when the DOS Run selection disappears.
+            // Uses the ACTUAL DosRuntimeRunDialog (never shown): construction,
+            // SelectForTest (the real SelectPath), and RefreshForTest (the
+            // real RefreshAutomatic). Zero validation processes, zero starts.
+            int oProbesBefore = prober.Calls;
+            int oStartsBefore = recorder.Starts.Count;
+            string ghostHost = Path.Combine(root, "gone-ghost", "dosbox.exe");
+            // 2. INITIAL INVALID: genuine constructor-initial state whose
+            // preferred candidate is an existing Invalid/non-runnable row
+            // (not a Ready-then-reselect sequence).
+            using (var invalidInitDialog = new DosRuntimeRunDialog(initTarget,
+                new DosRuntimeCandidate[] { initClassicRow, initStagingRow, initInvalidRow },
+                initInvalidRow,
+                refresh: () => new DosRuntimeCandidate[] { initClassicRow, initStagingRow },
+                probePath: path => discovery.ProbeUserSelection(path)))
+            {
+                if (invalidInitDialog.CurrentForTest is null || !invalidInitDialog.CurrentForTest.ExecutablePath.Equals(initMissing, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Initial dialog current candidate is not the Invalid preferred host.");
+                if (invalidInitDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run is enabled for the initially selected Invalid host.");
+            }
+            // 3. NOT-FOUND AFTER READY: Ready Classic selected, then a
+            // requested path that is NOT present must fail closed instead of
+            // leaving the stale Classic row (or another Ready row) authorized.
+            using (var notFoundDialog = new DosRuntimeRunDialog(initTarget,
+                new DosRuntimeCandidate[] { initClassicRow, initStagingRow },
+                initClassicRow,
+                refresh: () => new DosRuntimeCandidate[] { initClassicRow, initStagingRow },
+                probePath: path => discovery.ProbeUserSelection(path)))
+            {
+                if (notFoundDialog.CurrentForTest is null || !notFoundDialog.CurrentForTest.ExecutablePath.Equals(initClassic, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Not-found fixture did not start with Classic selected.");
+                if (!notFoundDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Not-found fixture did not start with Run enabled.");
+                notFoundDialog.SelectForTest(ghostHost);
+                if (notFoundDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run stayed enabled after selecting a disappeared path.");
+                if (notFoundDialog.CurrentForTest is not null)
+                    throw new InvalidDataException("A stale/different candidate stayed current after selecting a disappeared path.");
+            }
+            // 4. REFRESH HOST DISAPPEARS: Classic selected, Refresh drops it.
+            // Staging stays visible but must NOT inherit Run authorization;
+            // explicitly selecting Staging re-enables Run.
+            using (var disappearedDialog = new DosRuntimeRunDialog(initTarget,
+                new DosRuntimeCandidate[] { initClassicRow, initStagingRow },
+                initClassicRow,
+                refresh: () => new DosRuntimeCandidate[] { initStagingRow },
+                probePath: path => discovery.ProbeUserSelection(path)))
+            {
+                if (!disappearedDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Disappeared-host fixture did not start with Run enabled.");
+                disappearedDialog.RefreshForTest();
+                if (disappearedDialog.CurrentCandidates.Any(item => item.ExecutablePath.Equals(initClassic, StringComparison.OrdinalIgnoreCase) && item.IsRunnable))
+                    throw new InvalidDataException("Disappeared Classic host is still selectable after Refresh.");
+                if (!disappearedDialog.CurrentCandidates.Any(item => item.ExecutablePath.Equals(stagingHost, StringComparison.OrdinalIgnoreCase) && item.IsRunnable))
+                    throw new InvalidDataException("Remaining Staging host is not visible after Refresh.");
+                if (disappearedDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run silently authorized the remaining host after the selection disappeared.");
+                if (disappearedDialog.CurrentForTest is not null)
+                    throw new InvalidDataException("A stale/different candidate stayed current after Refresh dropped the selection.");
+                disappearedDialog.SelectForTest(stagingHost);
+                if (!disappearedDialog.RunEnabledForTest)
+                    throw new InvalidDataException("Inner Run did not enable after explicitly selecting the remaining Ready host.");
+                if (disappearedDialog.CurrentForTest is null || !disappearedDialog.CurrentForTest.ExecutablePath.Equals(stagingHost, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Explicit Staging selection did not become current.");
+            }
+            if (prober.Calls != oProbesBefore || recorder.Starts.Count != oStartsBefore)
+                throw new InvalidDataException("Fail-closed selection regressions started a validation or game process.");
             int startsBeforeGeneric = recorder.Starts.Count;
 
             // Generic routing: E1EGA + non-SK EN previews (zero starts).

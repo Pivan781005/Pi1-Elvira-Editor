@@ -254,11 +254,17 @@ internal sealed class DosRuntimeRunDialog : Form
 
     private void SelectPath(string? executablePath)
     {
-        // R9F V8.6m: programmatic selection is authoritative immediately.
-        // Pre-show constructor/Refresh/Browse initialization cannot rely on
-        // DataGridView.SelectionChanged timing, so always synchronize Run and
-        // detail state here — including the not-found path, which must fail
-        // closed instead of leaving Run enabled for a stale row.
+        // R9F V8.6o fail-closed: programmatic selection is deterministic. A
+        // found path becomes current/selected (Ready enables Run, Invalid
+        // disables it). A requested path matching NO row must not leave a
+        // stale/different row authoritative: explicitly clear current and
+        // selection state so UpdateRunState sees no runnable candidate and
+        // Run stays disabled until the user explicitly selects a remaining
+        // host. A null/empty request selects nothing and preserves existing
+        // constructor semantics. (R9F V8.6m: synchronize immediately here,
+        // never via SelectionChanged timing, focus, Show/Shown, BeginInvoke,
+        // DoEvents, timers, Sleep, or synthetic input.)
+        bool found = false;
         if (!string.IsNullOrWhiteSpace(executablePath))
         {
             foreach (DataGridViewRow row in _grid.Rows)
@@ -267,8 +273,15 @@ internal sealed class DosRuntimeRunDialog : Form
                 {
                     row.Selected = true;
                     _grid.CurrentCell = row.Cells[0];
+                    found = true;
                     break;
                 }
+            }
+            if (!found)
+            {
+                _grid.ClearSelection();
+                _grid.CurrentCell = null;
+                Selected = null;
             }
         }
         UpdateRunState();
