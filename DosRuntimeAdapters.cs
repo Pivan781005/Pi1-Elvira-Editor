@@ -279,11 +279,20 @@ internal sealed class DosBoxStagingAdapter : IDosRuntimeAdapter
     // Staging manual: dosbox --version prints version information and exits.
     public IReadOnlyList<string> VersionArguments => ["--version"];
 
+    /// <summary>R9F V8.6l shared Staging family marker: DOSBox plus optional
+    /// whitespace/hyphen plus Staging (DOSBox Staging, DOSBox-Staging, any
+    /// capitalization) in authoritative metadata. The generic English word
+    /// "Staging" alone (Video Staging Utility, Deployment Staging Tool) never
+    /// identifies the DOSBox family. Used identically by Identify and
+    /// TryValidateMetadata so hint and validation share one semantics.</summary>
+    internal static bool HasStagingFamilyMarker(string? value) =>
+        !string.IsNullOrEmpty(value) &&
+        System.Text.RegularExpressions.Regex.IsMatch(value, @"dosbox[\s\-]*staging", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     public bool Identifies(DosRuntimeHostEvidence evidence)
     {
         if (evidence.FileName.Equals("dosbox-x.exe", StringComparison.OrdinalIgnoreCase)) return false;
-        if ((evidence.ProductName ?? string.Empty).Contains("Staging", StringComparison.OrdinalIgnoreCase)) return true;
-        return false;
+        return HasStagingFamilyMarker(evidence.ProductName) || HasStagingFamilyMarker(evidence.FileDescription);
     }
 
     /// <summary>R9F V8.6f Staging positive validation. Requires a
@@ -325,12 +334,12 @@ internal sealed class DosBoxStagingAdapter : IDosRuntimeAdapter
     public bool SupportsMetadataValidation => true;
 
     /// <summary>R9F V8.6k non-interactive DOSBox Staging identification.
-    /// Positive contract: ProductName and/or FileDescription positively
-    /// identifies "DOSBox Staging", a usable FileVersion/ProductVersion exists,
-    /// no DOSBox-X contradiction and no Classic-only identity contradiction
-    /// exist, and the executable/original filename may corroborate without
-    /// ever being sole evidence. Never spawns dosbox.exe --version and never
-    /// falls back to it.</summary>
+    /// Positive contract: ProductName and/or FileDescription carries the
+    /// shared DOSBox-family Staging marker (see HasStagingFamilyMarker), a
+    /// usable FileVersion/ProductVersion exists, no DOSBox-X contradiction and
+    /// no Classic-only identity contradiction exist, and the
+    /// executable/original filename may corroborate without ever being sole
+    /// evidence. Never spawns dosbox.exe --version and never falls back to it.</summary>
     public bool TryValidateMetadata(DosRuntimeHostEvidence evidence, out string version, out string detail)
     {
         version = string.Empty;
@@ -342,8 +351,7 @@ internal sealed class DosBoxStagingAdapter : IDosRuntimeAdapter
             detail = "Executable metadata does not positively identify DOSBox Staging.";
             return false;
         }
-        if (!product.Contains("Staging", StringComparison.OrdinalIgnoreCase) &&
-            !description.Contains("Staging", StringComparison.OrdinalIgnoreCase))
+        if (!HasStagingFamilyMarker(product) && !HasStagingFamilyMarker(description))
         {
             detail = "Executable metadata does not positively identify DOSBox Staging.";
             return false;

@@ -2801,6 +2801,22 @@ internal static class Program
                 throw new InvalidDataException("Genuine Staging host was rejected.");
             if (string.IsNullOrWhiteSpace(genuineStaging.Version))
                 throw new InvalidDataException("Genuine Staging version is empty.");
+            // R9F V8.6l: the generic English word "Staging" alone must never
+            // identify the DOSBox family (sensitive to the 224dd31 bug where
+            // Contains("Staging") accepted these).
+            DosRuntimeCandidate videoStaging = ProbeSingle("dosbox.exe", "Video Staging Utility", string.Empty,
+                fileVersion: "1.2.3", productVersion: "1.2.3", originalFilename: "dosbox.exe", fileDescription: "Media Staging Helper");
+            if (videoStaging.IsRunnable || videoStaging.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Unrelated 'Video Staging Utility' became DOSBox Staging.");
+            DosRuntimeCandidate deploymentStaging = ProbeSingle("dosbox.exe", "Deployment Staging Tool", string.Empty,
+                fileVersion: "2.0", productVersion: "2.0", originalFilename: "dosbox.exe", fileDescription: "Deployment Staging Tool");
+            if (deploymentStaging.IsRunnable || deploymentStaging.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Unrelated 'Deployment Staging Tool' became DOSBox Staging.");
+            // Hyphenated DOSBox-Staging remains a positive family marker.
+            DosRuntimeCandidate hyphenStaging = ProbeSingle("dosbox.exe", "DOSBox-Staging", string.Empty,
+                fileVersion: "0.82.2", productVersion: "0.82.2", originalFilename: "dosbox.exe", fileDescription: "DOSBox-Staging");
+            if (!hyphenStaging.IsRunnable || hyphenStaging.Compatibility != DosRuntimeCompatibility.Compatible || hyphenStaging.Kind != DosRuntimeKind.DosBoxStaging)
+                throw new InvalidDataException("Hyphenated DOSBox-Staging host was rejected.");
             // 6. Genuine X => Compatible via executable metadata (no -version
             // process: the real dosbox-x.exe flag opens an interactive console).
             DosRuntimeCandidate genuineX = ProbeSingle("dosbox-x.exe", "DOSBox-X DOS Emulator", string.Empty,
@@ -3252,6 +3268,26 @@ internal static class Program
                 throw new InvalidDataException("Invalid Browse host was accepted.");
             if (recorder.Starts.Count != startsBeforeEvil)
                 throw new InvalidDataException("Invalid Browse started a process.");
+
+            // R9F V8.6l §12/§13: unrelated "Staging Utility" Browse is rejected
+            // (generic "Staging" never identifies the family), zero starts.
+            string utilDir = Path.Combine(root, "stagingutil"); Directory.CreateDirectory(utilDir);
+            string utilHost = Path.Combine(utilDir, "dosbox.exe"); File.WriteAllBytes(utilHost, [0x4D, 0x5A]);
+            files.Files.Add(utilHost);
+            evidence[utilHost] = new("dosbox.exe", "Video Staging Utility", "1.2.3", "1.2.3", "dosbox.exe", "Media Staging Helper");
+            prober.ThrowPaths.Add(utilHost);
+            int startsBeforeUtil = recorder.Starts.Count;
+            _ = form.BeginRunDialogForTest();
+            bool utilRejected = false;
+            try { form.BrowseRunDialogHostForTest(utilHost); }
+            catch (InvalidOperationException) { utilRejected = true; }
+            if (!utilRejected)
+                throw new InvalidDataException("Unrelated Staging Utility Browse host was accepted.");
+            if (recorder.Starts.Count != startsBeforeUtil)
+                throw new InvalidDataException("Unrelated Staging Utility Browse started a process.");
+            if (DosRuntimeRunDialog.IsRunEnabledFor(new DosRuntimeCandidate(DosRuntimeKind.Unknown, "dosbox.exe", string.Empty,
+                utilHost, DosRuntimeSource.UserBrowse, DosRuntimeCompatibility.Incompatible, "Executable metadata does not positively identify DOSBox Staging.")))
+                throw new InvalidDataException("Inner Run is enabled for an unrelated Staging Utility row.");
 
             // G. No compatible candidates => dialog opens, inner disabled.
             var emptyFiles = new FakeDosRuntimeFileSystem
