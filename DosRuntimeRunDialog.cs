@@ -1,5 +1,47 @@
 namespace Pi1ElviraEditor;
 
+/// <summary>R9F V8.6i effective Run candidate set. The bounded automatic
+/// discovery list never contains a valid remembered/manual preferred host that
+/// lives outside discovery, so the Run dialog merges one authoritative list:
+/// all automatic candidates plus every still-runnable sticky candidate
+/// (preferred, remembered, per-launch Browse) whose path is ABSENT from the
+/// current automatic set. De-duplicated by normalized executable path
+/// (case-insensitive). Fresh automatic results are authoritative for their own
+/// paths: a sticky row never overwrites a same-path automatic row, so an
+/// explicit Refresh that re-probes a path to Incompatible stays truthful
+/// instead of showing stale probe-time Ready. Sticky rows are additionally
+/// filtered live by IsRunnable (file must exist); disappeared paths are
+/// dropped, never executed. Building the list never probes and never persists.</summary>
+internal static class DosRuntimeRunCandidates
+{
+    internal static IReadOnlyList<DosRuntimeCandidate> BuildEffective(
+        IReadOnlyList<DosRuntimeCandidate> automatic,
+        IEnumerable<DosRuntimeCandidate?> sticky)
+    {
+        var merged = new Dictionary<string, DosRuntimeCandidate>(StringComparer.OrdinalIgnoreCase);
+        foreach (DosRuntimeCandidate candidate in automatic ?? [])
+        {
+            if (candidate is null) continue;
+            string key = Normalize(candidate.ExecutablePath);
+            if (!merged.ContainsKey(key)) merged[key] = candidate;
+        }
+        foreach (DosRuntimeCandidate? candidate in sticky ?? [])
+        {
+            if (candidate is null || !candidate.IsRunnable) continue;
+            string key = Normalize(candidate.ExecutablePath);
+            if (!merged.ContainsKey(key)) merged[key] = candidate;
+        }
+        return merged.Values.ToArray();
+    }
+
+    internal static string Normalize(string? executablePath)
+    {
+        if (string.IsNullOrWhiteSpace(executablePath)) return string.Empty;
+        try { return Path.GetFullPath(executablePath).ToUpperInvariant(); }
+        catch { return executablePath.ToUpperInvariant(); }
+    }
+}
+
 /// <summary>R9F V8.6h explicit per-launch DOS runtime selection. The outer
 /// Run... action never executes directly: this modal dialog shows the
 /// authoritative target plus detected compatible hosts, preselects the
@@ -20,15 +62,27 @@ internal sealed class DosRuntimeRunDialog : Form
     private readonly Button _btnCancel = new();
     private readonly Func<IReadOnlyList<DosRuntimeCandidate>> _refresh;
     private readonly Func<string, DosRuntimeCandidate> _probePath;
+    /// <summary>R9F V8.6i sticky session-valid rows (preferred/remembered/
+    /// per-launch Browse) preserved across explicit Refresh without re-probe.
+    /// Disappeared paths are filtered live on every Fill.</summary>
+    private readonly List<DosRuntimeCandidate> _sticky = [];
 
     internal DosRuntimeCandidate? Selected { get; private set; }
+
+    internal IReadOnlyList<DosRuntimeCandidate> CurrentCandidates =>
+        _grid.Rows.Cast<DataGridViewRow>()
+            .Select(row => row.Tag as DosRuntimeCandidate)
+            .Where(item => item is not null)
+            .Cast<DosRuntimeCandidate>()
+            .ToArray();
 
     internal DosRuntimeRunDialog(
         VariantLaunchTarget target,
         IReadOnlyList<DosRuntimeCandidate> candidates,
         DosRuntimeCandidate? preferred,
         Func<IReadOnlyList<DosRuntimeCandidate>> refresh,
-        Func<string, DosRuntimeCandidate> probePath)
+        Func<string, DosRuntimeCandidate> probePath,
+        IEnumerable<DosRuntimeCandidate?>? stickyExtras = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         _refresh = refresh ?? throw new ArgumentNullException(nameof(refresh));
@@ -98,7 +152,7 @@ internal sealed class DosRuntimeRunDialog : Form
         _btnBrowse.Click += (_, _) => BrowseHost();
         _btnRefresh.Text = UiText.Get("DosRuntime.Refresh");
         _btnRefresh.Size = new Size(110, 28);
-        _btnRefresh.Click += (_, _) => Fill(_refresh());
+        _btnRefresh.Click += (_, _) => RefreshAutomatic();
         bottom.Controls.AddRange(new Control[] { _btnCancel, _btnRun, _btnBrowse, _btnRefresh });
 
         Controls.Add(_grid);
@@ -107,8 +161,26 @@ internal sealed class DosRuntimeRunDialog : Form
         Controls.Add(bottom);
         AcceptButton = _btnRun;
         CancelButton = _btnCancel;
-        Fill(candidates);
+        foreach (DosRuntimeCandidate? extra in stickyExtras ?? [])
+        {
+            if (extra is null || !extra.IsRunnable) continue;
+            if (!_sticky.Any(item => DosRuntimeRunCandidates.Normalize(item.ExecutablePath).Equals(DosRuntimeRunCandidates.Normalize(extra.ExecutablePath), StringComparison.OrdinalIgnoreCase)))
+                _sticky.Add(extra);
+        }
+        Fill(DosRuntimeRunCandidates.BuildEffective(candidates, _sticky));
         SelectPath(preferred?.ExecutablePath);
+    }
+
+    /// <summary>R9F V8.6i Refresh merges fresh automatic discovery with the
+    /// sticky session-valid rows (preferred/remembered/Browse). Still-valid
+    /// extras remain present and selected; disappeared paths drop out and can
+    /// never execute. Per-launch Browse choices are not persisted.</summary>
+    private void RefreshAutomatic()
+    {
+        IReadOnlyList<DosRuntimeCandidate> fresh;
+        try { fresh = _refresh(); }
+        catch { return; }
+        Fill(DosRuntimeRunCandidates.BuildEffective(fresh, _sticky));
     }
 
     internal static string DosCommandPreview(VariantLaunchTarget target)
@@ -198,13 +270,19 @@ internal sealed class DosRuntimeRunDialog : Form
             MessageBox.Show(this, UiText.Get("DosRuntime.HostInvalid"), UiText.Get("DosRuntime.RunDialogTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        var merged = _grid.Rows.Cast<DataGridViewRow>()
-            .Select(row => row.Tag as DosRuntimeCandidate)
-            .Where(item => item is not null)
-            .Cast<DosRuntimeCandidate>()
-            .Where(item => !item.ExecutablePath.Equals(probed.ExecutablePath, StringComparison.OrdinalIgnoreCase))
-            .Append(probed)
-            .ToArray();
+        if (!_sticky.Any(item => DosRuntimeRunCandidates.Normalize(item.ExecutablePath).Equals(DosRuntimeRunCandidates.Normalize(probed.ExecutablePath), StringComparison.OrdinalIgnoreCase)))
+            _sticky.Add(probed);
+        // The fresh probe is authoritative for its own path: drop any same-path
+        // grid row first so BuildEffective (fresh-automatic-wins) keeps probing truth.
+        string probedKey = DosRuntimeRunCandidates.Normalize(probed.ExecutablePath);
+        var merged = DosRuntimeRunCandidates.BuildEffective(
+            _grid.Rows.Cast<DataGridViewRow>()
+                .Select(row => row.Tag as DosRuntimeCandidate)
+                .Where(item => item is not null)
+                .Cast<DosRuntimeCandidate>()
+                .Where(item => !DosRuntimeRunCandidates.Normalize(item.ExecutablePath).Equals(probedKey, StringComparison.OrdinalIgnoreCase))
+                .ToArray(),
+            [probed]);
         Fill(merged);
         SelectPath(probed.ExecutablePath);
     }

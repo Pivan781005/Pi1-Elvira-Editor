@@ -1990,17 +1990,23 @@ internal sealed class MainForm : Form
         }
         // Reuse session-cached candidates; opening the dialog performs zero
         // new probes (explicit Refresh/Browse inside the dialog may probe).
+        // R9F V8.6i: merge the effective set so a valid remembered/manual
+        // preferred host outside automatic discovery still appears and can be
+        // preselected without browsing again.
         _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot);
+        IReadOnlyList<DosRuntimeCandidate> effective = DosRuntimeRunCandidates.BuildEffective(
+            _dosCandidates, [_dosSelected, _dosRememberedCandidate]);
         using var dialog = new DosRuntimeRunDialog(
             target,
-            _dosCandidates,
+            effective,
             _dosSelected,
             refresh: () =>
             {
                 _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot, refresh: true);
                 return _dosCandidates;
             },
-            probePath: path => _dosDiscovery.ProbeUserSelection(path));
+            probePath: path => _dosDiscovery.ProbeUserSelection(path),
+            stickyExtras: [_dosSelected, _dosRememberedCandidate]);
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Selected is null) return;
         ExecuteRunWithHost(dialog.Selected, target);
     }
@@ -6188,9 +6194,11 @@ internal sealed class MainForm : Form
     {
         _variantExecution = execution ?? throw new ArgumentNullException(nameof(execution));
     }
-    /// <summary>R9F V8.6h headless Run-dialog model: resolves the authoritative
-    /// target and reuses session-cached candidates with zero process starts.
-    /// Mirrors opening the modal Run dialog (preferred host preselected).</summary>
+    /// <summary>R9F V8.6h/i headless Run-dialog model: resolves the authoritative
+    /// target and merges the EFFECTIVE candidate set (automatic + valid
+    /// preferred/remembered/per-launch rows) with zero process starts and zero
+    /// new probes. Mirrors opening the modal Run dialog. The preselected row
+    /// is guaranteed to exist in Candidates (same shared helper as the dialog).</summary>
     internal sealed record RunDialogPreparedForTest(
         VariantLaunchTarget Target,
         IReadOnlyList<DosRuntimeCandidate> Candidates,
@@ -6202,10 +6210,33 @@ internal sealed class MainForm : Form
             throw new InvalidOperationException("No game installation is active.");
         VariantLaunchTarget target = _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
         _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot);
-        DosRuntimeCandidate? preselected = _dosSelected is not null && _dosSelected.IsRunnable ? _dosSelected : null;
-        _pendingRunOpenTargetForTest = target;
+        // Fresh dialog: per-launch Browse rows from any previous dialog session
+        // are discarded (never persisted); only preferred/remembered stick.
         _runDialogExtraCandidatesForTest.Clear();
-        return new RunDialogPreparedForTest(target, _dosCandidates, preselected, DosRuntimeRunDialog.DosCommandPreview(target));
+        IReadOnlyList<DosRuntimeCandidate> effective = DosRuntimeRunCandidates.BuildEffective(
+            _dosCandidates, [_dosSelected, _dosRememberedCandidate]);
+        DosRuntimeCandidate? preselected = _dosSelected is not null && _dosSelected.IsRunnable
+            ? effective.FirstOrDefault(item => DosRuntimeRunCandidates.Normalize(item.ExecutablePath).Equals(DosRuntimeRunCandidates.Normalize(_dosSelected.ExecutablePath), StringComparison.OrdinalIgnoreCase))
+            : null;
+        _pendingRunOpenTargetForTest = target;
+        foreach (DosRuntimeCandidate extra in effective)
+        {
+            if (_dosCandidates.Any(item => DosRuntimeRunCandidates.Normalize(item.ExecutablePath).Equals(DosRuntimeRunCandidates.Normalize(extra.ExecutablePath), StringComparison.OrdinalIgnoreCase)))
+                continue;
+            _runDialogExtraCandidatesForTest.Add(extra);
+        }
+        return new RunDialogPreparedForTest(target, effective, preselected, DosRuntimeRunDialog.DosCommandPreview(target));
+    }
+    /// <summary>R9F V8.6i headless dialog Refresh: re-discovers automatic hosts
+    /// (may re-probe) while preserving still-valid sticky rows without
+    /// re-probe. Mirrors the dialog Refresh button. Returns the effective list.</summary>
+    internal IReadOnlyList<DosRuntimeCandidate> RefreshRunDialogForTest()
+    {
+        if (_activeProject is null || _activeVariant is null)
+            throw new InvalidOperationException("No game installation is active.");
+        _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot, refresh: true);
+        return DosRuntimeRunCandidates.BuildEffective(
+            _dosCandidates, [_dosSelected, _dosRememberedCandidate, .. _runDialogExtraCandidatesForTest]);
     }
     /// <summary>R9F V8.6h headless dialog confirmation: revalidates the
     /// authoritative target plus session-valid host state, then executes
@@ -6220,12 +6251,12 @@ internal sealed class MainForm : Form
             ?? _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
         _pendingRunOpenTargetForTest = null;
         _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot);
-        DosRuntimeCandidate? selected = _dosCandidates.FirstOrDefault(item =>
-            item.ExecutablePath.Equals(selectedExecutablePath, StringComparison.OrdinalIgnoreCase));
-        selected ??= _dosRememberedCandidate is not null &&
-            _dosRememberedCandidate.ExecutablePath.Equals(selectedExecutablePath, StringComparison.OrdinalIgnoreCase)
-            ? _dosRememberedCandidate : null;
-        selected ??= _runDialogExtraCandidatesForTest.FirstOrDefault(item =>
+        // Mirror the dialog grid: one effective list where fresh automatic
+        // rows win same-path duplicates, so a stale sticky object can never be
+        // confirmed invisibly after an explicit Refresh.
+        IReadOnlyList<DosRuntimeCandidate> effective = DosRuntimeRunCandidates.BuildEffective(
+            _dosCandidates, [_dosSelected, _dosRememberedCandidate, .. _runDialogExtraCandidatesForTest]);
+        DosRuntimeCandidate? selected = effective.FirstOrDefault(item =>
             item.ExecutablePath.Equals(selectedExecutablePath, StringComparison.OrdinalIgnoreCase));
         if (selected is null || !selected.IsRunnable)
             return "The selected DOS runtime host is unavailable.";

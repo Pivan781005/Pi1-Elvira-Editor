@@ -3167,12 +3167,122 @@ internal static class Program
             if (recorder.Starts.Count != startsBeforeGone)
                 throw new InvalidDataException("Disappeared-host confirmation launched or silently fell back.");
 
+            // R9F V8.6i external preferred host outside automatic discovery.
+            // Automatic discovery holds Classic (deleted above) + Staging; the
+            // external X host is positively probed and session-valid but never
+            // enumerated by bounded discovery.
+            string externalDir = Path.Combine(root, "external-x"); Directory.CreateDirectory(externalDir);
+            string externalX = Path.Combine(externalDir, "dosbox-x.exe"); File.WriteAllBytes(externalX, [0x4D, 0x5A]);
+            files.Files.Add(externalX);
+            evidence[externalX] = new("dosbox-x.exe", "DOSBox-X", "2024.06.01");
+            prober.Results[externalX] = new(true, "DOSBox-X version 2024.06.01", string.Empty, 0);
+            form.SelectDosHostViaBrowseForTest(externalX);
+            form.OpenModsForTest();
+            DosRuntimeSelectedHost? externalSaved = store.Load();
+            if (externalSaved is null || !externalSaved.ExecutablePath.Equals(externalX, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("External preferred host did not persist.");
+            int probesBeforeExternalOpen = form.DosProbeCountForTest;
+            var preparedExternal = form.BeginRunDialogForTest();
+            if (recorder.Starts.Count != startsBeforeGone)
+                throw new InvalidDataException("External-preferred dialog open started a process.");
+            if (!preparedExternal.Candidates.Any(item => item.ExecutablePath.Equals(externalX, StringComparison.OrdinalIgnoreCase) && item.IsRunnable))
+                throw new InvalidDataException("External preferred host is missing from the effective Run candidate list.");
+            if (preparedExternal.Preselected is null || !preparedExternal.Preselected.ExecutablePath.Equals(externalX, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("External preferred host is not the preselected row.");
+            if (!preparedExternal.Candidates.Any(item => item.ExecutablePath.Equals(preparedExternal.Preselected.ExecutablePath, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("Preselected host does not exist in the effective candidate list.");
+            if (form.DosProbeCountForTest != probesBeforeExternalOpen)
+                throw new InvalidDataException("External-preferred dialog open caused new DOS probes.");
+            form.ConfirmRunDialogForTest(externalX);
+            if (recorder.Starts.Count != startsBeforeGone + 1 || !recorder.Starts[^1].FileName.Equals(externalX, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("External preferred confirmation did not execute exactly the external X host.");
+            RequireHostRouting(recorder.Starts[^1], externalX, preparedExternal.Target);
+            DosRuntimeSelectedHost? afterExternal = store.Load();
+            if (afterExternal is null || !afterExternal.ExecutablePath.Equals(externalX, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("External per-launch confirmation changed the persisted preference.");
+            int startsAfterExternal = recorder.Starts.Count;
+
+            // R9F V8.6i Browse + Refresh: browsed rows survive explicit Refresh
+            // while still present; disappeared rows drop fail-closed.
+            string browse2Dir = Path.Combine(root, "browsed2"); Directory.CreateDirectory(browse2Dir);
+            string browse2Host = Path.Combine(browse2Dir, "dosbox.exe"); File.WriteAllBytes(browse2Host, [0x4D, 0x5A]);
+            files.Files.Add(browse2Host);
+            evidence[browse2Host] = new("dosbox.exe", "DOSBox", "0.74.3");
+            prober.Results[browse2Host] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            _ = form.BeginRunDialogForTest();
+            DosRuntimeCandidate browsed2 = form.BrowseRunDialogHostForTest(browse2Host);
+            if (!browsed2.IsRunnable)
+                throw new InvalidDataException("Second Browse host was not accepted.");
+            if (recorder.Starts.Count != startsAfterExternal)
+                throw new InvalidDataException("Second Browse started a process before confirmation.");
+            IReadOnlyList<DosRuntimeCandidate> refreshed = form.RefreshRunDialogForTest();
+            if (!refreshed.Any(item => item.ExecutablePath.Equals(browse2Host, StringComparison.OrdinalIgnoreCase) && item.IsRunnable))
+                throw new InvalidDataException("Browsed host did not survive explicit Refresh while still present.");
+            if (!refreshed.Any(item => item.ExecutablePath.Equals(externalX, StringComparison.OrdinalIgnoreCase) && item.IsRunnable))
+                throw new InvalidDataException("External preferred host did not survive explicit Refresh.");
+            if (recorder.Starts.Count != startsAfterExternal)
+                throw new InvalidDataException("Explicit Refresh started a process.");
+            form.ConfirmRunDialogForTest(browse2Host);
+            if (recorder.Starts.Count != startsAfterExternal + 1 || !recorder.Starts[^1].FileName.Equals(browse2Host, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Refreshed Browse confirmation did not execute once.");
+            int startsAfterBrowse2 = recorder.Starts.Count;
+            File.Delete(browse2Host);
+            files.Files.Remove(browse2Host);
+            IReadOnlyList<DosRuntimeCandidate> refreshedGone = form.RefreshRunDialogForTest();
+            if (refreshedGone.Any(item => item.ExecutablePath.Equals(browse2Host, StringComparison.OrdinalIgnoreCase) && item.IsRunnable))
+                throw new InvalidDataException("Disappeared Browse host remains selectable after Refresh.");
+            _ = form.BeginRunDialogForTest();
+            string goneBlocked = form.ConfirmRunDialogForTest(browse2Host);
+            if (recorder.Starts.Count != startsAfterBrowse2 || string.IsNullOrWhiteSpace(goneBlocked))
+                throw new InvalidDataException("Disappeared Browse confirmation was not blocked fail-closed.");
+
+            // R9F V8.6i same-path precedence: fresh automatic results win over
+            // stale sticky rows. P is automatically discovered AND preferred.
+            form.SelectDosHostViaBrowseForTest(stagingHost);
+            form.OpenModsForTest();
+            var preparedSamePath = form.BeginRunDialogForTest();
+            DosRuntimeCandidate? openRow = preparedSamePath.Candidates.SingleOrDefault(item =>
+                item.ExecutablePath.Equals(stagingHost, StringComparison.OrdinalIgnoreCase));
+            if (openRow is not { Compatibility: DosRuntimeCompatibility.Compatible } || !openRow.IsRunnable)
+                throw new InvalidDataException("Same-path fixture host is not Compatible on dialog open.");
+            // Simulate the executable at P changing while the file still exists:
+            // the next explicit Refresh probe returns a family-invalid result.
+            prober.Results[stagingHost] = new(true, "Unknown option: --version", string.Empty, 0);
+            IReadOnlyList<DosRuntimeCandidate> refreshedNegative = form.RefreshRunDialogForTest();
+            DosRuntimeCandidate[] negativeRows = refreshedNegative
+                .Where(item => item.ExecutablePath.Equals(stagingHost, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (negativeRows.Length != 1)
+                throw new InvalidDataException($"Same-path Refresh produced {negativeRows.Length} rows for P instead of exactly one.");
+            if (negativeRows[0].Compatibility == DosRuntimeCompatibility.Compatible || negativeRows[0].IsRunnable)
+                throw new InvalidDataException("Stale sticky Compatible row overwrote the fresh automatic Incompatible result.");
+            int startsBeforeNegative = recorder.Starts.Count;
+            _ = form.BeginRunDialogForTest();
+            string negativeBlocked = form.ConfirmRunDialogForTest(stagingHost);
+            if (recorder.Starts.Count != startsBeforeNegative || string.IsNullOrWhiteSpace(negativeBlocked))
+                throw new InvalidDataException("Same-path stale confirmation was not blocked fail-closed.");
+            // Same-path positive: fresh automatic Compatible wins with current data.
+            prober.Results[stagingHost] = new(true, "dosbox-staging 0.82.3", string.Empty, 0);
+            IReadOnlyList<DosRuntimeCandidate> refreshedPositive = form.RefreshRunDialogForTest();
+            DosRuntimeCandidate[] positiveRows = refreshedPositive
+                .Where(item => item.ExecutablePath.Equals(stagingHost, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (positiveRows.Length != 1)
+                throw new InvalidDataException($"Same-path positive Refresh produced {positiveRows.Length} rows for P instead of exactly one.");
+            if (positiveRows[0].Compatibility != DosRuntimeCompatibility.Compatible || !positiveRows[0].IsRunnable)
+                throw new InvalidDataException("Fresh automatic Compatible row did not win for P.");
+            if (!positiveRows[0].Version.Contains("0.82.3", StringComparison.Ordinal))
+                throw new InvalidDataException("Same-path row does not reflect fresh probe data: " + positiveRows[0].Version);
+            _ = form.BeginRunDialogForTest();
+            form.ConfirmRunDialogForTest(stagingHost);
+            if (recorder.Starts.Count != startsBeforeNegative + 1 || !recorder.Starts[^1].FileName.Equals(stagingHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Same-path positive confirmation did not execute exactly P.");
+            int startsBeforeGeneric = recorder.Starts.Count;
+
             // Generic routing: E1EGA + E2 + non-SK EN previews (zero starts).
             form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
             var egaPrepared = form.BeginRunDialogForTest();
             if (!egaPrepared.DosCommandPreview.Contains("RUNEGA", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("E1EGA preview is hardcoded to another runtime: " + egaPrepared.DosCommandPreview);
-            if (recorder.Starts.Count != startsBeforeGone)
+            if (recorder.Starts.Count != startsBeforeGeneric)
                 throw new InvalidDataException("EGA preview started a process.");
             form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
             form.SelectTranslationForTest("EN");
