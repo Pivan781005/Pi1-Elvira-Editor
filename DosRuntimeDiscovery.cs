@@ -262,11 +262,27 @@ internal sealed class DosRuntimeDiscoveryService
         if (!probe.Success)
             return new(adapter.Kind, adapter.FamilyDisplayName, string.Empty, executablePath, source,
                 DosRuntimeCompatibility.Incompatible, "Version probe failed: " + probe.Error);
+        // R9F V8.6f: filename is only a hint. Compatibility requires positive
+        // family-specific validation (exit 0, family marker, parseable
+        // version, no contradiction). A renamed executable printing
+        // "Unknown option: -version" or unrelated output fails closed.
+        bool valid;
+        try { valid = adapter.IsValidProbe(evidence, probe); }
+        catch { valid = false; }
+        if (!valid)
+            return new(adapter.Kind, adapter.FamilyDisplayName, string.Empty, executablePath, source,
+                DosRuntimeCompatibility.Incompatible, "Version probe did not positively identify " + adapter.FamilyDisplayName + ".");
         string combined = string.IsNullOrWhiteSpace(probe.Output) ? probe.Error : probe.Output;
         if (string.IsNullOrWhiteSpace(combined))
             return new(adapter.Kind, adapter.FamilyDisplayName, string.Empty, executablePath, source,
                 DosRuntimeCompatibility.Incompatible, "Version probe produced no output.");
-        return new(adapter.Kind, adapter.FamilyDisplayName, adapter.ParseVersion(combined), executablePath, source,
+        string version;
+        try { version = adapter.ParseVersion(combined); }
+        catch { version = "unknown"; }
+        if (string.IsNullOrWhiteSpace(version) || version.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+            return new(adapter.Kind, adapter.FamilyDisplayName, string.Empty, executablePath, source,
+                DosRuntimeCompatibility.Incompatible, "Version probe output is not parseable for " + adapter.FamilyDisplayName + ".");
+        return new(adapter.Kind, adapter.FamilyDisplayName, version, executablePath, source,
             DosRuntimeCompatibility.Compatible, "Probed successfully.");
     }
 

@@ -31,7 +31,7 @@ internal static class DosRuntimeLaunchPlanner
         IDosRuntimeAdapter adapter = DosRuntimeAdapters.All.FirstOrDefault(item => item.Kind == host.Kind)
             ?? throw new InvalidOperationException("No launch adapter exists for the selected DOS runtime host.");
         IReadOnlyList<string> configs = SelectBaseConfigs(gameRoot, target);
-        string sound = ResolveSoundSwitch(gameRoot);
+        string sound = ResolveSoundSwitch(gameRoot, target.GameId);
         string dosCommand = Path.GetFileNameWithoutExtension(target.ExecutableFile);
         var request = new DosRuntimeLaunchRequest(target.WorkingDirectory, dosCommand, target.DataFile, sound, configs);
         IReadOnlyList<string> arguments = adapter.BuildArguments(request);
@@ -65,10 +65,20 @@ internal static class DosRuntimeLaunchPlanner
     }
 
     /// <summary>Existing editor sound semantics first (PI1SND.BAT SET
-    /// PI1SND=/x, whitelisted shape), GOG BAT default /s otherwise. Never
-    /// invented beyond these two derived sources.</summary>
-    internal static string ResolveSoundSwitch(string? gameRoot)
+    /// PI1SND=/x, game-specific whitelist from LauncherService.SoundOptions),
+    /// GOG BAT default /s otherwise. Unknown/malformed values (including /zz
+    /// or BAT metacharacters) fall back to proven GOG /s. Never invented.</summary>
+    internal static string ResolveSoundSwitch(string? gameRoot) =>
+        ResolveSoundSwitch(gameRoot, gameId: null);
+
+    /// <summary>R9F V8.6f authoritative game-specific sound validation.
+    /// Elvira1 allows /p /t /a /c /s /m0 /m1 /m2; Elvira2 allows
+    /// /p /t /a /s /m (LauncherService.SoundOptions). Null/unknown gameId
+    /// accepts the union of both sets; BuildPlan always passes the
+    /// authoritative target.GameId so no guessing occurs.</summary>
+    internal static string ResolveSoundSwitch(string? gameRoot, string? gameId)
     {
+        HashSet<string> allowed = AllowedSoundSwitches(gameId);
         if (!string.IsNullOrWhiteSpace(gameRoot))
         {
             try
@@ -81,8 +91,9 @@ internal static class DosRuntimeLaunchPlanner
                         string trimmed = line.Trim();
                         if (!trimmed.StartsWith("SET PI1SND=", StringComparison.OrdinalIgnoreCase)) continue;
                         string value = trimmed["SET PI1SND=".Length..].Trim();
-                        if (System.Text.RegularExpressions.Regex.IsMatch(value, @"^/[A-Za-z0-9]{1,3}$"))
-                            return value;
+                        string normalized = value.Trim().ToLowerInvariant();
+                        if (allowed.Contains(normalized))
+                            return normalized;
                     }
                 }
             }
@@ -91,6 +102,16 @@ internal static class DosRuntimeLaunchPlanner
             }
         }
         return GogDefaultSoundSwitch;
+    }
+
+    internal static HashSet<string> AllowedSoundSwitches(string? gameId)
+    {
+        if (gameId is not null && gameId.Equals("Elvira2", StringComparison.OrdinalIgnoreCase))
+            return new(StringComparer.OrdinalIgnoreCase) { "/p", "/t", "/a", "/s", "/m" };
+        if (gameId is not null && gameId.Equals("Elvira1", StringComparison.OrdinalIgnoreCase))
+            return new(StringComparer.OrdinalIgnoreCase) { "/p", "/t", "/a", "/c", "/s", "/m0", "/m1", "/m2" };
+        // Unknown game: union of both authoritative sets (no invention).
+        return new(StringComparer.OrdinalIgnoreCase) { "/p", "/t", "/a", "/c", "/s", "/m", "/m0", "/m1", "/m2" };
     }
 
     private static string SafeChild(string parent, string component)

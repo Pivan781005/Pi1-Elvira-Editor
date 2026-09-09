@@ -47,14 +47,23 @@ internal sealed class VariantExecutionService
         _debug = debug ?? VariantDebugConfiguration.Unavailable;
     }
 
-    /// <summary>Build-side availability only. Run additionally requires a
-    /// valid selected DOS host (see DosRuntimeExecutionReadiness); Debug
-    /// additionally requires its configured developer host.</summary>
+    /// <summary>Build-side availability only. Debug requires its configured
+    /// developer host. Run NEVER reports direct executable availability:
+    /// a DOS target requires a DOS runtime launch plan/host (see
+    /// DosRuntimeExecutionReadiness); LaunchReady alone never means Windows
+    /// Run is available. Use ExecutePlan for the only valid Run path.</summary>
     public bool IsAvailable(VariantLaunchTarget target, VariantExecutionMode mode)
     {
         if (target.Readiness != VariantLaunchReadiness.LaunchReady) return false;
-        return mode == VariantExecutionMode.Debug ? _debug.IsConfigured : true;
+        if (mode == VariantExecutionMode.Run) return false;
+        return _debug.IsConfigured;
     }
+
+    /// <summary>Build-side launch-readiness without any host claim. True when
+    /// the semantic target is LaunchReady, regardless of DOS host or debug
+    /// host configuration.</summary>
+    public bool IsBuildReady(VariantLaunchTarget target) =>
+        target.Readiness == VariantLaunchReadiness.LaunchReady;
 
     public VariantExecutionResult Execute(VariantLaunchTarget target, VariantExecutionMode mode)
     {

@@ -145,10 +145,17 @@ internal sealed class MainForm : Form
     private readonly CenteredCaptionButton btnDosRuntimeChange = new();
     private readonly CenteredCaptionButton btnDosRuntimeRefresh = new();
     private readonly Label lblRunReadiness = new();
-    private readonly DosRuntimeDiscoveryService _dosDiscovery = new();
-    private readonly DosRuntimeSettingsStore _dosSettings = new();
+    private DosRuntimeDiscoveryService _dosDiscovery = new();
+    private DosRuntimeSettingsStore _dosSettings = new();
     private IReadOnlyList<DosRuntimeCandidate> _dosCandidates = [];
     private DosRuntimeCandidate? _dosSelected;
+    /// <summary>R9F V8.6f session-level remembered/manual-host validation
+    /// cache. A Browse-selected host outside automatic discovery is probed
+    /// once when chosen (or once on session restore) and reused across Mods
+    /// opens with zero new probes until explicit Refresh, disappearance, or
+    /// injection reset. Never persisted across restarts without validation.</summary>
+    private DosRuntimeCandidate? _dosRememberedCandidate;
+    private string? _dosRememberedPath;
     private bool _testBypassConfirm;
     private readonly Label lblRecoveryTitle = new();
     private readonly Label lblRecoveryStatus = new();
@@ -1966,11 +1973,14 @@ internal sealed class MainForm : Form
         if (!result.Started) SetStatus(result.Detail, true);
     }
 
-    /// <summary>R9F V8.6e DOS host selection: remembered path revalidated on
-    /// every Mods refresh; discovery itself is session-cached and never walks
-    /// VARIANTS. Never silently switches hosts: the UI always shows the
-    /// effective selection.</summary>
-    private void EnsureDosRuntimeSelection()
+    /// <summary>R9F V8.6f DOS host selection: remembered/manual host is
+    /// session-cached (probe once, reuse with zero new probes); discovery
+    /// itself is session-cached and never walks VARIANTS. A missing/invalid
+    /// saved host falls back to current bounded discovery results when a
+    /// compatible host exists; the fallback is session-effective only and
+    /// never overwrites the persisted preference. The UI always shows the
+    /// effective selection, never silently executing another host.</summary>
+    private void EnsureDosRuntimeSelection(bool forceManualRevalidate = false)
     {
         if (_activeProject is null)
         {
@@ -1982,9 +1992,16 @@ internal sealed class MainForm : Form
         DosRuntimeSelectedHost? saved = _dosSettings.Load();
         if (saved is not null)
         {
-            if (!File.Exists(saved.ExecutablePath))
+            bool exists;
+            try { exists = File.Exists(saved.ExecutablePath); }
+            catch { exists = false; }
+            if (!exists)
             {
-                _dosSelected = null;
+                InvalidateRememberedHost(saved.ExecutablePath);
+                // Saved preference unavailable: fall back to automatic
+                // discovery without overwriting the persisted preference
+                // (a temporarily missing drive must not erase it).
+                _dosSelected = SelectAutomaticDosHost();
                 return;
             }
             DosRuntimeCandidate? match = _dosCandidates.FirstOrDefault(item =>
@@ -1994,16 +2011,56 @@ internal sealed class MainForm : Form
                 _dosSelected = match;
                 return;
             }
+            // Manual/remembered host outside automatic discovery: reuse the
+            // session-validated candidate with zero new probes.
+            if (!forceManualRevalidate && _dosRememberedCandidate is not null &&
+                string.Equals(_dosRememberedPath, saved.ExecutablePath, StringComparison.OrdinalIgnoreCase) &&
+                _dosRememberedCandidate.ExecutablePath.Equals(saved.ExecutablePath, StringComparison.OrdinalIgnoreCase))
+            {
+                if (_dosRememberedCandidate.IsRunnable)
+                {
+                    _dosSelected = _dosRememberedCandidate;
+                    return;
+                }
+                InvalidateRememberedHost(saved.ExecutablePath);
+                _dosSelected = SelectAutomaticDosHost();
+                return;
+            }
             DosRuntimeCandidate probed = _dosDiscovery.ProbeUserSelection(saved.ExecutablePath);
-            _dosSelected = probed.IsRunnable ? probed with { Source = DosRuntimeSource.RememberedSelection } : null;
+            DosRuntimeCandidate cached = probed.IsRunnable
+                ? probed with { Source = DosRuntimeSource.RememberedSelection }
+                : probed;
+            _dosRememberedCandidate = cached;
+            _dosRememberedPath = saved.ExecutablePath;
+            if (probed.IsRunnable)
+            {
+                _dosSelected = cached;
+                return;
+            }
+            // Saved host invalid: mark unavailable and fall back to
+            // automatic discovery without overwriting the preference.
+            _dosSelected = SelectAutomaticDosHost();
             return;
         }
-        _dosSelected = _dosCandidates
+        _dosSelected = SelectAutomaticDosHost();
+    }
+
+    private DosRuntimeCandidate? SelectAutomaticDosHost() =>
+        _dosCandidates
             .Where(item => item.IsRunnable)
             .OrderBy(item => item.Source == DosRuntimeSource.GogBundled ? 0 : 1)
             .ThenBy(item => item.Kind)
             .ThenBy(item => item.ExecutablePath, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault();
+
+    private void InvalidateRememberedHost(string? path)
+    {
+        if (path is null) return;
+        if (string.Equals(_dosRememberedPath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            _dosRememberedCandidate = null;
+            _dosRememberedPath = null;
+        }
     }
 
     private void UpdateDosRuntimePresentation(VariantLaunchTarget? target)
@@ -2040,6 +2097,16 @@ internal sealed class MainForm : Form
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Selected is null) return;
         _dosSelected = dialog.Selected;
         _dosSettings.Save(dialog.Selected.ExecutablePath, dialog.Selected.Kind);
+        // Retain the just-validated Browse host for this session so repeated
+        // Mods opens perform zero new probes.
+        _dosRememberedCandidate = dialog.Selected.Source == DosRuntimeSource.RememberedSelection
+            ? dialog.Selected
+            : dialog.Selected with { Source = DosRuntimeSource.RememberedSelection };
+        // Only mark RememberedSelection when the host is outside automatic
+        // discovery; automatic hosts keep their discovery source.
+        if (_dosCandidates.Any(item => item.ExecutablePath.Equals(dialog.Selected.ExecutablePath, StringComparison.OrdinalIgnoreCase) && item.IsRunnable))
+            _dosRememberedCandidate = null;
+        _dosRememberedPath = _dosRememberedCandidate is null ? null : dialog.Selected.ExecutablePath;
         if (_activeProject is not null)
             _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot);
         UpdateDosRuntimePresentation(_lastLauncherTarget);
@@ -2049,7 +2116,7 @@ internal sealed class MainForm : Form
     {
         if (_activeProject is null) return;
         _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot, refresh: true);
-        EnsureDosRuntimeSelection();
+        EnsureDosRuntimeSelection(forceManualRevalidate: true);
         UpdateDosRuntimePresentation(_lastLauncherTarget);
     }
 
@@ -6019,13 +6086,14 @@ internal sealed class MainForm : Form
     private int _modsSnapshotBuildCount;
     internal IReadOnlyList<DosRuntimeCandidate> DosCandidatesForTest => _dosCandidates;
     internal string? DosSelectedPathForTest => _dosSelected?.ExecutablePath;
+    internal DosRuntimeCandidate? DosSelectedForTest => _dosSelected;
     internal string RunReadinessForTest => lblRunReadiness.Text ?? string.Empty;
     internal string DosSelectedLabelForTest => lblDosRuntimeSelected.Text ?? string.Empty;
     internal void RefreshDosDiscoveryForTest()
     {
         if (_activeProject is null) return;
         _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot, refresh: true);
-        EnsureDosRuntimeSelection();
+        EnsureDosRuntimeSelection(forceManualRevalidate: true);
         UpdateDosRuntimePresentation(_lastLauncherTarget);
     }
     internal void SetDosSelectedHostForTest(DosRuntimeCandidate? selected)
@@ -6034,6 +6102,43 @@ internal sealed class MainForm : Form
         // settings file. Production selection always persists via the dialog.
         _dosSelected = selected;
         UpdateDosRuntimePresentation(_lastLauncherTarget);
+    }
+    /// <summary>R9F V8.6f production-path Browse simulation: probes exactly
+    /// once via the active discovery service, persists path/kind, retains the
+    /// validated candidate in the session cache, and shows it as effective.</summary>
+    internal void InjectDosDiscoveryForTest(DosRuntimeDiscoveryService discovery)
+    {
+        _dosDiscovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
+        _dosRememberedCandidate = null;
+        _dosRememberedPath = null;
+    }
+    internal void InjectDosSettingsForTest(DosRuntimeSettingsStore store)
+    {
+        _dosSettings = store ?? throw new ArgumentNullException(nameof(store));
+        _dosRememberedCandidate = null;
+        _dosRememberedPath = null;
+    }
+    internal DosRuntimeCandidate SelectDosHostViaBrowseForTest(string executablePath)
+    {
+        DosRuntimeCandidate probed = _dosDiscovery.ProbeUserSelection(executablePath);
+        if (!probed.IsRunnable)
+            throw new InvalidOperationException("Browse host is not runnable: " + probed.Detail);
+        _dosSelected = probed.Source == DosRuntimeSource.RememberedSelection
+            ? probed
+            : probed with { Source = DosRuntimeSource.RememberedSelection };
+        _dosSettings.Save(_dosSelected.ExecutablePath, _dosSelected.Kind);
+        _dosRememberedCandidate = _dosSelected;
+        _dosRememberedPath = _dosSelected.ExecutablePath;
+        if (_activeProject is not null)
+            _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot);
+        UpdateDosRuntimePresentation(_lastLauncherTarget);
+        return _dosSelected;
+    }
+    internal void ClearDosSettingsForTest()
+    {
+        try { _dosSettings.Clear(); } catch { }
+        _dosRememberedCandidate = null;
+        _dosRememberedPath = null;
     }
 
     internal ContextSafetyDiagnostics RunContextSafetyStressForTest(GameInstallation elvira1, GameInstallation elvira2)

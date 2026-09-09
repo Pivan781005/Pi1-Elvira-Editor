@@ -2661,6 +2661,8 @@ internal static class Program
             throw new InvalidDataException("Invalid executable was reported runnable.");
         if (found.Any(item => item.ExecutablePath.Contains("VARIANTS", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("Automatic discovery walked foreign VARIANTS residue.");
+        // R9F V8.6f family-specific probe validation: filename is only a hint.
+        VerifyDosHostFamilyNegatives();
         int probesAfterFirst = prober.Calls;
         _ = discovery.Discover(@"C:\g");
         if (prober.Calls != probesAfterFirst)
@@ -2703,9 +2705,236 @@ internal static class Program
                 throw new InvalidDataException("Selected host did not persist/reload.");
         }
         finally { try { Directory.Delete(Path.GetDirectoryName(settingsPath)!, true); } catch { } }
+        VerifyDosRememberedHostSmoke(elvira1Source, elvira2Source);
         if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
             !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
             throw new InvalidDataException("DOS runtime discovery smoke modified a real GameRoot.");
+    }
+
+    /// <summary>R9F V8.6f family-specific host validation. Temp fake
+    /// executables/prober only. Sensitive enough that V8.6e (filename hint +
+    /// any non-empty output) fails the renamed-host negatives.</summary>
+    private static void VerifyDosHostFamilyNegatives()
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), "Pi1DosFamilyProbe", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        try
+        {
+            DosRuntimeCandidate ProbeSingle(string fileName, string? product, string output, int exitCode = 0, bool success = true)
+            {
+                string path = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"), fileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllBytes(path, [0x4D, 0x5A]);
+                var localFiles = new FakeDosRuntimeFileSystem();
+                localFiles.Files.Add(path);
+                var localEvidence = new Dictionary<string, DosRuntimeHostEvidence>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [path] = new(fileName, product, "1.0")
+                };
+                var localProber = new FakeDosRuntimeProbeRunner();
+                localProber.Results[path] = new(success, output, string.Empty, exitCode);
+                var localDiscovery = new DosRuntimeDiscoveryService(localFiles, localProber, p => localEvidence[p]);
+                return localDiscovery.ProbeUserSelection(path);
+            }
+
+            // 1. Renamed dosbox.exe printing "Unknown option" must NOT be runnable.
+            DosRuntimeCandidate fakeClassic = ProbeSingle("dosbox.exe", null, "Unknown option: -version");
+            if (fakeClassic.IsRunnable || fakeClassic.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Renamed dosbox.exe with 'Unknown option' became compatible.");
+            // 2. dosbox.exe + unrelated metadata/output must NOT be runnable.
+            DosRuntimeCandidate media = ProbeSingle("dosbox.exe", "Media Player", "Media Player 9.9");
+            if (media.IsRunnable || media.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Unrelated dosbox.exe with media output became compatible.");
+            // 3. dosbox-x.exe + unrelated metadata/output must NOT be runnable.
+            DosRuntimeCandidate fakeX = ProbeSingle("dosbox-x.exe", "EvilSoft", "Evil Joystick 1.0");
+            if (fakeX.IsRunnable || fakeX.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Renamed dosbox-x.exe became compatible.");
+            // 4. Genuine Classic (including old GOG with null Product) + valid output => Compatible.
+            DosRuntimeCandidate genuineClassic = ProbeSingle("dosbox.exe", "DOSBox", "DOSBox version 0.74-3");
+            if (!genuineClassic.IsRunnable || genuineClassic.Compatibility != DosRuntimeCompatibility.Compatible || genuineClassic.Kind != DosRuntimeKind.DosBoxClassic)
+                throw new InvalidDataException("Genuine Classic host was rejected.");
+            DosRuntimeCandidate oldGog = ProbeSingle("dosbox.exe", null, "DOSBox version 0.74-3");
+            if (!oldGog.IsRunnable || oldGog.Compatibility != DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Old GOG Classic without ProductName was rejected.");
+            // 5. Genuine Staging => Compatible.
+            DosRuntimeCandidate genuineStaging = ProbeSingle("dosbox.exe", "DOSBox Staging", "dosbox-staging 0.82.2");
+            if (!genuineStaging.IsRunnable || genuineStaging.Compatibility != DosRuntimeCompatibility.Compatible || genuineStaging.Kind != DosRuntimeKind.DosBoxStaging)
+                throw new InvalidDataException("Genuine Staging host was rejected.");
+            // 6. Genuine X => Compatible.
+            DosRuntimeCandidate genuineX = ProbeSingle("dosbox-x.exe", "DOSBox-X", "DOSBox-X version 2024.03.01");
+            if (!genuineX.IsRunnable || genuineX.Compatibility != DosRuntimeCompatibility.Compatible || genuineX.Kind != DosRuntimeKind.DosBoxX)
+                throw new InvalidDataException("Genuine DOSBox-X host was rejected.");
+            // 7. Cross-family must fail closed.
+            DosRuntimeCandidate classicAsStaging = ProbeSingle("dosbox.exe", "DOSBox", "dosbox-staging 0.82.2");
+            if (classicAsStaging.IsRunnable || classicAsStaging.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Classic evidence with Staging output became compatible.");
+            DosRuntimeCandidate stagingAsClassic = ProbeSingle("dosbox.exe", "DOSBox Staging", "DOSBox version 0.74-3");
+            if (stagingAsClassic.IsRunnable || stagingAsClassic.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Staging evidence with Classic output became compatible.");
+            DosRuntimeCandidate xAsClassic = ProbeSingle("dosbox-x.exe", "DOSBox-X", "DOSBox version 0.74-3");
+            if (xAsClassic.IsRunnable || xAsClassic.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("X evidence with Classic output became compatible.");
+            DosRuntimeCandidate classicAsX = ProbeSingle("dosbox.exe", "DOSBox", "DOSBox-X version 2024.03.01");
+            if (classicAsX.IsRunnable || classicAsX.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Classic evidence with X output became compatible.");
+            // Generic Classic must never become Staging via probe alone.
+            DosRuntimeCandidate genericStagingOutput = ProbeSingle("dosbox.exe", "DOSBox", "dosbox-staging 0.82.2");
+            if (genericStagingOutput.Compatibility == DosRuntimeCompatibility.Compatible && genericStagingOutput.Kind == DosRuntimeKind.DosBoxStaging)
+                throw new InvalidDataException("Generic Classic became Staging.");
+            // Non-zero exit fails closed even with valid-looking output.
+            DosRuntimeCandidate badExit = ProbeSingle("dosbox.exe", "DOSBox", "DOSBox version 0.74-3", exitCode: 1);
+            if (badExit.IsRunnable || badExit.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Non-zero probe exit became compatible.");
+            // /zz-style arbitrary version-like output without family marker fails.
+            DosRuntimeCandidate zz = ProbeSingle("dosbox.exe", null, "9.9");
+            if (zz.IsRunnable || zz.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Arbitrary version output became compatible.");
+        }
+        finally { try { Directory.Delete(tempRoot, true); } catch { } }
+    }
+
+    /// <summary>R9F V8.6f remembered/manual-host production-path regression.
+    /// Drives MainForm.EnsureDosRuntimeSelection via OpenModsForTest (not the
+    /// discovery service in isolation). Fails on V8.6e for repeated-manual
+    /// re-probing and for missing-host fallback.</summary>
+    private static void VerifyDosRememberedHostSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1DosRememberedHostSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            SeedSkTranslationForSmoke(fixture);
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Remembered-host fixture did not validate as an installation.");
+            // R9F V8.6f: automatic host lives outside GameRoot (PATH) to
+            // preserve fixture pristine immutability. A GOG-bundled file
+            // under GameRoot would inject UnexpectedFile into the baseline
+            // and break ProjectContextLoader.Open; PATH-based automatic host
+            // exercises the identical fallback/selection path.
+            string autoDir = Path.Combine(root, "auto");
+            Directory.CreateDirectory(autoDir);
+            string autoHost = Path.Combine(autoDir, "dosbox.exe");
+            File.WriteAllBytes(autoHost, [0x4D, 0x5A]);
+            string externalDir = Path.Combine(root, "external");
+            Directory.CreateDirectory(externalDir);
+            string externalHost = Path.Combine(externalDir, "dosbox.exe");
+            File.WriteAllBytes(externalHost, [0x4D, 0x5A]);
+
+            var files = new FakeDosRuntimeFileSystem
+            {
+                PathVariable = autoDir,
+                ProgramFiles = Path.Combine(root, "nopf"),
+                ProgramFilesX86 = Path.Combine(root, "nopf86"),
+                LocalAppData = Path.Combine(root, "nolocal")
+            };
+            files.Files.Add(autoHost);
+            files.Files.Add(externalHost);
+            var evidence = new Dictionary<string, DosRuntimeHostEvidence>(StringComparer.OrdinalIgnoreCase)
+            {
+                [autoHost] = new("dosbox.exe", "DOSBox", "0.74.3"),
+                [externalHost] = new("dosbox.exe", "DOSBox", "0.74.3")
+            };
+            var prober = new FakeDosRuntimeProbeRunner();
+            prober.Results[autoHost] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            prober.Results[externalHost] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            var discovery = new DosRuntimeDiscoveryService(files, prober, path => evidence[path]);
+            string settingsDir = Path.Combine(root, "settings");
+            Directory.CreateDirectory(settingsDir);
+            var store = new DosRuntimeSettingsStore(Path.Combine(settingsDir, "dos-runtime.json"));
+
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            form.InjectDosDiscoveryForTest(discovery);
+            form.InjectDosSettingsForTest(store);
+            form.SelectTranslationForTest("SK");
+            if (!form.RebuildActiveVariantCoreForTest())
+                throw new InvalidDataException("Remembered-host fixture build failed.");
+            if (!form.VariantLaunchReadinessForTest().Equals("LaunchReady", StringComparison.Ordinal))
+                throw new InvalidDataException("Remembered-host fixture was not launch-ready.");
+
+            // A. Automatic discovery contains the bounded host; manual Browse selects external.
+            form.OpenModsForTest();
+            if (form.DosSelectedPathForTest is null || !form.DosSelectedPathForTest.Equals(autoHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Automatic selection did not pick the bounded host.");
+            int probesAfterAuto = form.DosProbeCountForTest;
+            form.SelectDosHostViaBrowseForTest(externalHost);
+            if (!form.DosSelectedPathForTest!.Equals(externalHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Browse-selected external host did not persist.");
+            DosRuntimeSelectedHost? saved = store.Load();
+            if (saved is null || !saved.ExecutablePath.Equals(externalHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Browse-selected external host did not persist to settings.");
+            int probesAfterBrowse = form.DosProbeCountForTest;
+            if (probesAfterBrowse <= probesAfterAuto)
+                throw new InvalidDataException("Browse selection did not probe once.");
+
+            // B. Repeated Mods opens: same host, zero new probes, Run correct.
+            for (int open = 0; open < 5; open++)
+            {
+                form.OpenModsForTest();
+                if (!form.DosSelectedPathForTest!.Equals(externalHost, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"Repeated Mods open {open} lost the external host.");
+                if (form.DosProbeCountForTest != probesAfterBrowse)
+                    throw new InvalidDataException($"Repeated Mods open {open} re-probed the remembered host.");
+                if (!form.RunEnabledForTest)
+                    throw new InvalidDataException($"Run disabled with Ready build and valid remembered host (open {open}).");
+                if (!form.DosSelectedLabelForTest.Contains(externalHost, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"Effective-host UI does not show the external host (open {open}).");
+            }
+
+            // C. Explicit Refresh re-probes but keeps the compatible host effective.
+            form.RefreshDosDiscoveryForTest();
+            if (form.DosProbeCountForTest <= probesAfterBrowse)
+                throw new InvalidDataException("Explicit Refresh did not re-probe.");
+            if (!form.DosSelectedPathForTest!.Equals(externalHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Explicit Refresh lost the compatible remembered host.");
+            int probesAfterRefresh = form.DosProbeCountForTest;
+
+            // D. Saved/manual disappears: fall back to automatic host, UI shows it.
+            File.Delete(externalHost);
+            files.Files.Remove(externalHost);
+            form.OpenModsForTest();
+            if (form.DosSelectedPathForTest is null || !form.DosSelectedPathForTest.Equals(autoHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Missing remembered host did not fall back to the automatic host.");
+            if (!form.DosSelectedLabelForTest.Contains(autoHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Fallback UI does not identify the automatic host.");
+            if (!form.RunEnabledForTest)
+                throw new InvalidDataException("Run disabled after automatic fallback on a Ready build.");
+            DosRuntimeSelectedHost? stillSaved = store.Load();
+            if (stillSaved is null || !stillSaved.ExecutablePath.Equals(externalHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Fallback overwrote the persisted preference.");
+            int probesAfterFallback = form.DosProbeCountForTest;
+            form.OpenModsForTest();
+            if (form.DosProbeCountForTest != probesAfterFallback)
+                throw new InvalidDataException("Fallback path re-probed on repeated opens.");
+
+            // E. No saved host + compatible discovery => automatic selection.
+            form.ClearDosSettingsForTest();
+            form.OpenModsForTest();
+            if (form.DosSelectedPathForTest is null || !form.DosSelectedPathForTest.Equals(autoHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Automatic selection failed with no saved host.");
+
+            // F. No valid hosts => Run disabled / NeedHost.
+            File.Delete(autoHost);
+            files.Files.Remove(autoHost);
+            form.RefreshDosDiscoveryForTest();
+            form.OpenModsForTest();
+            if (form.DosSelectedPathForTest is not null)
+                throw new InvalidDataException("A host remained selected with no valid hosts.");
+            if (form.RunEnabledForTest)
+                throw new InvalidDataException("Run enabled with no valid hosts.");
+            if (!form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.NeedHost"), StringComparison.Ordinal))
+                throw new InvalidDataException("Missing-host readiness does not report NeedHost.");
+            _ = probesAfterRefresh;
+
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Remembered-host smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
 
     private static void VerifyDosLaunchPlanSmoke(string elvira1Source, string elvira2Source)
@@ -2809,6 +3038,8 @@ internal static class Program
             File.WriteAllText(Path.Combine(sndRoot, "PI1SND.BAT"), "SET PI1SND=/evil;rm -rf\r\n");
             if (DosRuntimeLaunchPlanner.ResolveSoundSwitch(sndRoot) != "/s")
                 throw new InvalidDataException("Malicious PI1SND.BAT value was not rejected to /s.");
+            // R9F V8.6f game-specific whitelist (LauncherService.SoundOptions).
+            VerifySoundSwitchWhitelist(sndRoot);
 
             if (!SnapshotRootFiles(e1.GameRoot).Concat(SnapshotRootFiles(e2.GameRoot)).ToArray().SequenceEqual(fixtureBefore, StringComparer.Ordinal))
                 throw new InvalidDataException("Launch planning wrote into a fixture GameRoot.");
@@ -2817,6 +3048,44 @@ internal static class Program
                 throw new InvalidDataException("DOS launch plan smoke modified a real GameRoot.");
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    /// <summary>R9F V8.6f sound whitelist: Elvira1 /p /t /a /c /s /m0 /m1 /m2,
+    /// Elvira2 /p /t /a /s /m. /zz, injection, and cross-game MIDI misuse fall
+    /// back to proven GOG /s. Missing file falls back to /s.</summary>
+    private static void VerifySoundSwitchWhitelist(string sndRoot)
+    {
+        void Require(string content, string gameId, string expected, string scenario)
+        {
+            File.WriteAllText(Path.Combine(sndRoot, "PI1SND.BAT"), content);
+            string actual = DosRuntimeLaunchPlanner.ResolveSoundSwitch(sndRoot, gameId);
+            if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"Sound whitelist failed ({scenario}): got '{actual}', want '{expected}'.");
+        }
+        Require("SET PI1SND=/a\r\n", "Elvira1", "/a", "E1 /a");
+        Require("SET PI1SND=/s\r\n", "Elvira1", "/s", "E1 /s");
+        Require("SET PI1SND=/m1\r\n", "Elvira1", "/m1", "E1 MIDI /m1");
+        Require("SET PI1SND=/m0\r\n", "Elvira1", "/m0", "E1 MIDI /m0");
+        Require("SET PI1SND=/m2\r\n", "Elvira1", "/m2", "E1 MIDI /m2");
+        Require("SET PI1SND=/c\r\n", "Elvira1", "/c", "E1 /c");
+        Require("SET PI1SND=/m\r\n", "Elvira2", "/m", "E2 MIDI /m");
+        Require("SET PI1SND=/a\r\n", "Elvira2", "/a", "E2 /a");
+        Require("SET PI1SND=/s\r\n", "Elvira2", "/s", "E2 /s");
+        // /m0 is E1-only and must not validate for E2.
+        Require("SET PI1SND=/m0\r\n", "Elvira2", "/s", "E2 rejects E1-only /m0");
+        // /c is E1-only and must not validate for E2.
+        Require("SET PI1SND=/c\r\n", "Elvira2", "/s", "E2 rejects E1-only /c");
+        // /m is E2-only and must not validate for E1.
+        Require("SET PI1SND=/m\r\n", "Elvira1", "/s", "E1 rejects E2-only /m");
+        Require("SET PI1SND=/zz\r\n", "Elvira1", "/s", "/zz rejected");
+        Require("SET PI1SND=/zz\r\n", "Elvira2", "/s", "/zz rejected E2");
+        Require("SET PI1SND=/s & del C:\\*.*\r\n", "Elvira1", "/s", "command injection rejected");
+        Require("SET PI1SND=/s|more\r\n", "Elvira1", "/s", "pipe injection rejected");
+        Require("SET PI1SND=\r\n", "Elvira1", "/s", "empty rejected");
+        File.Delete(Path.Combine(sndRoot, "PI1SND.BAT"));
+        if (DosRuntimeLaunchPlanner.ResolveSoundSwitch(sndRoot, "Elvira1") != "/s" ||
+            DosRuntimeLaunchPlanner.ResolveSoundSwitch(sndRoot, "Elvira2") != "/s")
+            throw new InvalidDataException("Missing PI1SND.BAT did not fall back to /s.");
     }
 
     private static void VerifyDosGogConfigSmoke(string elvira1Source, string elvira2Source)
@@ -9834,8 +10103,12 @@ internal static class Program
         VariantManifestService.Write(project, variant, directories, CompositeBuildMode.PristineOnly,
             [variant.GeneratedExecutableName, variant.LogicalDataFileName], "EN");
         VariantLaunchTarget target = launcher.Resolve(project, variant);
-        if (target.Readiness != VariantLaunchReadiness.LaunchReady || !execution.IsAvailable(target, VariantExecutionMode.Run) || !execution.IsAvailable(target, VariantExecutionMode.Debug))
+        // R9F V8.6f: LaunchReady alone never means Windows Run is available.
+        // Direct Run availability is always false; only ExecutePlan runs.
+        if (target.Readiness != VariantLaunchReadiness.LaunchReady || execution.IsAvailable(target, VariantExecutionMode.Run) || !execution.IsAvailable(target, VariantExecutionMode.Debug))
             throw new InvalidDataException("Ready fixture variant was not launch-ready: " + target.Detail);
+        if (!execution.IsBuildReady(target))
+            throw new InvalidDataException("Ready fixture variant did not report build-ready.");
         // R9F V8.6e P0: even a fully ready target must never be handed to
         // Windows directly. The legacy direct Run path fails closed.
         RequireDirectRunRejected(execution, target, runner, "Ready variant direct run");

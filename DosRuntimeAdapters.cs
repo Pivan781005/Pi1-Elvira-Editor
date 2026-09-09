@@ -77,7 +77,8 @@ internal static class DosRuntimeHostEvidenceReader
 
 /// <summary>Host-specific adapter: owns probe semantics and launch-plan
 /// syntax for exactly one DOSBox family. Version-switch syntax is never
-/// guessed globally.</summary>
+/// guessed globally. Filename is only a candidate hint; Compatible requires
+/// positive family-specific probe validation via IsValidProbe.</summary>
 internal interface IDosRuntimeAdapter
 {
     DosRuntimeKind Kind { get; }
@@ -85,6 +86,11 @@ internal interface IDosRuntimeAdapter
     IReadOnlyList<string> ExecutableFileNames { get; }
     IReadOnlyList<string> VersionArguments { get; }
     bool Identifies(DosRuntimeHostEvidence evidence);
+    /// <summary>R9F V8.6f: positive family-specific probe validation.
+    /// Requires acceptable completion (Success + exit 0), positive
+    /// family output with parseable version, and no contradictory family
+    /// evidence. Filename alone never validates.</summary>
+    bool IsValidProbe(DosRuntimeHostEvidence evidence, DosRuntimeProbeResult probe);
     string ParseVersion(string probeOutput);
     IReadOnlyList<string> BuildArguments(DosRuntimeLaunchRequest request);
 }
@@ -114,10 +120,38 @@ internal sealed class DosBoxClassicAdapter : IDosRuntimeAdapter
         return evidence.FileName.Equals("dosbox.exe", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>R9F V8.6f Classic positive validation. Accepts genuine
+    /// Classic/GOG "DOSBox version X.Y" output (Product may be absent for
+    /// old GOG). Rejects Staging, DOSBox-X, "Unknown option", and arbitrary
+    /// renamed outputs. All supported Classic hosts return exit 0 for
+    /// "-version" per the Classic manual; any other code fails closed.</summary>
+    public bool IsValidProbe(DosRuntimeHostEvidence evidence, DosRuntimeProbeResult probe)
+    {
+        if (evidence.FileName.Equals("dosbox-x.exe", StringComparison.OrdinalIgnoreCase)) return false;
+        string product = evidence.ProductName ?? string.Empty;
+        if (product.Contains("Staging", StringComparison.OrdinalIgnoreCase)) return false;
+        if (product.Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase)) return false;
+        if (probe is not { Success: true }) return false;
+        // Real Classic/Staging/X version probes exit 0. No supported host
+        // legitimately returns another code; accept only 0.
+        if (probe.ExitCode != 0) return false;
+        string combined = (probe.Output ?? string.Empty) + "\n" + (probe.Error ?? string.Empty);
+        if (combined.Contains("staging", StringComparison.OrdinalIgnoreCase)) return false;
+        if (combined.Contains("dosbox-x", StringComparison.OrdinalIgnoreCase)) return false;
+        if (System.Text.RegularExpressions.Regex.IsMatch(combined, @"dosbox\s+x\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) return false;
+        if (!System.Text.RegularExpressions.Regex.IsMatch(combined, @"DOSBox\s+version\s+\d+\.\d+", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) return false;
+        return true;
+    }
+
     public string ParseVersion(string probeOutput)
     {
-        string first = (probeOutput ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? string.Empty;
-        return string.IsNullOrWhiteSpace(first) ? "unknown" : first.Length > 64 ? first[..64] : first;
+        foreach (string line in (probeOutput ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            string trimmed = line.Trim();
+            if (System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"DOSBox\s+version\s+\d+\.\d+", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                return trimmed.Length > 64 ? trimmed[..64] : trimmed;
+        }
+        return "unknown";
     }
 
     public IReadOnlyList<string> BuildArguments(DosRuntimeLaunchRequest request)
@@ -158,12 +192,37 @@ internal sealed class DosBoxStagingAdapter : IDosRuntimeAdapter
         return false;
     }
 
+    /// <summary>R9F V8.6f Staging positive validation. Requires a
+    /// Staging-specific probe ("dosbox-staging" + version) and rejects
+    /// Classic/X outputs. Metadata contradiction rejects: a Classic-positive
+    /// Product ("DOSBox" without "Staging") or an X-positive Product never
+    /// becomes Staging via probe alone. Null/unrelated Product without a
+    /// contradictory family marker may still validate via a strong Staging
+    /// probe. Exit 0 only.</summary>
+    public bool IsValidProbe(DosRuntimeHostEvidence evidence, DosRuntimeProbeResult probe)
+    {
+        if (evidence.FileName.Equals("dosbox-x.exe", StringComparison.OrdinalIgnoreCase)) return false;
+        string product = evidence.ProductName ?? string.Empty;
+        if (product.Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase)) return false;
+        if (product.Contains("DOSBox", StringComparison.OrdinalIgnoreCase) &&
+            !product.Contains("Staging", StringComparison.OrdinalIgnoreCase)) return false;
+        if (probe is not { Success: true }) return false;
+        if (probe.ExitCode != 0) return false;
+        string combined = (probe.Output ?? string.Empty) + "\n" + (probe.Error ?? string.Empty);
+        if (combined.Contains("dosbox-x", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!combined.Contains("staging", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!System.Text.RegularExpressions.Regex.IsMatch(combined, @"dosbox[-\s]?staging", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) return false;
+        if (!System.Text.RegularExpressions.Regex.IsMatch(combined, @"\d+\.\d+")) return false;
+        return true;
+    }
+
     public string ParseVersion(string probeOutput)
     {
         foreach (string line in (probeOutput ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
             string trimmed = line.Trim();
-            if (trimmed.Contains("taging", StringComparison.OrdinalIgnoreCase) || System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"\d+\.\d+"))
+            if (System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"dosbox[-\s]?staging", System.Text.RegularExpressions.RegexOptions.IgnoreCase) &&
+                System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"\d+\.\d+"))
                 return trimmed.Length > 64 ? trimmed[..64] : trimmed;
         }
         return "unknown";
@@ -209,10 +268,37 @@ internal sealed class DosBoxXAdapter : IDosRuntimeAdapter
         return (evidence.ProductName ?? string.Empty).Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>R9F V8.6f X positive validation. Filename dosbox-x.exe is only
+    /// a hint: Compatible additionally requires a DOSBox-X-specific probe
+    /// ("DOSBox-X" + version). Rejects Staging/Classic outputs and
+    /// contradictory Classic/Staging metadata. Exit 0 only.</summary>
+    public bool IsValidProbe(DosRuntimeHostEvidence evidence, DosRuntimeProbeResult probe)
+    {
+        string product = evidence.ProductName ?? string.Empty;
+        if (product.Contains("Staging", StringComparison.OrdinalIgnoreCase) &&
+            !product.Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase)) return false;
+        if (product.Contains("DOSBox", StringComparison.OrdinalIgnoreCase) &&
+            !product.Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase) &&
+            !product.Contains("Staging", StringComparison.OrdinalIgnoreCase)) return false;
+        if (probe is not { Success: true }) return false;
+        if (probe.ExitCode != 0) return false;
+        string combined = (probe.Output ?? string.Empty) + "\n" + (probe.Error ?? string.Empty);
+        if (combined.Contains("staging", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!System.Text.RegularExpressions.Regex.IsMatch(combined, @"DOSBox[\s\-]*X", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) return false;
+        if (!System.Text.RegularExpressions.Regex.IsMatch(combined, @"\d+\.\d+")) return false;
+        return true;
+    }
+
     public string ParseVersion(string probeOutput)
     {
-        string first = (probeOutput ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? string.Empty;
-        return string.IsNullOrWhiteSpace(first) ? "unknown" : first.Length > 64 ? first[..64] : first;
+        foreach (string line in (probeOutput ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            string trimmed = line.Trim();
+            if (System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"DOSBox[\s\-]*X", System.Text.RegularExpressions.RegexOptions.IgnoreCase) &&
+                System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"\d+\.\d+"))
+                return trimmed.Length > 64 ? trimmed[..64] : trimmed;
+        }
+        return "unknown";
     }
 
     public IReadOnlyList<string> BuildArguments(DosRuntimeLaunchRequest request)
