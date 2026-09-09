@@ -1535,6 +1535,7 @@ internal sealed class MainForm : Form
 
     private void RefreshVariantGrid(string? selectDataFile = null, ModsLauncherRefreshSnapshot? snapshot = null)
     {
+        using var _diag = ModsRefreshDiagnostics.MeasureLowerGrid();
         VariantCatalog catalog = EnsureVariantCatalog();
         string? selected = selectDataFile ?? SelectedVariant?.DataFile;
         variantGrid.Rows.Clear();
@@ -1584,13 +1585,17 @@ internal sealed class MainForm : Form
     private ModsLauncherRefreshSnapshot BuildModsSnapshot(VariantCatalog catalog)
     {
         _modsSnapshotBuildCount++;
+        ModsRefreshDiagnostics.SnapshotBuilds++;
         ProjectContext project = _activeProject ?? throw new InvalidOperationException("No game installation is active.");
         VariantContext active = _activeVariant ?? throw new InvalidOperationException("No game installation is active.");
         var inspect = ModsInspectOverrideForTest ?? ((p, v, e) => { ModsInspectCallCountForTest++; return _variantBuildStatus.InspectEdition(p, v, e); });
-        var resolve = ModsResolveOverrideForTest ?? ((p, v, e) => { ModsResolveCallCountForTest++; return _variantLauncher.ResolveEdition(p, v, e); });
-        return ModsLauncherRefreshSnapshotBuilder.Build(
+        // R9F V8.6g: active target derived from its own inspection; no
+        // separate outer ResolveEdition. ModsResolveCallCountForTest now
+        // counts only legacy override use (kept for the synthetic unit test).
+        _ = ModsResolveOverrideForTest;
+        return ModsLauncherRefreshSnapshotBuilder.BuildFromInspections(
             project, _availableActiveVariants, active, _activeTranslationCode,
-            inspect, resolve,
+            inspect,
             (p, v, t) => _variantLauncher.CreateRedirectionPlan(p, v, t),
             () => GetVariantGridEntries(catalog).ToArray());
     }
@@ -1599,6 +1604,21 @@ internal sealed class MainForm : Form
     internal int DosProbeCountForTest => _dosDiscovery.ProbeCountForTest;
 
     private void OpenModsLauncher()
+    {
+        using var _diag = ModsRefreshDiagnostics.MeasureOpenMods();
+        using var _hashScope = ModsFileHashCache.BeginRefresh();
+        ModsValidationPresentationCache.IsPresentationScope = true;
+        try
+        {
+            OpenModsLauncherCore();
+        }
+        finally
+        {
+            ModsValidationPresentationCache.IsPresentationScope = false;
+        }
+    }
+
+    private void OpenModsLauncherCore()
     {
         ModsRefreshCount++;
         if (_activeProject is null || _activeVariant is null)
@@ -1683,6 +1703,7 @@ internal sealed class MainForm : Form
 
     private void RefreshVariantManager(ModsLauncherRefreshSnapshot? snapshot = null)
     {
+        using var _diag = ModsRefreshDiagnostics.MeasureRefreshManager();
         _refreshingVariantManager = true;
         try
         {
@@ -1768,6 +1789,7 @@ internal sealed class MainForm : Form
 
     private void UpdateRecoverySafetyPresentation()
     {
+        using var _diag = ModsRefreshDiagnostics.MeasureRecoveryPresentation();
         if (_activeProject is null || _activeVariant is null) { SetRecoverySafetyControls(active: false); return; }
         RecoverySafetyInspection inspection = _recoverySafety.Inspect(_activeProject);
         VariantDirectoryOperationResult ownership = _variantDirectories.ValidateOwnedVariantEditionDirectory(_activeProject, _activeVariant, _activeTranslationCode);
@@ -6140,6 +6162,10 @@ internal sealed class MainForm : Form
         _dosRememberedCandidate = null;
         _dosRememberedPath = null;
     }
+    internal int VariantManagerRowCountForTest => variantManagerGrid.Rows.Count;
+    internal int LowerGridRowCountForTest => variantGrid.Rows.Count;
+    internal int DosCandidateCountForTest => _dosCandidates.Count;
+    internal ModsRefreshDiagnostics.Snapshot ModsDiagnosticsForTest => ModsRefreshDiagnostics.Capture();
 
     internal ContextSafetyDiagnostics RunContextSafetyStressForTest(GameInstallation elvira1, GameInstallation elvira2)
     {

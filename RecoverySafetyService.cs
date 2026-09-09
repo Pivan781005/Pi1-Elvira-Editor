@@ -44,6 +44,7 @@ internal sealed class RecoverySafetyService
 
     public RecoverySafetyInspection Inspect(ProjectContext project)
     {
+        using var _ = ModsRefreshDiagnostics.MeasureRecoveryInspect();
         ArgumentNullException.ThrowIfNull(project);
         BaselineValidationResult baseline = new PristineManifestService(project.StorageLayout, project.GameProfile).ValidateBaseline();
         IReadOnlyList<VariantDirectoryInfo> variants = _directories.Enumerate(project, VariantContextCatalog.CreateBuiltIns(project));

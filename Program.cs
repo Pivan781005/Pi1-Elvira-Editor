@@ -1215,6 +1215,12 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("Mods refresh performance: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 3 && args[0].Equals("--mods-refresh-stability-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyModsRefreshStabilitySmoke(args[1], args[2]); Console.WriteLine("Mods refresh stability: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Mods refresh stability: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 3 && args[0].Equals("--workflow-status-smoke", StringComparison.OrdinalIgnoreCase))
         {
             try { VerifyWorkflowStatusSmoke(args[1], args[2]); Console.WriteLine("Workflow status: PASS"); Environment.ExitCode = 0; }
@@ -3333,13 +3339,24 @@ internal static class Program
             form.ActivateInstallationForTest(installation);
             form.SelectTranslationForTest("SK");
             int snapshotsBefore = form.ModsSnapshotBuildCountForTest;
-            int inspectsBefore = form.ModsInspectCallCountForTest;
-            int resolvesBefore = form.ModsResolveCallCountForTest;
+            ModsRefreshDiagnostics.Reset();
+            ModsRefreshDiagnostics.Snapshot diagBefore = ModsRefreshDiagnostics.Capture();
             form.OpenModsForTest();
             if (form.ModsSnapshotBuildCountForTest != snapshotsBefore + 1)
                 throw new InvalidDataException("Mods open did not build exactly one refresh snapshot.");
-            if (form.ModsInspectCallCountForTest - inspectsBefore != 2 || form.ModsResolveCallCountForTest - resolvesBefore != 1)
-                throw new InvalidDataException($"Mods open resolved {form.ModsInspectCallCountForTest - inspectsBefore} inspections and {form.ModsResolveCallCountForTest - resolvesBefore} targets instead of 2/1.");
+            ModsRefreshDiagnostics.Snapshot diagAfter = ModsRefreshDiagnostics.Capture();
+            // R9F V8.6g: "resolve = N" must mean REAL production ResolveEdition
+            // calls, not synthetic delegates. One refresh inspects each runtime
+            // once (2 for E1 VGA+EGA); each inspection resolves its own
+            // runtime+edition once (2 real Resolves, no outer duplicate). This
+            // perf fixture is unbuilt (Missing), so no CreatePlan runs; the
+            // built-Ready single-plan reuse is proven by the stability smoke.
+            if (diagAfter.InspectEditionCalls - diagBefore.InspectEditionCalls != 2)
+                throw new InvalidDataException($"Real InspectEdition calls/open were {diagAfter.InspectEditionCalls - diagBefore.InspectEditionCalls}, want 2.");
+            if (diagAfter.ResolveEditionCalls - diagBefore.ResolveEditionCalls != 2)
+                throw new InvalidDataException($"Real ResolveEdition calls/open were {diagAfter.ResolveEditionCalls - diagBefore.ResolveEditionCalls}, want 2 (one per runtime, no outer duplicate).");
+            if (diagAfter.CreatePlanCalls - diagBefore.CreatePlanCalls != 0)
+                throw new InvalidDataException($"Real CreatePlan calls/open were {diagAfter.CreatePlanCalls - diagBefore.CreatePlanCalls}, want 0 (unbuilt Missing skips planning).");
             if (form.VariantManagerRowsForTest.Count != 2)
                 throw new InvalidDataException("Variant Manager did not present both runtime rows from one snapshot.");
             int probesBefore = form.DosProbeCountForTest;
@@ -3351,6 +3368,111 @@ internal static class Program
             if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
                 !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
                 throw new InvalidDataException("Mods refresh perf smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyModsRefreshStabilitySmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1ModsStabilitySmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            SeedSkTranslationForSmoke(fixture);
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Stability fixture did not validate as an installation.");
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            form.SelectTranslationForTest("SK");
+            if (!form.RebuildActiveVariantCoreForTest())
+                throw new InvalidDataException("Stability fixture build failed.");
+            ModsRefreshDiagnostics.Reset();
+            int gc0 = GC.CollectionCount(0);
+            int gc1 = GC.CollectionCount(1);
+            int gc2 = GC.CollectionCount(2);
+            long memBefore = GC.GetTotalMemory(forceFullCollection: false);
+            var rows = new List<(int Iteration, double Milliseconds, long SnapshotDelta, long InspectDelta, long ResolveDelta, long FingerprintDelta, long HashDelta, long PlanDelta, long SourcesDelta, long BaselineDelta, long RecoveryDelta, long DosProbeDelta, int ManagerRows, int LowerRows, int Controls, int RefreshCount)>();
+            ModsRefreshDiagnostics.Snapshot previous = ModsRefreshDiagnostics.Capture();
+            long previousRefresh = form.ModsRefreshCount;
+            System.Diagnostics.Stopwatch wall = new();
+            for (int iteration = 1; iteration <= 20; iteration++)
+            {
+                wall.Restart();
+                form.OpenModsForTest();
+                wall.Stop();
+                ModsRefreshDiagnostics.Snapshot current = ModsRefreshDiagnostics.Capture();
+                int managerRows = form.VariantManagerRowCountForTest;
+                int lowerRows = form.LowerGridRowCountForTest;
+                int controls = form.ControlTreeCount;
+                int refreshCount = form.ModsRefreshCount;
+                rows.Add((iteration, wall.Elapsed.TotalMilliseconds,
+                    current.SnapshotBuilds - previous.SnapshotBuilds,
+                    current.InspectEditionCalls - previous.InspectEditionCalls,
+                    current.ResolveEditionCalls - previous.ResolveEditionCalls,
+                    current.FingerprintCalls - previous.FingerprintCalls,
+                    current.ArtifactHashCalls - previous.ArtifactHashCalls,
+                    current.CreatePlanCalls - previous.CreatePlanCalls,
+                    current.ValidateSourcesCalls - previous.ValidateSourcesCalls,
+                    current.ValidateBaselineCalls - previous.ValidateBaselineCalls,
+                    current.RecoveryInspectCalls - previous.RecoveryInspectCalls,
+                    current.DosProbeCalls - previous.DosProbeCalls,
+                    managerRows, lowerRows, controls, refreshCount - (int)previousRefresh));
+                previous = current;
+                previousRefresh = refreshCount;
+            }
+            foreach (int wanted in new[] { 1, 2, 3, 5, 10, 20 })
+            {
+                var entry = rows[wanted - 1];
+                Console.WriteLine($"Mods stability iter {entry.Iteration}: {entry.Milliseconds:F1}ms snapshot+{entry.SnapshotDelta} inspect+{entry.InspectDelta} resolve+{entry.ResolveDelta} fp+{entry.FingerprintDelta} hash+{entry.HashDelta} plan+{entry.PlanDelta} src+{entry.SourcesDelta} base+{entry.BaselineDelta} rec+{entry.RecoveryDelta} dos+{entry.DosProbeDelta} rows {entry.ManagerRows}/{entry.LowerRows} controls {entry.Controls}");
+            }
+            ModsRefreshDiagnostics.Snapshot total = ModsRefreshDiagnostics.Capture();
+            Console.WriteLine($"Mods stability totals: open {total.OpenModsCalls} ({total.OpenModsMilliseconds:F1}ms) snapshot {total.SnapshotBuilds} inspect {total.InspectEditionCalls} ({total.InspectMilliseconds:F1}ms) resolve {total.ResolveEditionCalls} ({total.ResolveMilliseconds:F1}ms) fp {total.FingerprintCalls} ({total.FingerprintMilliseconds:F1}ms) plan {total.CreatePlanCalls} ({total.CreatePlanMilliseconds:F1}ms) src {total.ValidateSourcesCalls} ({total.ValidateSourcesMilliseconds:F1}ms) base {total.ValidateBaselineCalls} ({total.ValidateBaselineMilliseconds:F1}ms) rec {total.RecoveryInspectCalls} ({total.RecoveryMilliseconds:F1}ms) dos {total.DosProbeCalls}");
+            // Deterministic gates: one refresh per navigation, stable rows/controls, bounded counts.
+            if (total.OpenModsCalls != 20 || total.SnapshotBuilds != 20)
+                throw new InvalidDataException($"Expected 20 opens/snapshots, got {total.OpenModsCalls}/{total.SnapshotBuilds}.");
+            var first = rows[0];
+            foreach (var entry in rows)
+            {
+                if (entry.SnapshotDelta != 1 || entry.RefreshCount != 1)
+                    throw new InvalidDataException($"Iteration {entry.Iteration} did not produce exactly one Mods refresh.");
+                if (entry.ManagerRows != first.ManagerRows || entry.LowerRows != first.LowerRows || entry.Controls != first.Controls)
+                    throw new InvalidDataException($"Iteration {entry.Iteration} changed rows/controls {first.ManagerRows}/{first.LowerRows}/{first.Controls} -> {entry.ManagerRows}/{entry.LowerRows}/{entry.Controls}.");
+                if (entry.DosProbeDelta != 0 && entry.Iteration > 1)
+                {
+                    // First open may probe via real discovery; steady-state must not.
+                    // Allow at most the initial discovery probes on iteration 1.
+                    if (rows[0].DosProbeDelta < 0)
+                        throw new InvalidDataException("DOS probe accounting regressed.");
+                }
+            }
+            // Steady-state (10-20) must not grow expensive counts per open.
+            var steady = rows.Skip(9).ToArray();
+            long inspectSteady = steady[0].InspectDelta;
+            long resolveSteady = steady[0].ResolveDelta;
+            long fpSteady = steady[0].FingerprintDelta;
+            long planSteady = steady[0].PlanDelta;
+            long srcSteady = steady[0].SourcesDelta;
+            long baseSteady = steady[0].BaselineDelta;
+            long recSteady = steady[0].RecoveryDelta;
+            foreach (var entry in steady)
+            {
+                if (entry.InspectDelta != inspectSteady || entry.ResolveDelta != resolveSteady ||
+                    entry.FingerprintDelta != fpSteady || entry.PlanDelta != planSteady || entry.SourcesDelta != srcSteady ||
+                    entry.BaselineDelta != baseSteady || entry.RecoveryDelta != recSteady)
+                    throw new InvalidDataException($"Steady-state operation counts grew at iteration {entry.Iteration}.");
+            }
+            // No DOS probes in steady state after warm-up (real discovery is session-cached).
+            if (steady.Any(entry => entry.DosProbeDelta != 0))
+                throw new InvalidDataException("Steady-state Mods opens re-probed DOS hosts.");
+            long memAfter = GC.GetTotalMemory(forceFullCollection: false);
+            Console.WriteLine($"Mods stability memory: before {memBefore / 1024}KB after {memAfter / 1024}KB GC {gc0}->{GC.CollectionCount(0)}/{gc1}->{GC.CollectionCount(1)}/{gc2}->{GC.CollectionCount(2)}");
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Mods refresh stability smoke modified a real GameRoot.");
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }

@@ -50,4 +50,34 @@ internal static class ModsLauncherRefreshSnapshotBuilder
         LauncherRedirectionPlan plan = redirection(project, activeVariant, target);
         return new ModsLauncherRefreshSnapshot(editionCode, byVariant, target, plan, gridEntries());
     }
+
+    /// <summary>R9F V8.6g single-resolution snapshot: the active target is
+    /// derived from its own inspection (which already contains the
+    /// authoritative ResolveEdition result). No separate outer ResolveEdition
+    /// runs, so one refresh performs one Resolve per required runtime+edition
+    /// inside Inspect, not one extra.</summary>
+    internal static ModsLauncherRefreshSnapshot BuildFromInspections(
+        ProjectContext project,
+        IReadOnlyList<VariantContext> variants,
+        VariantContext activeVariant,
+        string editionCode,
+        Func<ProjectContext, VariantContext, string, VariantBuildStatusProjection> inspect,
+        Func<ProjectContext, VariantContext, VariantLaunchTarget, LauncherRedirectionPlan> redirection,
+        Func<IReadOnlyList<VariantEntry>> gridEntries)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(activeVariant);
+        ArgumentNullException.ThrowIfNull(inspect);
+        var byVariant = new Dictionary<BuiltInVariantId, VariantBuildStatusProjection>();
+        foreach (VariantContext variant in variants)
+        {
+            if (!ReferenceEquals(project, variant.Project)) continue;
+            if (byVariant.ContainsKey(variant.VariantId)) continue;
+            byVariant[variant.VariantId] = inspect(project, variant, editionCode);
+        }
+        if (!byVariant.TryGetValue(activeVariant.VariantId, out VariantBuildStatusProjection? activeStatus) || activeStatus is null)
+            throw new InvalidOperationException("Active variant projection is missing.");
+        LauncherRedirectionPlan plan = redirection(project, activeVariant, activeStatus.Target);
+        return new ModsLauncherRefreshSnapshot(editionCode, byVariant, activeStatus.Target, plan, gridEntries());
+    }
 }

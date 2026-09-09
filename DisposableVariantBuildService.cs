@@ -47,7 +47,10 @@ internal sealed class DisposableVariantBuildService
     /// <summary>Read-only source-resolution primitive; useful for testing mutable backup semantics.</summary>
     internal static (DisposableVariantBuildStatus Status, IReadOnlyList<DisposableVariantBuildSource> Sources) ValidateSources(ProjectContext project)
     {
+        using var _ = ModsRefreshDiagnostics.MeasureValidateSources();
         if (project is null) return (DisposableVariantBuildStatus.InvalidContext, []);
+        if (ModsValidationPresentationCache.TryGetSources(project, out DisposableVariantBuildStatus cachedStatus, out IReadOnlyList<DisposableVariantBuildSource> cachedSources))
+            return (cachedStatus, cachedSources);
         var sources = new List<DisposableVariantBuildSource>();
         foreach (PristineManifestFile file in project.PristineManifest.Files)
         {
@@ -58,10 +61,11 @@ internal sealed class DisposableVariantBuildService
             if (!File.Exists(source)) return (file.Classification == PristineFileClassification.MutableBackedUp ? DisposableVariantBuildStatus.MutableBackupMissing : DisposableVariantBuildStatus.SourceFileMissing, []);
             if (IsReparsePoint(source)) return (file.Classification == PristineFileClassification.MutableBackedUp ? DisposableVariantBuildStatus.MutableBackupMismatch : DisposableVariantBuildStatus.SourceHashMismatch, []);
             FileInfo info = new(source);
-            if (info.Length != file.Size || !Hash(source).Equals(file.Sha256, StringComparison.OrdinalIgnoreCase))
+            if (info.Length != file.Size || !ModsFileHashCache.GetSha256(source).Equals(file.Sha256, StringComparison.OrdinalIgnoreCase))
                 return (file.Classification == PristineFileClassification.MutableBackedUp ? DisposableVariantBuildStatus.MutableBackupMismatch : DisposableVariantBuildStatus.SourceHashMismatch, []);
             sources.Add(new(file, source));
         }
+        ModsValidationPresentationCache.StoreSources(project, DisposableVariantBuildStatus.Success, sources);
         return (DisposableVariantBuildStatus.Success, sources);
     }
 

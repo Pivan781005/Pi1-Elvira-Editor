@@ -101,6 +101,9 @@ internal sealed class PristineManifestService
 
     public BaselineValidationResult ValidateBaseline()
     {
+        using var _ = ModsRefreshDiagnostics.MeasureValidateBaseline();
+        if (ModsValidationPresentationCache.TryGetBaseline(_layout.GameRoot, _layout, out BaselineValidationResult? cached) && cached is not null)
+            return cached;
         if (!File.Exists(ManifestPath)) return new(BaselineValidationStatus.ManifestMissing, []);
         PristineManifest manifest;
         try { manifest = LoadManifest(ManifestPath, _game); }
@@ -125,7 +128,9 @@ internal sealed class PristineManifestService
         entries.AddRange(actual.Values.Select(file => new BaselineValidationEntry(file.RelativePath, BaselineValidationStatus.UnexpectedFile)));
         BaselineValidationStatus aggregate = entries.All(item => item.Status == BaselineValidationStatus.MatchesBaseline)
             ? BaselineValidationStatus.MatchesBaseline : entries.First(item => item.Status != BaselineValidationStatus.MatchesBaseline).Status;
-        return new(aggregate, entries.OrderBy(item => item.RelativePath, StringComparer.OrdinalIgnoreCase).ToArray());
+        var result = new BaselineValidationResult(aggregate, entries.OrderBy(item => item.RelativePath, StringComparer.OrdinalIgnoreCase).ToArray());
+        ModsValidationPresentationCache.StoreBaseline(_layout.GameRoot, _layout, result);
+        return result;
     }
 
     /// <summary>Read-only manifest parser for ProjectContext loading. It does not write or adopt anything.</summary>

@@ -169,6 +169,7 @@ internal sealed class DosRuntimeDiscoveryService
         string key = (gameRoot ?? string.Empty).ToUpperInvariant();
         if (!refresh && _cached is not null && _cachedRoot == key)
             return _cached;
+        ModsRefreshDiagnostics.DosDiscoverCalls++;
         IReadOnlyList<DosRuntimeCandidate> found = DiscoverUncached(gameRoot);
         _cachedRoot = key;
         _cached = found;
@@ -256,6 +257,7 @@ internal sealed class DosRuntimeDiscoveryService
             return new(DosRuntimeKind.Unknown, Path.GetFileName(executablePath), string.Empty, executablePath, source,
                 DosRuntimeCompatibility.Unrecognized, "Not a recognized DOSBox-family host.");
         _probeCount++;
+        ModsRefreshDiagnostics.DosProbeCalls++;
         DosRuntimeProbeResult probe;
         try { probe = _prober.Probe(executablePath, adapter.VersionArguments, SystemDosRuntimeProbeRunner.DefaultTimeoutMilliseconds); }
         catch { probe = new(false, string.Empty, "Probe failed.", -1); }

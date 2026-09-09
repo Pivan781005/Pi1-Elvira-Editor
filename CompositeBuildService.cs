@@ -42,6 +42,7 @@ internal sealed class CompositeBuildService
 
     public CompositeBuildPlan CreatePlan(ProjectContext project, VariantContext variant, CompositeBuildMode mode)
     {
+        using var _ = ModsRefreshDiagnostics.MeasureCreatePlan();
         Validate(project, variant);
         return new(PristineManifestService.GameIdFor(project.GameProfile), variant.VariantId, variant.RuntimeKind,
             GetProjectVariantCode(project, variant), GetEditionDirectoryPath(project, variant), project.BaselineFingerprint, mode, OrderedStages, BuildCapabilities(project, variant));

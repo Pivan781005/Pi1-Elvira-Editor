@@ -39,7 +39,7 @@ internal sealed class PristineInstallationService
         {
             var info = new FileInfo(path.Absolute);
             (PristineFileClassification classification, PristineFileRole role) = Classify(path.Relative);
-            entries.Add(new PristineInstallationFile(path.Relative, path.Absolute, info.Length, HashFile(path.Absolute), classification, role));
+            entries.Add(new PristineInstallationFile(path.Relative, path.Absolute, info.Length, ModsFileHashCache.GetSha256(path.Absolute), classification, role));
         }
         return entries;
     }

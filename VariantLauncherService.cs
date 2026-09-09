@@ -75,14 +75,22 @@ internal sealed class VariantLauncherService
     /// <summary>Authoritative explicit runnable target:
     /// VARIANTS\&lt;RuntimeKey&gt;\&lt;EditionCode&gt;. Edition subdirectories
     /// coexist; the runtime root itself is never a runnable output.</summary>
-    public VariantLaunchTarget ResolveEdition(ProjectContext? project, VariantContext? variant, string editionCode)
+    public VariantLaunchTarget ResolveEdition(ProjectContext? project, VariantContext? variant, string editionCode) =>
+        ResolveEditionWithPlan(project, variant, editionCode).Target;
+
+    /// <summary>R9F V8.6g single-plan resolution: returns the authoritative
+    /// target plus the already-computed build plan (non-null when ownership
+    /// is AlreadyValid) so status inspection reuses one CreatePlan instead
+    /// of building a second identical plan.</summary>
+    internal (VariantLaunchTarget Target, CompositeBuildPlan? Plan) ResolveEditionWithPlan(ProjectContext? project, VariantContext? variant, string editionCode)
     {
+        using var _ = ModsRefreshDiagnostics.MeasureResolve();
         if (project is null || variant is null)
-            return new("None", 0, 0, string.Empty, string.Empty, string.Empty, string.Empty,
+            return (new("None", 0, 0, string.Empty, string.Empty, string.Empty, string.Empty,
                 VariantDirectoryOperationStatus.InvalidContext, false, VariantLaunchReadiness.NoActiveInstallation,
-                "No game selected. Use Find games... or Browse folder...");
+                "No game selected. Use Find games... or Browse folder..."), null);
         if (!ReferenceEquals(project, variant.Project))
-            return Invalid(project, variant, "VariantContext does not belong to the active ProjectContext.");
+            return (Invalid(project, variant, "VariantContext does not belong to the active ProjectContext."), null);
 
         string normalizedCode;
         string root;
@@ -92,13 +100,13 @@ internal sealed class VariantLauncherService
             root = _directories.GetVariantEditionDirectoryPath(project, variant, normalizedCode);
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException)
-        { return Invalid(project, variant, ex.Message); }
+        { return (Invalid(project, variant, ex.Message), null); }
         VariantDirectoryOperationResult ownership = _directories.ValidateOwnedVariantEditionDirectory(project, variant, normalizedCode);
         if (ownership.Status == VariantDirectoryOperationStatus.NotFound)
-            return ResolveMissingEdition(project, variant, normalizedCode);
+            return (ResolveMissingEdition(project, variant, normalizedCode), null);
         if (ownership.Status != VariantDirectoryOperationStatus.AlreadyValid)
-            return Make(project, variant, root, ownership.Status, false, VariantLaunchReadiness.ForeignOrInvalidVariant,
-                "Variant directory is not owned by this project/runtime: " + ownership.Status + ".");
+            return (Make(project, variant, root, ownership.Status, false, VariantLaunchReadiness.ForeignOrInvalidVariant,
+                "Variant directory is not owned by this project/runtime: " + ownership.Status + "."), null);
 
         CompositeBuildPlan plan = _composite.CreatePlan(project, variant, CompositeBuildMode.Full);
         bool configured = plan.Capabilities.Count > 0 && plan.Capabilities.All(capability => capability.Configured);
@@ -114,8 +122,8 @@ internal sealed class VariantLauncherService
             {
                 VariantManifest manifest = VariantManifestService.Read(root);
                 if (!manifest.ProjectCode.Equals(normalizedCode, StringComparison.OrdinalIgnoreCase))
-                    return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
-                        "The generated output belongs to a different selected project variant.");
+                    return (Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                        "The generated output belongs to a different selected project variant."), plan);
                 // R9F V8.6d content-based freshness: the built artifact is stale
                 // when current project inputs differ from the recorded build
                 // provenance. This is a service-level check, not a UI label.
@@ -124,13 +132,13 @@ internal sealed class VariantLauncherService
                     string current = ProjectBuildFingerprintService.Compute(project, variant, normalizedCode);
                     if (string.IsNullOrWhiteSpace(manifest.InputFingerprint) ||
                         !manifest.InputFingerprint.Equals(current, StringComparison.OrdinalIgnoreCase))
-                        return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
-                            "Project content changed since the last build; rebuild the variant to use the current project state.");
+                        return (Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                            "Project content changed since the last build; rebuild the variant to use the current project state."), plan);
                 }
                 catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException)
                 {
-                    return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
-                        "Current project state is invalid; rebuild the variant to use the current project state.");
+                    return (Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                        "Current project state is invalid; rebuild the variant to use the current project state."), plan);
                 }
                 // R9D: the launch artifacts must still be byte-identical to the authorized
                 // build recorded in the manifest, and the executable must retain a supported
@@ -139,22 +147,22 @@ internal sealed class VariantLauncherService
                 // data artifact instead and never claims the executable is unsupported.
                 SupportedExecutableClassification launched = SupportedExecutableIdentityService.Classify(variant.RuntimeKind, output);
                 if (!launched.IsSupportedForBinaryUse || !MatchesRecordedRuntimeHash(manifest, root, executableName))
-                    return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
-                        SupportedExecutableIdentityService.DescribeBlocked(launched, "run/debug"));
+                    return (Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                        SupportedExecutableIdentityService.DescribeBlocked(launched, "run/debug")), plan);
                 if (!MatchesRecordedRuntimeHash(manifest, root, dataName))
-                    return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
-                        SupportedExecutableIdentityService.DescribeArtifactMismatch(variant.RuntimeKind, dataName, "run/debug"));
+                    return (Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                        SupportedExecutableIdentityService.DescribeArtifactMismatch(variant.RuntimeKind, dataName, "run/debug")), plan);
             }
             catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
             {
-                return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
-                    "The generated output has no valid project-identity manifest.");
+                return (Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                    "The generated output has no valid project-identity manifest."), plan);
             }
         }
         if (!configured || !outputExists)
-            return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
-                !configured ? "Full build is not configured." : "Required generated executable or data artifact is missing.");
-        return Make(project, variant, root, ownership.Status, true, VariantLaunchReadiness.LaunchReady, "Authorized generated variant output is present.", executableName, dataName);
+            return (Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                !configured ? "Full build is not configured." : "Required generated executable or data artifact is missing."), plan);
+        return (Make(project, variant, root, ownership.Status, true, VariantLaunchReadiness.LaunchReady, "Authorized generated variant output is present.", executableName, dataName), plan);
     }
 
     public LauncherRedirectionPlan CreateRedirectionPlan(ProjectContext project, VariantContext variant)
@@ -183,6 +191,7 @@ internal sealed class VariantLauncherService
     /// resolved target instead of resolving the same runtime+edition again.</summary>
     internal LauncherRedirectionPlan CreateRedirectionPlan(ProjectContext project, VariantContext variant, VariantLaunchTarget resolvedTarget)
     {
+        using var _ = ModsRefreshDiagnostics.MeasureRedirection();
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(resolvedTarget);
         string launcher = project.GameProfile == ElviraGameProfile.Elvira1 ? "ELVIRA.BAT" : "CERBERUS.BAT";
@@ -232,6 +241,7 @@ internal sealed class VariantLauncherService
     /// </summary>
     private static bool MatchesRecordedRuntimeHash(VariantManifest manifest, string root, string fileName)
     {
+        using var _ = ModsRefreshDiagnostics.MeasureArtifactHash();
         VariantManifestRuntimeArtifact? recorded = manifest.RuntimeArtifacts
             .SingleOrDefault(artifact => artifact.RelativePath.Equals(fileName, StringComparison.OrdinalIgnoreCase));
         if (recorded is not { Present: true } || recorded.Size <= 0 || string.IsNullOrWhiteSpace(recorded.Sha256))

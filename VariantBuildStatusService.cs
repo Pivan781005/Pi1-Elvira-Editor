@@ -37,17 +37,24 @@ internal sealed class VariantBuildStatusService
     /// <summary>R9F V7 authoritative per-edition inspection. Every Mods &amp;
     /// Launcher row (manager, top summary, rebuild gating) uses the same
     /// explicit (runtime, edition) identity; the runtime parent alone is
-    /// never a runnable output.</summary>
+    /// never a runnable output. R9F V8.6g reuses the Resolve plan for
+    /// capabilities instead of building a second identical plan.</summary>
     public VariantBuildStatusProjection InspectEdition(ProjectContext? project, VariantContext? variant, string editionCode)
     {
-        VariantLaunchTarget target = _launcher.ResolveEdition(project, variant, editionCode);
+        using var _ = ModsRefreshDiagnostics.MeasureInspect();
+        (VariantLaunchTarget target, CompositeBuildPlan? plan) = _launcher.ResolveEditionWithPlan(project, variant, editionCode);
         if (project is null || variant is null || !ReferenceEquals(project, variant.Project) ||
             target.Ownership != VariantDirectoryOperationStatus.AlreadyValid)
             return new(Map(target.Readiness), target, 0, 0);
 
-        CompositeBuildPlan plan = _composite.CreatePlan(project, variant, CompositeBuildMode.Full);
-        int configured = plan.Capabilities.Count(capability => capability.Configured);
-        return new(Map(target.Readiness), target, configured, plan.Capabilities.Count);
+        if (plan is not null)
+        {
+            int configured = plan.Capabilities.Count(capability => capability.Configured);
+            return new(Map(target.Readiness), target, configured, plan.Capabilities.Count);
+        }
+        CompositeBuildPlan fresh = _composite.CreatePlan(project, variant, CompositeBuildMode.Full);
+        int freshConfigured = fresh.Capabilities.Count(capability => capability.Configured);
+        return new(Map(target.Readiness), target, freshConfigured, fresh.Capabilities.Count);
     }
 
     private static VariantBuildStatus Map(VariantLaunchReadiness readiness) => readiness switch

@@ -14,6 +14,7 @@ internal static class ProjectBuildFingerprintService
 
     internal static string Compute(ProjectContext project, VariantContext variant, string editionCode)
     {
+        using var _ = ModsRefreshDiagnostics.MeasureFingerprint();
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(variant);
         if (!ReferenceEquals(project, variant.Project))
