@@ -258,10 +258,12 @@ internal sealed class DosRuntimeDiscoveryService
                 DosRuntimeCompatibility.Unrecognized, "Not a recognized DOSBox-family host.");
         if (adapter.SupportsMetadataValidation)
         {
-            // R9F V8.6j: non-interactive DOSBox-X identification. The real
-            // dosbox-x.exe -version path opens its own console and waits for
-            // keyboard input, so Windows discovery and Browse must never spawn
-            // it. Zero process probes on this path by construction.
+            // R9F V8.6j/k: non-interactive family identification from
+            // authoritative executable metadata. Spawning Classic (-version),
+            // Staging (--version), or X (-version) merely to identify a host
+            // flashes interactive consoles on Windows, so production
+            // discovery, Refresh, and Browse validate metadata only. Zero
+            // process probes on this path by construction.
             string metadataVersion;
             string metadataDetail;
             bool metadataValid;
@@ -274,6 +276,10 @@ internal sealed class DosRuntimeDiscoveryService
             return new(adapter.Kind, adapter.FamilyDisplayName, shortVersion, executablePath, source,
                 DosRuntimeCompatibility.Compatible, metadataDetail);
         }
+        // Retained only for adapters without a metadata contract
+        // (non-Windows/future/test compatibility). All three supported Windows
+        // families validate via metadata above and never reach this process
+        // probe from normal Windows production validation.
         _probeCount++;
         ModsRefreshDiagnostics.DosProbeCalls++;
         DosRuntimeProbeResult probe;

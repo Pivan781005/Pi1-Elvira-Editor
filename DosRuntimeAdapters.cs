@@ -123,6 +123,30 @@ internal sealed record DosRuntimeLaunchRequest(
     string SoundSwitch,
     IReadOnlyList<string> BaseConfigFiles);
 
+/// <summary>R9F V8.6k deterministic user-facing version normalization for
+/// Windows FileVersionInfo values. Fully numeric comma-separated versions
+/// (e.g. real GOG Classic "0,74,2,1") display dotted ("0.74.2.1"); already
+/// dotted values pass through; anything without a usable dotted token yields
+/// "unknown". Stable, parseable, no timestamps, no process execution.</summary>
+internal static class DosRuntimeMetadataVersions
+{
+    internal static string Normalize(string? raw)
+    {
+        string text = (raw ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(text)) return "unknown";
+        string compact = text.Replace(" ", string.Empty);
+        if (System.Text.RegularExpressions.Regex.IsMatch(compact, @"^\d+(,\d+)+$"))
+            return compact.Replace(',', '.');
+        if (System.Text.RegularExpressions.Regex.IsMatch(text, @"^\d+(\.\d+)*$"))
+            return text.Length > 64 ? text[..64] : text;
+        System.Text.RegularExpressions.Match match =
+            System.Text.RegularExpressions.Regex.Match(text, @"\d+(\.\d+)+");
+        if (!match.Success) return "unknown";
+        string token = match.Value;
+        return token.Length > 64 ? token[..64] : token;
+    }
+}
+
 internal sealed class DosBoxClassicAdapter : IDosRuntimeAdapter
 {
     public DosRuntimeKind Kind => DosRuntimeKind.DosBoxClassic;
@@ -174,13 +198,54 @@ internal sealed class DosBoxClassicAdapter : IDosRuntimeAdapter
         return "unknown";
     }
 
-    public bool SupportsMetadataValidation => false;
+    public bool SupportsMetadataValidation => true;
 
+    /// <summary>R9F V8.6k non-interactive DOSBox Classic identification.
+    /// Positive contract: ProductName and/or FileDescription positively
+    /// identifies DOSBox, is NOT Staging, is NOT DOSBox-X, a usable
+    /// FileVersion/ProductVersion exists, and the executable/original filename
+    /// corroborates (dosbox.exe) without ever being sole evidence. Never
+    /// spawns dosbox.exe -version and never falls back to it.</summary>
     public bool TryValidateMetadata(DosRuntimeHostEvidence evidence, out string version, out string detail)
     {
         version = string.Empty;
-        detail = "DOSBox Classic requires a non-interactive version-probe result.";
-        return false;
+        string product = evidence.ProductName ?? string.Empty;
+        string description = evidence.FileDescription ?? string.Empty;
+        if ((product.Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase) ||
+                description.Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase)) ||
+            System.Text.RegularExpressions.Regex.IsMatch(product + " " + description, @"dosbox\s+x\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            detail = "Executable metadata does not positively identify DOSBox Classic.";
+            return false;
+        }
+        if (product.Contains("Staging", StringComparison.OrdinalIgnoreCase) ||
+            description.Contains("Staging", StringComparison.OrdinalIgnoreCase))
+        {
+            detail = "Executable metadata does not positively identify DOSBox Classic.";
+            return false;
+        }
+        if (!product.Contains("DOSBox", StringComparison.OrdinalIgnoreCase) &&
+            !description.Contains("DOSBox", StringComparison.OrdinalIgnoreCase))
+        {
+            detail = "Executable metadata does not positively identify DOSBox Classic.";
+            return false;
+        }
+        string normalized = DosRuntimeMetadataVersions.Normalize(
+            !string.IsNullOrWhiteSpace(evidence.FileVersion) ? evidence.FileVersion : evidence.ProductVersion);
+        if (normalized.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            detail = "Executable metadata does not contain a usable version.";
+            return false;
+        }
+        if (!evidence.FileName.Equals("dosbox.exe", StringComparison.OrdinalIgnoreCase) &&
+            !(evidence.OriginalFilename ?? string.Empty).Equals("dosbox.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            detail = "Executable metadata does not positively identify DOSBox Classic.";
+            return false;
+        }
+        version = normalized;
+        detail = "Identified from executable metadata.";
+        return true;
     }
 
     public IReadOnlyList<string> BuildArguments(DosRuntimeLaunchRequest request)
@@ -257,13 +322,42 @@ internal sealed class DosBoxStagingAdapter : IDosRuntimeAdapter
         return "unknown";
     }
 
-    public bool SupportsMetadataValidation => false;
+    public bool SupportsMetadataValidation => true;
 
+    /// <summary>R9F V8.6k non-interactive DOSBox Staging identification.
+    /// Positive contract: ProductName and/or FileDescription positively
+    /// identifies "DOSBox Staging", a usable FileVersion/ProductVersion exists,
+    /// no DOSBox-X contradiction and no Classic-only identity contradiction
+    /// exist, and the executable/original filename may corroborate without
+    /// ever being sole evidence. Never spawns dosbox.exe --version and never
+    /// falls back to it.</summary>
     public bool TryValidateMetadata(DosRuntimeHostEvidence evidence, out string version, out string detail)
     {
         version = string.Empty;
-        detail = "DOSBox Staging requires a non-interactive version-probe result.";
-        return false;
+        string product = evidence.ProductName ?? string.Empty;
+        string description = evidence.FileDescription ?? string.Empty;
+        if (product.Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase) ||
+            description.Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase))
+        {
+            detail = "Executable metadata does not positively identify DOSBox Staging.";
+            return false;
+        }
+        if (!product.Contains("Staging", StringComparison.OrdinalIgnoreCase) &&
+            !description.Contains("Staging", StringComparison.OrdinalIgnoreCase))
+        {
+            detail = "Executable metadata does not positively identify DOSBox Staging.";
+            return false;
+        }
+        string normalized = DosRuntimeMetadataVersions.Normalize(
+            !string.IsNullOrWhiteSpace(evidence.FileVersion) ? evidence.FileVersion : evidence.ProductVersion);
+        if (normalized.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            detail = "Executable metadata does not contain a usable version.";
+            return false;
+        }
+        version = normalized;
+        detail = "Identified from executable metadata.";
+        return true;
     }
 
     public IReadOnlyList<string> BuildArguments(DosRuntimeLaunchRequest request)
@@ -372,11 +466,10 @@ internal sealed class DosBoxXAdapter : IDosRuntimeAdapter
         string rawVersion = !string.IsNullOrWhiteSpace(evidence.FileVersion)
             ? evidence.FileVersion
             : evidence.ProductVersion ?? string.Empty;
-        System.Text.RegularExpressions.Match match =
-            System.Text.RegularExpressions.Regex.Match(rawVersion, @"\d+(\.\d+)+");
-        if (!match.Success)
+        string normalized = DosRuntimeMetadataVersions.Normalize(rawVersion);
+        if (normalized.Equals("unknown", StringComparison.OrdinalIgnoreCase))
         {
-            detail = "Executable metadata does not positively identify DOSBox-X.";
+            detail = "Executable metadata does not contain a usable version.";
             return false;
         }
         bool nameCorroborates =
@@ -388,7 +481,7 @@ internal sealed class DosBoxXAdapter : IDosRuntimeAdapter
             detail = "Executable metadata does not positively identify DOSBox-X.";
             return false;
         }
-        version = match.Value;
+        version = normalized;
         detail = "Identified from executable metadata (no process probe).";
         return true;
     }

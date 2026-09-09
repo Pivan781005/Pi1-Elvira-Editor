@@ -2641,6 +2641,9 @@ internal static class Program
         // R9F V8.6j: DOSBox-X must validate from metadata without spawning its
         // interactive -version console, so its path throws if ever probed.
         prober.ThrowPaths.Add(@"C:\x\dosbox-x.exe");
+        // R9F V8.6k: all Windows families validate metadata-only (§20). Any
+        // validation process attempt throws and fails the smoke loudly.
+        foreach (string registered in files.Files) prober.ThrowPaths.Add(registered);
         prober.Results[@"C:\FakePF\DOSBox Staging\dosbox.exe"] = new(true, "dosbox-staging 0.82.2", string.Empty, 0);
         var discovery = new DosRuntimeDiscoveryService(files, prober, path => evidence[path]);
         IReadOnlyList<DosRuntimeCandidate> found = discovery.Discover(@"C:\g");
@@ -2694,8 +2697,10 @@ internal static class Program
         if (prober.Calls != probesAfterFirst)
             throw new InvalidDataException("Session discovery cache was not reused on repeated discovery.");
         _ = discovery.Discover(@"C:\g", refresh: true);
-        if (prober.Calls <= probesAfterFirst)
-            throw new InvalidDataException("Explicit refresh did not re-probe.");
+        // R9F V8.6k: even explicit Refresh validates from re-read metadata
+        // only; Windows host discovery starts zero validation processes.
+        if (prober.Calls != probesAfterFirst)
+            throw new InvalidDataException("Explicit refresh started a DOSBox validation process.");
         string pickedDir = Path.Combine(Path.GetTempPath(), "Pi1DosPickedHost", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(pickedDir);
         string pickedPath = Path.Combine(pickedDir, "dosbox.exe");
@@ -2705,6 +2710,7 @@ internal static class Program
             files.Files.Add(pickedPath);
             evidence[pickedPath] = new("dosbox.exe", "DOSBox", "0.74.3");
             prober.Results[pickedPath] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            prober.ThrowPaths.Add(pickedPath);
             DosRuntimeCandidate picked = discovery.ProbeUserSelection(pickedPath);
             if (!picked.IsRunnable || picked.Source != DosRuntimeSource.UserBrowse)
                 throw new InvalidDataException("Compatible manual Browse host was not accepted.");
@@ -2760,33 +2766,41 @@ internal static class Program
                 };
                 var localProber = new FakeDosRuntimeProbeRunner();
                 localProber.Results[path] = new(success, output, string.Empty, exitCode);
+                // R9F V8.6k: Windows family validation is metadata-only; any
+                // process probe attempt throws here.
+                localProber.ThrowPaths.Add(path);
                 var localDiscovery = new DosRuntimeDiscoveryService(localFiles, localProber, p => localEvidence[p]);
                 return localDiscovery.ProbeUserSelection(path);
             }
 
-            // 1. Renamed dosbox.exe printing "Unknown option" must NOT be runnable.
+            // 1. Renamed dosbox.exe with null metadata must NOT be runnable.
             DosRuntimeCandidate fakeClassic = ProbeSingle("dosbox.exe", null, "Unknown option: -version");
             if (fakeClassic.IsRunnable || fakeClassic.Compatibility == DosRuntimeCompatibility.Compatible)
-                throw new InvalidDataException("Renamed dosbox.exe with 'Unknown option' became compatible.");
-            // 2. dosbox.exe + unrelated metadata/output must NOT be runnable.
+                throw new InvalidDataException("Renamed dosbox.exe with null metadata became compatible.");
+            // 2. dosbox.exe + unrelated metadata must NOT be runnable.
             DosRuntimeCandidate media = ProbeSingle("dosbox.exe", "Media Player", "Media Player 9.9");
             if (media.IsRunnable || media.Compatibility == DosRuntimeCompatibility.Compatible)
-                throw new InvalidDataException("Unrelated dosbox.exe with media output became compatible.");
-            // 3. dosbox-x.exe + unrelated metadata/output must NOT be runnable.
+                throw new InvalidDataException("Unrelated dosbox.exe metadata became compatible.");
+            // 3. dosbox-x.exe + unrelated metadata must NOT be runnable.
             DosRuntimeCandidate fakeX = ProbeSingle("dosbox-x.exe", "EvilSoft", "Evil Joystick 1.0");
             if (fakeX.IsRunnable || fakeX.Compatibility == DosRuntimeCompatibility.Compatible)
                 throw new InvalidDataException("Renamed dosbox-x.exe became compatible.");
-            // 4. Genuine Classic (including old GOG with null Product) + valid output => Compatible.
-            DosRuntimeCandidate genuineClassic = ProbeSingle("dosbox.exe", "DOSBox", "DOSBox version 0.74-3");
+            // 4. Genuine Classic (real GOG shape: ProductName DOSBox DOS
+            // Emulator, comma FileVersion, dosbox.exe identity) => Compatible
+            // with normalized dotted version, zero process probes.
+            DosRuntimeCandidate genuineClassic = ProbeSingle("DOSBox.exe", "DOSBox DOS Emulator", string.Empty,
+                fileVersion: "0,74,2,1", productVersion: "0,74,2,1", originalFilename: "DOSBox.exe", fileDescription: "DOSBox DOS Emulator");
             if (!genuineClassic.IsRunnable || genuineClassic.Compatibility != DosRuntimeCompatibility.Compatible || genuineClassic.Kind != DosRuntimeKind.DosBoxClassic)
                 throw new InvalidDataException("Genuine Classic host was rejected.");
-            DosRuntimeCandidate oldGog = ProbeSingle("dosbox.exe", null, "DOSBox version 0.74-3");
-            if (!oldGog.IsRunnable || oldGog.Compatibility != DosRuntimeCompatibility.Compatible)
-                throw new InvalidDataException("Old GOG Classic without ProductName was rejected.");
-            // 5. Genuine Staging => Compatible.
-            DosRuntimeCandidate genuineStaging = ProbeSingle("dosbox.exe", "DOSBox Staging", "dosbox-staging 0.82.2");
+            if (!genuineClassic.Version.Equals("0.74.2.1", StringComparison.Ordinal))
+                throw new InvalidDataException("Genuine Classic version was not normalized: " + genuineClassic.Version);
+            // 5. Genuine Staging => Compatible with metadata version, zero probes.
+            DosRuntimeCandidate genuineStaging = ProbeSingle("dosbox.exe", "DOSBox Staging", string.Empty,
+                fileVersion: "0, 82, 2, 0", productVersion: "0, 82, 2, 0", originalFilename: "dosbox.exe", fileDescription: "DOSBox Staging DOS Emulator");
             if (!genuineStaging.IsRunnable || genuineStaging.Compatibility != DosRuntimeCompatibility.Compatible || genuineStaging.Kind != DosRuntimeKind.DosBoxStaging)
                 throw new InvalidDataException("Genuine Staging host was rejected.");
+            if (string.IsNullOrWhiteSpace(genuineStaging.Version))
+                throw new InvalidDataException("Genuine Staging version is empty.");
             // 6. Genuine X => Compatible via executable metadata (no -version
             // process: the real dosbox-x.exe flag opens an interactive console).
             DosRuntimeCandidate genuineX = ProbeSingle("dosbox-x.exe", "DOSBox-X DOS Emulator", string.Empty,
@@ -2795,30 +2809,44 @@ internal static class Program
                 throw new InvalidDataException("Genuine DOSBox-X host was rejected.");
             if (!genuineX.Version.Contains("2026.08.02", StringComparison.Ordinal))
                 throw new InvalidDataException("Genuine DOSBox-X version did not come from metadata: " + genuineX.Version);
-            // 7. Cross-family must fail closed.
-            DosRuntimeCandidate classicAsStaging = ProbeSingle("dosbox.exe", "DOSBox", "dosbox-staging 0.82.2");
-            if (classicAsStaging.IsRunnable || classicAsStaging.Compatibility == DosRuntimeCompatibility.Compatible)
-                throw new InvalidDataException("Classic evidence with Staging output became compatible.");
-            DosRuntimeCandidate stagingAsClassic = ProbeSingle("dosbox.exe", "DOSBox Staging", "DOSBox version 0.74-3");
-            if (stagingAsClassic.IsRunnable || stagingAsClassic.Compatibility == DosRuntimeCompatibility.Compatible)
-                throw new InvalidDataException("Staging evidence with Classic output became compatible.");
+            // 7. Family precedence from metadata (no process probes here):
+            // X markers => X only, Staging markers => Staging only, plain
+            // DOSBox markers => Classic only. Filename is only a hint.
+            DosRuntimeCandidate xProductDosboxName = ProbeSingle("dosbox.exe", "DOSBox-X DOS Emulator", string.Empty,
+                fileVersion: "2026.08.02", originalFilename: "dosbox-x.exe", fileDescription: "DOSBox-X DOS Emulator");
+            if (xProductDosboxName.Kind != DosRuntimeKind.DosBoxX || xProductDosboxName.Compatibility != DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("DOSBox-X metadata did not classify as X.");
+            DosRuntimeCandidate stagingProduct = ProbeSingle("dosbox.exe", "DOSBox Staging", string.Empty,
+                fileVersion: "0, 82, 2, 0", originalFilename: "dosbox.exe", fileDescription: "DOSBox Staging DOS Emulator");
+            if (stagingProduct.Kind != DosRuntimeKind.DosBoxStaging || stagingProduct.Compatibility != DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Staging metadata did not classify as Staging.");
+            DosRuntimeCandidate classicProductAsStaging = ProbeSingle("dosbox.exe", "DOSBox DOS Emulator", string.Empty,
+                fileVersion: "0,74,2,1", originalFilename: "dosbox.exe", fileDescription: "DOSBox DOS Emulator");
+            if (classicProductAsStaging.Kind == DosRuntimeKind.DosBoxStaging &&
+                classicProductAsStaging.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Classic metadata became Staging.");
+            if (classicProductAsStaging.Kind == DosRuntimeKind.DosBoxX &&
+                classicProductAsStaging.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Classic metadata became DOSBox-X.");
             // R9F V8.6j: X filename hint plus Classic family metadata is a
             // cross-family contradiction and must fail closed at metadata level.
             DosRuntimeCandidate xFileClassicMeta = ProbeSingle("dosbox-x.exe", "DOSBox DOS Emulator", "DOSBox version 0.74-3",
                 fileVersion: "0, 74, 2, 1", originalFilename: "dosbox.exe", fileDescription: "DOSBox DOS Emulator");
             if (xFileClassicMeta.IsRunnable || xFileClassicMeta.Compatibility == DosRuntimeCompatibility.Compatible)
                 throw new InvalidDataException("X filename with Classic metadata became compatible.");
-            DosRuntimeCandidate classicAsX = ProbeSingle("dosbox.exe", "DOSBox", "DOSBox-X version 2024.03.01");
-            if (classicAsX.IsRunnable || classicAsX.Compatibility == DosRuntimeCompatibility.Compatible)
-                throw new InvalidDataException("Classic evidence with X output became compatible.");
-            // Generic Classic must never become Staging via probe alone.
-            DosRuntimeCandidate genericStagingOutput = ProbeSingle("dosbox.exe", "DOSBox", "dosbox-staging 0.82.2");
-            if (genericStagingOutput.Compatibility == DosRuntimeCompatibility.Compatible && genericStagingOutput.Kind == DosRuntimeKind.DosBoxStaging)
-                throw new InvalidDataException("Generic Classic became Staging.");
-            // Non-zero exit fails closed even with valid-looking output.
-            DosRuntimeCandidate badExit = ProbeSingle("dosbox.exe", "DOSBox", "DOSBox version 0.74-3", exitCode: 1);
-            if (badExit.IsRunnable || badExit.Compatibility == DosRuntimeCompatibility.Compatible)
-                throw new InvalidDataException("Non-zero probe exit became compatible.");
+            DosRuntimeCandidate classicAsX = ProbeSingle("dosbox.exe", "DOSBox DOS Emulator", string.Empty,
+                fileVersion: "0,74,2,1", originalFilename: "dosbox.exe", fileDescription: "DOSBox DOS Emulator");
+            if (classicAsX.Kind != DosRuntimeKind.DosBoxClassic || classicAsX.Compatibility != DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Classic metadata did not classify as Classic.");
+            // Valid family name but no usable version => fail closed (no process).
+            DosRuntimeCandidate classicNoVersion = ProbeSingle("dosbox.exe", "DOSBox DOS Emulator", string.Empty,
+                fileVersion: null, productVersion: null, originalFilename: "dosbox.exe", fileDescription: "DOSBox DOS Emulator");
+            if (classicNoVersion.IsRunnable || classicNoVersion.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Versionless Classic metadata became compatible.");
+            DosRuntimeCandidate stagingNoVersion = ProbeSingle("dosbox.exe", "DOSBox Staging", string.Empty,
+                fileVersion: "", productVersion: "  ", originalFilename: "dosbox.exe", fileDescription: "DOSBox Staging DOS Emulator");
+            if (stagingNoVersion.IsRunnable || stagingNoVersion.Compatibility == DosRuntimeCompatibility.Compatible)
+                throw new InvalidDataException("Versionless Staging metadata became compatible.");
             // /zz-style arbitrary version-like output without family marker fails.
             DosRuntimeCandidate zz = ProbeSingle("dosbox.exe", null, "9.9");
             if (zz.IsRunnable || zz.Compatibility == DosRuntimeCompatibility.Compatible)
@@ -2939,6 +2967,10 @@ internal static class Program
             var prober = new FakeDosRuntimeProbeRunner();
             prober.Results[autoHost] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
             prober.Results[externalHost] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            // R9F V8.6k: metadata-only validation starts zero processes on
+            // every path (Browse, Mods opens, explicit Refresh alike).
+            prober.ThrowPaths.Add(autoHost);
+            prober.ThrowPaths.Add(externalHost);
             var discovery = new DosRuntimeDiscoveryService(files, prober, path => evidence[path]);
             string settingsDir = Path.Combine(root, "settings");
             Directory.CreateDirectory(settingsDir);
@@ -2967,8 +2999,9 @@ internal static class Program
             if (saved is null || !saved.ExecutablePath.Equals(externalHost, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Browse-selected external host did not persist to settings.");
             int probesAfterBrowse = form.DosProbeCountForTest;
-            if (probesAfterBrowse <= probesAfterAuto)
-                throw new InvalidDataException("Browse selection did not probe once.");
+            // R9F V8.6k: Browse validates metadata without spawning any host.
+            if (probesAfterBrowse != probesAfterAuto)
+                throw new InvalidDataException("Browse selection started a DOSBox validation process.");
 
             // B. Repeated Mods opens: same host, zero new probes, Run correct.
             for (int open = 0; open < 5; open++)
@@ -2984,10 +3017,11 @@ internal static class Program
                     throw new InvalidDataException($"Effective-host UI does not show the external host (open {open}).");
             }
 
-            // C. Explicit Refresh re-probes but keeps the compatible host effective.
+            // C. Explicit Refresh re-reads metadata (zero processes) but keeps
+            // the compatible host effective.
             form.RefreshDosDiscoveryForTest();
-            if (form.DosProbeCountForTest <= probesAfterBrowse)
-                throw new InvalidDataException("Explicit Refresh did not re-probe.");
+            if (form.DosProbeCountForTest != probesAfterBrowse)
+                throw new InvalidDataException("Explicit Refresh started a DOSBox validation process.");
             if (!form.DosSelectedPathForTest!.Equals(externalHost, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Explicit Refresh lost the compatible remembered host.");
             int probesAfterRefresh = form.DosProbeCountForTest;
@@ -3081,6 +3115,11 @@ internal static class Program
             var prober = new FakeDosRuntimeProbeRunner();
             prober.Results[stagingHost] = new(true, "dosbox-staging 0.82.2", string.Empty, 0);
             prober.Results[classicHost] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            // R9F V8.6k: every fixture host identifies from metadata; any
+            // validation process attempt throws (dialog open/confirm/Refresh/
+            // Browse and edition switches must stay zero-process).
+            prober.ThrowPaths.Add(stagingHost);
+            prober.ThrowPaths.Add(classicHost);
             // R9F V8.6j: X identification must never spawn its interactive
             // -version console; any X process probe throws here.
             prober.ThrowPaths.Add(xHost);
@@ -3186,6 +3225,7 @@ internal static class Program
             files.Files.Add(browseHost);
             evidence[browseHost] = new("dosbox.exe", "DOSBox", "0.74.3");
             prober.Results[browseHost] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            prober.ThrowPaths.Add(browseHost);
             int startsBeforeBrowse = recorder.Starts.Count;
             _ = form.BeginRunDialogForTest();
             DosRuntimeCandidate browsed = form.BrowseRunDialogHostForTest(browseHost);
@@ -3315,6 +3355,8 @@ internal static class Program
             files.Files.Add(browse2Host);
             evidence[browse2Host] = new("dosbox.exe", "DOSBox", "0.74.3");
             prober.Results[browse2Host] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            // R9F V8.6k: Browse validates metadata without spawning a host.
+            prober.ThrowPaths.Add(browse2Host);
             _ = form.BeginRunDialogForTest();
             DosRuntimeCandidate browsed2 = form.BrowseRunDialogHostForTest(browse2Host);
             if (!browsed2.IsRunnable)
@@ -3344,6 +3386,8 @@ internal static class Program
 
             // R9F V8.6i same-path precedence: fresh automatic results win over
             // stale sticky rows. P is automatically discovered AND preferred.
+            // R9F V8.6k: freshness is observed through re-read executable
+            // metadata (fakes mutate the evidence dictionary); file still exists.
             form.SelectDosHostViaBrowseForTest(stagingHost);
             form.OpenModsForTest();
             var preparedSamePath = form.BeginRunDialogForTest();
@@ -3352,8 +3396,8 @@ internal static class Program
             if (openRow is not { Compatibility: DosRuntimeCompatibility.Compatible } || !openRow.IsRunnable)
                 throw new InvalidDataException("Same-path fixture host is not Compatible on dialog open.");
             // Simulate the executable at P changing while the file still exists:
-            // the next explicit Refresh probe returns a family-invalid result.
-            prober.Results[stagingHost] = new(true, "Unknown option: --version", string.Empty, 0);
+            // the next explicit Refresh re-reads family-invalid metadata.
+            evidence[stagingHost] = new("dosbox.exe", "Unrelated Application", "9.9", "9.9", "unrelated.exe", "Unrelated Application");
             IReadOnlyList<DosRuntimeCandidate> refreshedNegative = form.RefreshRunDialogForTest();
             DosRuntimeCandidate[] negativeRows = refreshedNegative
                 .Where(item => item.ExecutablePath.Equals(stagingHost, StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -3367,7 +3411,7 @@ internal static class Program
             if (recorder.Starts.Count != startsBeforeNegative || string.IsNullOrWhiteSpace(negativeBlocked))
                 throw new InvalidDataException("Same-path stale confirmation was not blocked fail-closed.");
             // Same-path positive: fresh automatic Compatible wins with current data.
-            prober.Results[stagingHost] = new(true, "dosbox-staging 0.82.3", string.Empty, 0);
+            evidence[stagingHost] = new("dosbox.exe", "DOSBox Staging", "0, 82, 3, 0", "0, 82, 3, 0", "dosbox.exe", "DOSBox Staging DOS Emulator");
             IReadOnlyList<DosRuntimeCandidate> refreshedPositive = form.RefreshRunDialogForTest();
             DosRuntimeCandidate[] positiveRows = refreshedPositive
                 .Where(item => item.ExecutablePath.Equals(stagingHost, StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -3383,7 +3427,10 @@ internal static class Program
                 throw new InvalidDataException("Same-path positive confirmation did not execute exactly P.");
             int startsBeforeGeneric = recorder.Starts.Count;
 
-            // Generic routing: E1EGA + E2 + non-SK EN previews (zero starts).
+            // Generic routing: E1EGA + non-SK EN previews (zero starts).
+            // R9F V8.6k §21: edition switches plus dialog opens on the
+            // production path must start zero DOSBox validation processes.
+            int validationCallsBeforeGeneric = prober.Calls;
             form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
             var egaPrepared = form.BeginRunDialogForTest();
             if (!egaPrepared.DosCommandPreview.Contains("RUNEGA", StringComparison.OrdinalIgnoreCase))
@@ -3396,6 +3443,8 @@ internal static class Program
             if (!enPrepared.DosCommandPreview.Contains("RUNVGA", StringComparison.OrdinalIgnoreCase) ||
                 !enPrepared.DosCommandPreview.Contains("GAMEPC", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Non-SK EN preview is hardcoded: " + enPrepared.DosCommandPreview);
+            if (prober.Calls != validationCallsBeforeGeneric)
+                throw new InvalidDataException("Edition switches plus dialog opens started DOSBox validation processes.");
             form.SelectTranslationForTest("SK");
 
             // Proof: no direct RUN*.EXE Windows launch; no GameRoot copies.
