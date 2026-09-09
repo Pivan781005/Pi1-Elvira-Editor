@@ -1155,6 +1155,24 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("Clean install activation: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 3 && args[0].Equals("--project-build-freshness-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyProjectBuildFreshnessSmoke(args[1], args[2]); Console.WriteLine("Project build freshness: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Project build freshness: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--extended-export-ux-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyExtendedExportUxSmoke(args[1], args[2]); Console.WriteLine("Extended export UX: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Extended export UX: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 3 && args[0].Equals("--add-variant-defaults-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyAddVariantDefaultsSmoke(args[1], args[2]); Console.WriteLine("Add Variant defaults: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Add Variant defaults: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 1 && args[0].Equals("--version-smoke", StringComparison.OrdinalIgnoreCase))
         {
             try { RunVersionSmoke(); Console.WriteLine("Product version: PASS"); Environment.ExitCode = 0; }
@@ -2040,6 +2058,321 @@ internal static class Program
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
+
+    private static void VerifyProjectBuildFreshnessSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1BuildFreshnessSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext project = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var directories = new VariantDirectoryService();
+            var translations = new TranslationProjectService();
+            var graphics = new GraphicsVariantService();
+            var fonts = new FontVariantService();
+            var runtimeUi = new RuntimeUiTextService();
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+
+            // Initial SK project state: one edit per domain.
+            TranslationProjectState textState = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk0 = translations.Create(project, textState, "Slovencina", "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text A." });
+            translations.Save(project, translations.Add(textState, sk0));
+
+            string source382 = Path.Combine(project.GameRoot, "382.VGA");
+            ParsedTable table = new VgaImageTableParser(File.ReadAllBytes(source382)).Parse();
+            VgaImageEntry image = table.Entries.Single(entry => entry.ImageId == 1 && entry.DataOffset > 0);
+            byte[] pixels = ElviraImageDecoder.Decode(File.ReadAllBytes(source382), image);
+            string palettePath = Path.Combine(project.GameRoot, "381.VGA");
+            IReadOnlyList<ElviraPaletteBank> banks = ElviraPaletteLoader.Load(palettePath);
+            int paletteBank = Elvira1PaletteResolver.EffectivePaletteBank(null, new Elvira1PaletteResolver().Resolve(palettePath, source382, image.ImageId), banks.Count);
+            System.Drawing.Color[] palette = banks[paletteBank].Colors;
+            string pngA = Path.Combine(root, "382-0001-A.png");
+            using (System.Drawing.Bitmap bitmap = PaletteTools.ToBitmap(image.PixelWidth, image.Height, pixels, palette, transparentZero: false))
+            {
+                bitmap.SetPixel(0, 0, palette[(pixels[0] + 1) & 0x0F]);
+                bitmap.Save(pngA, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            string pngB = Path.Combine(root, "382-0001-B.png");
+            using (System.Drawing.Bitmap bitmap = PaletteTools.ToBitmap(image.PixelWidth, image.Height, pixels, palette, transparentZero: false))
+            {
+                bitmap.SetPixel(0, 0, palette[(pixels[0] + 2) & 0x0F]);
+                bitmap.Save(pngB, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            GraphicsProjectState g0 = graphics.SetEdit(project, GraphicsProjectState.Empty(ElviraGameProfile.Elvira1),
+                new GraphicsProjectEdit(new GraphicsProjectIdentity("382.VGA", 1), pngA, GraphicsEditScope.RuntimeSpecific, VariantRuntimeKind.Elvira1Vga));
+            if (!graphics.Save(project, "SK", g0).Succeeded) throw new InvalidDataException("Freshness fixture graphics save failed.");
+
+            FontProjectState f0 = fonts.SetEdit(project, FontProjectState.Empty(ElviraGameProfile.Elvira1),
+                FontProjectEdit.Create(new(0x41), Convert.FromHexString("A0B0C0D0E0F00000"), FontEditScope.Shared, null));
+            if (!fonts.Save(project, "SK", f0).Succeeded) throw new InvalidDataException("Freshness fixture font save failed.");
+
+            const string PauseA = "     Pozastavené\r\r\r Continue      Quit";
+            const string PauseB = "     R9F PAUSE!\r\r\r Continue      Quit";
+            RuntimeUiTextState u0 = runtimeUi.SetOverride(project, runtimeUi.Load(project, "SK").State!, VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, PauseA);
+            if (!runtimeUi.Save(project, "SK", u0).Succeeded) throw new InvalidDataException("Freshness fixture runtime-ui save failed.");
+
+            TranslationProjectVariant LoadSk() => translations.Load(project).State!.Variants.Single(item => item.Code == "SK");
+            GraphicsProjectState LoadG() => graphics.Load(project, "SK").State!;
+            FontProjectState LoadF() => new FontVariantService().Load(project, "SK").State!;
+            RuntimeUiTextState LoadU() => runtimeUi.Load(project, "SK").State!;
+
+            var composite = new CompositeBuildService(new DisposableVariantBuildService(directories), directories,
+                stepProvider: (_, _) => ActiveProjectCompositeBuildFactory.Create(directories, translations, graphics,
+                    new ActiveProjectBuildInput(LoadSk(), LoadG(), LoadU(), LoadF())),
+                runtimeArtifactProvider: (_, runtime) => { TranslationProjectVariant t = LoadSk(); return [ActiveProjectBuildIdentity.ExecutableName(runtime, t), t.DataFile]; },
+                projectVariantProvider: (_, _) => "SK");
+            var launcher = new VariantLauncherService(directories, composite);
+            var status = new VariantBuildStatusService(composite, launcher);
+
+            RequireDirectoryStatus(directories.EnsureVariantEditionDirectory(project, vga, "SK"), VariantDirectoryOperationStatus.Created, "freshness fixture directory");
+            string editionRoot = directories.GetVariantEditionDirectoryPath(project, vga, "SK");
+
+            void RequireReady(string phase)
+            {
+                VariantLaunchTarget target = launcher.ResolveEdition(project, vga, "SK");
+                VariantBuildStatusProjection projection = status.InspectEdition(project, vga, "SK");
+                if (target.Readiness != VariantLaunchReadiness.LaunchReady)
+                    throw new InvalidDataException($"Freshness {phase}: expected LaunchReady, got {target.Readiness} ({target.Detail}).");
+                if (projection.Status != VariantBuildStatus.Ready)
+                    throw new InvalidDataException($"Freshness {phase}: expected Ready, got {projection.Status}.");
+            }
+            void RequireStale(string phase)
+            {
+                VariantLaunchTarget target = launcher.ResolveEdition(project, vga, "SK");
+                VariantBuildStatusProjection projection = status.InspectEdition(project, vga, "SK");
+                if (target.Readiness == VariantLaunchReadiness.LaunchReady)
+                    throw new InvalidDataException($"Freshness {phase}: stale build is still LaunchReady.");
+                if (projection.Status != VariantBuildStatus.Incomplete)
+                    throw new InvalidDataException($"Freshness {phase}: expected stale Incomplete, got {projection.Status} / {target.Readiness}.");
+            }
+            CompositeBuildResult Rebuild(string phase)
+            {
+                CompositeBuildResult result = composite.Build(project, vga, CompositeBuildMode.Full);
+                if (result.Status != CompositeBuildStatus.Success)
+                    throw new InvalidDataException($"Freshness {phase}: rebuild failed: {result.Status} / {result.Stages.Last().Detail}");
+                return result;
+            }
+
+            // A. Build SK variant => Ready.
+            Rebuild("A-build");
+            RequireReady("A-ready");
+            VerifyVariantManifest(VariantManifestService.Read(editionRoot), project, vga, "Full");
+            string exePath = Path.Combine(editionRoot, "RUNVGASK.EXE");
+            string dataPath = Path.Combine(editionRoot, "GAMEPCSK");
+            string vgaPath = Path.Combine(editionRoot, "382.VGA");
+            string exeHashA = HashFile(exePath);
+            string dataHashA = HashFile(dataPath);
+
+            // B. Change one Font glyph + Save => BuildRequired (stale), old exe untouched and lacking the new glyph.
+            FontProjectState f1 = fonts.SetEdit(project, LoadF(),
+                FontProjectEdit.Create(new(0x42), Convert.FromHexString("0102030405060708"), FontEditScope.Shared, null));
+            if (!fonts.Save(project, "SK", f1).Succeeded) throw new InvalidDataException("Freshness font mutation save failed.");
+            RequireStale("B-font-stale");
+            if (HashFile(exePath) != exeHashA) throw new InvalidDataException("Freshness B: existing executable was touched by Save.");
+            if (RunVgaFontService.LoadRunVga(exePath).Glyphs[0x42].Original.SequenceEqual(Convert.FromHexString("0102030405060708")))
+                throw new InvalidDataException("Freshness B: old executable silently contains the new font glyph.");
+
+            // C. Rebuild => Ready.
+            Rebuild("C-rebuild");
+            RequireReady("C-ready");
+            if (HashFile(exePath) == exeHashA) throw new InvalidDataException("Freshness C: rebuild did not materialize the font change.");
+            if (!RunVgaFontService.LoadRunVga(exePath).Glyphs[0x42].Original.SequenceEqual(Convert.FromHexString("0102030405060708")))
+                throw new InvalidDataException("Freshness C: rebuilt executable lost the font change.");
+            string exeHashC = HashFile(exePath);
+
+            // D. Change Runtime UI + Save => BuildRequired.
+            RuntimeUiTextState u1 = runtimeUi.SetOverride(project, LoadU(), VariantRuntimeKind.Elvira1Vga, RuntimeUiLogicalRecordId.PauseMenu, PauseB);
+            if (!runtimeUi.Save(project, "SK", u1).Succeeded) throw new InvalidDataException("Freshness runtime-ui mutation save failed.");
+            RequireStale("D-ui-stale");
+            if (HashFile(exePath) != exeHashC) throw new InvalidDataException("Freshness D: existing executable was touched by Save.");
+
+            // E. Rebuild => Ready.
+            Rebuild("E-rebuild");
+            RequireReady("E-ready");
+            string exeHashE = HashFile(exePath);
+
+            // F. Change Graphics + Save => BuildRequired.
+            GraphicsProjectState g1 = graphics.SetEdit(project, LoadG(),
+                new GraphicsProjectEdit(new GraphicsProjectIdentity("382.VGA", 1), pngB, GraphicsEditScope.RuntimeSpecific, VariantRuntimeKind.Elvira1Vga));
+            if (!graphics.Save(project, "SK", g1).Succeeded) throw new InvalidDataException("Freshness graphics mutation save failed.");
+            RequireStale("F-graphics-stale");
+            if (HashFile(exePath) != exeHashE) throw new InvalidDataException("Freshness F: existing executable was touched by Save.");
+
+            // G. Change Text + Save => BuildRequired.
+            TranslationProjectState reloaded = translations.Load(project).State!;
+            TranslationProjectState updated = translations.UpsertWorkingEdits(project, reloaded, "SK", new Dictionary<int, string> { [393] = "Slovensky projektovy text B: ina veta." });
+            translations.Save(project, updated);
+            RequireStale("G-text-stale");
+
+            // Rebuild with all latest inputs => Ready. Then H: no changes => repeated inspection stays Ready.
+            Rebuild("H-rebuild");
+            RequireReady("H-ready-1");
+            RequireReady("H-ready-2");
+            if (HashFile(dataPath) == dataHashA) throw new InvalidDataException("Freshness H: rebuild did not materialize the text change.");
+
+            // I. Revert exactly to the built provenance => Ready automatically (content-based truth, no rebuild).
+            // Mutate font once more (stale), then restore the exact built bytes.
+            string fontPath = fonts.GetPath(project, "SK");
+            byte[] builtFontBytes = File.ReadAllBytes(fontPath);
+            FontProjectState fTmp = fonts.SetEdit(project, LoadF(),
+                FontProjectEdit.Create(new(0x43), Convert.FromHexString("1112131415161718"), FontEditScope.Shared, null));
+            if (!fonts.Save(project, "SK", fTmp).Succeeded) throw new InvalidDataException("Freshness I mutation save failed.");
+            RequireStale("I-mutated-stale");
+            File.WriteAllBytes(fontPath, builtFontBytes);
+            VariantLaunchTarget reverted = launcher.ResolveEdition(project, vga, "SK");
+            VariantBuildStatusProjection revertedStatus = status.InspectEdition(project, vga, "SK");
+            if (reverted.Readiness != VariantLaunchReadiness.LaunchReady || revertedStatus.Status != VariantBuildStatus.Ready)
+                throw new InvalidDataException("Freshness I: exact revert to built provenance did not restore Ready automatically; content-based truth regressed.");
+
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Freshness smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyExtendedExportUxSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1ExtendedExportUxSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            ProjectContext e2 = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
+
+            // Default filenames are DOS 8.3 (single validator).
+            if (!GameDataFileService.IsDos83FileName(FontEditorForm.DefaultV5ExportFileName) || FontEditorForm.DefaultV5ExportFileName != "RUNVGAV5.EXE")
+                throw new InvalidDataException("V5 default export filename is not the DOS 8.3 RUNVGAV5.EXE.");
+            if (!GameDataFileService.IsDos83FileName(FontEditorForm.DefaultRunItExportFileName) || FontEditorForm.DefaultRunItExportFileName != "RUNITV2.EXE")
+                throw new InvalidDataException("RUNIT default export filename is not the DOS 8.3 RUNITV2.EXE.");
+            if (GameDataFileService.IsDos83FileName("RUNVGA_EXTENDED_CP852_V5.EXE") || GameDataFileService.IsDos83FileName("RUNIT_EXTENDED_CP852.EXE"))
+                throw new InvalidDataException("Legacy long export filenames falsely pass DOS 8.3 validation.");
+
+            // Project-bound export directory is editor-owned Exports, not GameRoot.
+            string exports = FontEditorForm.ResolveExtendedExportDirectory(e1);
+            if (!exports.Equals(Path.Combine(e1.ProjectRoot, "Exports"), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Project-bound export directory is not ProjectRoot\\Exports.");
+            if (GameRootWriteGuard.IsWithinDirectory(e1.GameRoot, exports) && !GameRootWriteGuard.IsOwnedEditorLocation(e1.GameRoot, exports))
+                throw new InvalidDataException("Project-bound export directory is not editor-owned.");
+            if (exports.StartsWith(e1.GameRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                !exports.StartsWith(Path.Combine(e1.GameRoot, "ElviraEditor") + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Project-bound export directory escapes editor ownership.");
+            // Manual-source mode never suggests the GameRoot.
+            string manual = FontEditorForm.ResolveExtendedExportDirectory(null);
+            if (string.IsNullOrWhiteSpace(manual))
+                throw new InvalidDataException("Manual-source export directory is empty.");
+
+            // Non-DOS names are rejected before writing.
+            string vgaSource = Path.Combine(e1.GameRoot, "RUNVGA.EXE");
+            string runitSource = Path.Combine(e2.GameRoot, "RUNIT.EXE");
+            string vgaHash = HashFile(vgaSource);
+            string runitHash = HashFile(runitSource);
+            bool rejectedLongV5 = false;
+            try { FontEditorForm.ValidateExtendedExportFileName(Path.Combine(root, "RUNVGA_EXTENDED_CP852_V5.EXE"), FontEditorForm.DefaultV5ExportFileName); }
+            catch (InvalidOperationException) { rejectedLongV5 = true; }
+            if (!rejectedLongV5 || File.Exists(Path.Combine(root, "RUNVGA_EXTENDED_CP852_V5.EXE")))
+                throw new InvalidDataException("Long V5 filename was not rejected before writing.");
+            bool rejectedLongV2 = false;
+            try { FontEditorForm.ValidateExtendedExportFileName(Path.Combine(root, "RUNIT_EXTENDED_CP852.EXE"), FontEditorForm.DefaultRunItExportFileName); }
+            catch (InvalidOperationException) { rejectedLongV2 = true; }
+            if (!rejectedLongV2 || File.Exists(Path.Combine(root, "RUNIT_EXTENDED_CP852.EXE")))
+                throw new InvalidDataException("Long RUNIT filename was not rejected before writing.");
+            FontEditorForm.ValidateExtendedExportFileName(Path.Combine(root, FontEditorForm.DefaultV5ExportFileName), FontEditorForm.DefaultV5ExportFileName);
+            FontEditorForm.ValidateExtendedExportFileName(Path.Combine(root, FontEditorForm.DefaultRunItExportFileName), FontEditorForm.DefaultRunItExportFileName);
+
+            // GameRoot export is rejected; source hash unchanged; no O-file created.
+            bool rejectedRoot = false;
+            try { RunVgaBootstrapService.CreateExtendedCp852(vgaSource, Path.Combine(e1.GameRoot, FontEditorForm.DefaultV5ExportFileName), GlyphRepository.CreateAllCp852Slots(), e1.GameRoot); }
+            catch (InvalidOperationException) { rejectedRoot = true; }
+            if (!rejectedRoot || File.Exists(Path.Combine(e1.GameRoot, FontEditorForm.DefaultV5ExportFileName)))
+                throw new InvalidDataException("GameRoot V5 export was not rejected.");
+            bool rejectedRoot2 = false;
+            try { RunItBootstrapService.CreateExtendedCp852(runitSource, Path.Combine(e2.GameRoot, FontEditorForm.DefaultRunItExportFileName), GlyphRepository.CreateAllCp852Slots(), e2.GameRoot); }
+            catch (InvalidOperationException) { rejectedRoot2 = true; }
+            if (!rejectedRoot2 || File.Exists(Path.Combine(e2.GameRoot, FontEditorForm.DefaultRunItExportFileName)))
+                throw new InvalidDataException("GameRoot RUNIT export was not rejected.");
+            if (HashFile(vgaSource) != vgaHash || HashFile(runitSource) != runitHash)
+                throw new InvalidDataException("Blocked export modified its source.");
+            if (Directory.EnumerateFiles(e1.GameRoot, "*O.EXE").Any() || Directory.EnumerateFiles(e2.GameRoot, "*O.EXE").Any() ||
+                File.Exists(Path.Combine(e1.GameRoot, "GAMEPCO")) || File.Exists(Path.Combine(e2.GameRoot, "GAMEPCO")))
+                throw new InvalidDataException("Blocked export created an O-file in GameRoot.");
+
+            // Successful external export with DOS 8.3 defaults keeps the source intact.
+            string okV5 = Path.Combine(root, "Exports", FontEditorForm.DefaultV5ExportFileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(okV5)!);
+            RunVgaBootstrapResult v5 = RunVgaBootstrapService.CreateExtendedCp852(vgaSource, okV5, GlyphRepository.CreateAllCp852Slots(), e1.GameRoot);
+            if (RunVgaBootstrapService.DetectState(okV5) != RunVgaBootstrapState.ExtendedCp852V5)
+                throw new InvalidDataException("External V5 export did not produce a V5 image.");
+            string okV2 = Path.Combine(root, "Exports", FontEditorForm.DefaultRunItExportFileName);
+            RunItBootstrapResult v2 = RunItBootstrapService.CreateExtendedCp852(runitSource, okV2, GlyphRepository.CreateAllCp852Slots(), e2.GameRoot);
+            if (RunItBootstrapService.DetectState(okV2) != RunItBootstrapState.ExtendedCp852)
+                throw new InvalidDataException("External RUNIT export did not produce a V2 image.");
+            if (HashFile(vgaSource) != vgaHash || HashFile(runitSource) != runitHash)
+                throw new InvalidDataException("Successful external export modified its source.");
+            _ = v5;
+            _ = v2;
+
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Extended export UX smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyAddVariantDefaultsSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1AddVariantDefaultsSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext project = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            var translations = new TranslationProjectService();
+            TranslationProjectState state = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            TranslationProjectVariant sk = translations.Create(project, state, "Slovencina", "SK", new Dictionary<int, string> { [393] = "Test." });
+            state = translations.Add(state, sk);
+            translations.Save(project, state);
+            TranslationProjectState loaded = translations.Load(project).State!;
+            VariantContext vga = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            VariantContext ega = VariantContextCatalog.CreateBuiltIns(project).Single(item => item.VariantId == BuiltInVariantId.Elvira1Ega);
+            var emptyCatalog = new VariantCatalog(project.GameRoot, project.GameProfile, [], false);
+
+            VariantEntrySuggestion vgaSuggestion = VariantEntrySuggestionService.Suggest(project, vga, "SK", loaded, emptyCatalog);
+            if (string.IsNullOrWhiteSpace(vgaSuggestion.DisplayName))
+                throw new InvalidDataException("Add Variant suggestion has an empty display name.");
+            if (!vgaSuggestion.DataFile.Equals("GAMEPCSK", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"Add Variant suggestion data file is {vgaSuggestion.DataFile}, expected GAMEPCSK.");
+            if (!GameDataFileService.IsDos83FileName(vgaSuggestion.DataFile))
+                throw new InvalidDataException("Add Variant suggestion data file is not DOS 8.3.");
+            if (!vgaSuggestion.ExeFile.Equals("RUNVGASK.EXE", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"Add Variant VGA executable mapping is {vgaSuggestion.ExeFile}, expected RUNVGASK.EXE.");
+            if (vgaSuggestion.DisplayName.Contains("TEST", StringComparison.OrdinalIgnoreCase) || vgaSuggestion.DataFile.Contains("TEST", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Add Variant suggestion requires an arbitrary TEST placeholder.");
+            if (vgaSuggestion.DuplicateExists)
+                throw new InvalidDataException("Add Variant suggestion falsely reports a duplicate for an empty catalog.");
+
+            VariantEntrySuggestion egaSuggestion = VariantEntrySuggestionService.Suggest(project, ega, "SK", loaded, emptyCatalog);
+            if (!egaSuggestion.ExeFile.Equals("RUNEGASK.EXE", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"Add Variant EGA executable mapping is {egaSuggestion.ExeFile}, expected RUNEGASK.EXE.");
+
+            var withSk = new VariantCatalog(project.GameRoot, project.GameProfile,
+                [new VariantEntry("Slovencina", "GAMEPCSK", true, 1, "SK", "RUNVGASK.EXE")], false);
+            VariantEntrySuggestion duplicate = VariantEntrySuggestionService.Suggest(project, vga, "SK", loaded, withSk);
+            if (!duplicate.DuplicateExists)
+                throw new InvalidDataException("Add Variant duplicate SK entry was not detected.");
+
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Add Variant defaults smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
 
     private static void RunProtectedGameRootWriteFirewallSmoke(string elvira1Source, string elvira2Source)
     {
@@ -9713,10 +10046,12 @@ internal static class Program
 
     private static void VerifyVariantManifest(VariantManifest manifest, ProjectContext project, VariantContext variant, string buildState)
     {
-        if (manifest.SchemaVersion != 1 || manifest.GameId != PristineManifestService.GameIdFor(project.GameProfile) ||
+        if (manifest.SchemaVersion != 2 || manifest.GameId != PristineManifestService.GameIdFor(project.GameProfile) ||
             manifest.VariantId != variant.VariantId.ToString() || manifest.RuntimeKind != variant.RuntimeKind.ToString() ||
             manifest.DirectoryKey != variant.DirectoryKey || manifest.BaselineFingerprint != project.BaselineFingerprint || manifest.BuildState != buildState)
             throw new InvalidDataException("Variant manifest identity or input fingerprint diverged.");
+        if (string.IsNullOrWhiteSpace(manifest.InputFingerprint) || manifest.InputFingerprint.Equals("INVALID", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Variant manifest is missing its content-based input fingerprint.");
         if (!manifest.OutputArtifacts.Select(artifact => artifact.RelativePath).SequenceEqual(manifest.OutputArtifacts.Select(artifact => artifact.RelativePath).OrderBy(path => path, StringComparer.Ordinal)) ||
             manifest.OutputArtifacts.Any(artifact => Path.IsPathRooted(artifact.RelativePath) || artifact.RelativePath.Contains('\\') || string.IsNullOrWhiteSpace(artifact.Sha256)) ||
             manifest.OutputArtifacts.Any(artifact => artifact.RelativePath.Equals(VariantManifestService.FileName, StringComparison.OrdinalIgnoreCase)))

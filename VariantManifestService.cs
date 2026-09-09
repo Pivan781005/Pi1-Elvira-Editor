@@ -18,6 +18,7 @@ internal sealed record VariantManifest(
     string DirectoryKey,
     string BaselineFingerprint,
     string BuildState,
+    string InputFingerprint,
     IReadOnlyList<VariantManifestRuntimeArtifact> RuntimeArtifacts,
     IReadOnlyList<VariantManifestArtifact> OutputArtifacts);
 
@@ -59,7 +60,12 @@ internal static class VariantManifestService
         ArgumentException.ThrowIfNullOrWhiteSpace(variantRoot);
         string path = Path.Combine(variantRoot, FileName);
         VariantManifest? manifest = JsonSerializer.Deserialize<VariantManifest>(File.ReadAllText(path), JsonOptions);
-        return manifest ?? throw new InvalidDataException("Variant manifest is empty or invalid.");
+        if (manifest is null) throw new InvalidDataException("Variant manifest is empty or invalid.");
+        // Pre-fingerprint (schema 1) manifests carry no input fingerprint.
+        // Normalize to empty so launchers treat them as stale until rebuild.
+        if (manifest.InputFingerprint is null)
+            manifest = manifest with { InputFingerprint = string.Empty };
+        return manifest;
     }
 
     private static VariantManifest Create(ProjectContext project, VariantContext variant, string root, CompositeBuildMode mode, IReadOnlyList<string>? runtimeArtifactNames, string? projectCode)
@@ -80,15 +86,21 @@ internal static class VariantManifestService
         VariantManifestRuntimeArtifact[] runtime = runtimePaths.Select(path => byPath.TryGetValue(path, out VariantManifestArtifact? artifact)
             ? new VariantManifestRuntimeArtifact(path, true, artifact.Size, artifact.Sha256)
             : new VariantManifestRuntimeArtifact(path, false, 0, string.Empty)).ToArray();
+        string normalizedCode = ProjectVariantOwnership.NormalizeCode(project, projectCode ?? ProjectVariantOwnership.OriginalCode);
+        string inputFingerprint;
+        try { inputFingerprint = ProjectBuildFingerprintService.Compute(project, variant, normalizedCode); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException)
+        { inputFingerprint = "INVALID:" + ex.GetType().Name; }
         return new VariantManifest(
-            SchemaVersion: 1,
+            SchemaVersion: 2,
             GameId: PristineManifestService.GameIdFor(project.GameProfile),
             VariantId: variant.VariantId.ToString(),
             RuntimeKind: variant.RuntimeKind.ToString(),
-            ProjectCode: ProjectVariantOwnership.NormalizeCode(project, projectCode ?? ProjectVariantOwnership.OriginalCode),
+            ProjectCode: normalizedCode,
             DirectoryKey: variant.DirectoryKey,
             BaselineFingerprint: project.BaselineFingerprint,
             BuildState: mode == CompositeBuildMode.Full ? "Full" : "PristineOnly",
+            InputFingerprint: inputFingerprint,
             RuntimeArtifacts: runtime,
             OutputArtifacts: output);
     }

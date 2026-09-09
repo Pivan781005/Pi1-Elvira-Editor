@@ -934,6 +934,46 @@ internal sealed class FontEditorForm : Form
         return null;
     }
 
+    /// <summary>R9F V8.6d export destination policy. Project-bound exports
+    /// default to the authoritative editor-owned ProjectRoot\Exports location
+    /// (never GameRoot). Manual-source mode without a ProjectContext uses a
+    /// safe external folder and never suggests the GameRoot.</summary>
+    internal static string ResolveExtendedExportDirectory(ProjectContext? project)
+    {
+        if (project is not null)
+            return Path.Combine(project.ProjectRoot, "Exports");
+        string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        if (!string.IsNullOrWhiteSpace(documents) && Directory.Exists(documents))
+            return documents;
+        string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        if (!string.IsNullOrWhiteSpace(desktop) && Directory.Exists(desktop))
+            return desktop;
+        return Path.GetTempPath();
+    }
+
+    internal const string DefaultV5ExportFileName = "RUNVGAV5.EXE";
+    internal const string DefaultRunItExportFileName = "RUNITV2.EXE";
+
+    /// <summary>R9F V8.6d dialog boundary: the user-chosen external export
+    /// name must be DOS 8.3 (single existing validator). Internal bootstrap
+    /// callers (composite build, temp fixtures) are unaffected.</summary>
+    internal static void ValidateExtendedExportFileName(string? destinationPath, string dosExample)
+    {
+        string? name = string.IsNullOrWhiteSpace(destinationPath) ? null : Path.GetFileName(destinationPath);
+        if (string.IsNullOrWhiteSpace(name) || !GameDataFileService.IsDos83FileName(name))
+            throw new InvalidOperationException($"'{name}' is not a DOS-compatible 8.3 filename. Choose a DOS 8.3 name such as {dosExample}. No files were changed.");
+    }
+
+    private string GetExtendedExportDirectory()
+    {
+        string directory = ResolveExtendedExportDirectory(_fontProject);
+        if (_fontProject is not null)
+        {
+            try { Directory.CreateDirectory(directory); } catch { }
+        }
+        return directory;
+    }
+
     private void SaveCopy()
     {
         if (_loaded is null || !_loaded.CanApply || !_glyphs.Any(g => g.HasEdited)) return;
@@ -957,9 +997,10 @@ internal sealed class FontEditorForm : Form
         }
     }
 
-    /// <summary>Creates an extended-CP852 executable as a NEW user-chosen
-    /// file from a verified packed/baseline source. The pristine GameRoot
-    /// source is only read; this never patches a game installation.
+    /// <summary>Explicit external export of an extended-CP852 executable as a
+    /// NEW user-chosen file from a verified packed/baseline source. The pristine
+    /// GameRoot source is only read; this never patches a game installation and
+    /// never builds a runnable project variant.
     /// Use Save to project + Build Variant for owned variant executables.</summary>
     private void CreateExtendedCp852()
     {
@@ -992,11 +1033,17 @@ internal sealed class FontEditorForm : Form
         {
             Title = UiText.Get("Font.SaveV5Title"),
             Filter = $"{UiText.Get("DosExecutable")} (*.EXE)|*.EXE|{UiText.Get("AllFiles")} (*.*)|*.*",
-            FileName = "RUNVGA_EXTENDED_CP852_V5.EXE",
-            InitialDirectory = Path.GetDirectoryName(_loaded.SourcePath),
+            FileName = DefaultV5ExportFileName,
+            InitialDirectory = GetExtendedExportDirectory(),
             OverwritePrompt = false
         };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try { ValidateExtendedExportFileName(dlg.FileName, DefaultV5ExportFileName); }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, UiText.Get("Font.CreateV5Title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         try
         {
             Cursor = Cursors.WaitCursor;
@@ -1036,11 +1083,17 @@ internal sealed class FontEditorForm : Form
         {
             Title = UiText.Get("Font.SaveRunItTitle"),
             Filter = $"{UiText.Get("DosExecutable")} (*.EXE)|*.EXE|{UiText.Get("AllFiles")} (*.*)|*.*",
-            FileName = "RUNIT_EXTENDED_CP852.EXE",
-            InitialDirectory = Path.GetDirectoryName(_loaded.SourcePath),
+            FileName = DefaultRunItExportFileName,
+            InitialDirectory = GetExtendedExportDirectory(),
             OverwritePrompt = false
         };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try { ValidateExtendedExportFileName(dlg.FileName, DefaultRunItExportFileName); }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, UiText.Get("Font.CreateRunItTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         try
         {
             Cursor = Cursors.WaitCursor;

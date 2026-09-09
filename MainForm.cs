@@ -1840,7 +1840,28 @@ internal sealed class MainForm : Form
     private void AddVariant()
     {
         VariantCatalog catalog = EnsureVariantCatalog();
-        using var dialog = new VariantEntryDialog();
+        // R9F V8.6d: the standard Build Variant flow never requires Add.
+        // When the user does open Add, prefill from the current edition/runtime
+        // so no internal filename knowledge is needed. Duplicates are not
+        // suggested: select the existing entry instead.
+        VariantEntrySuggestion suggestion = VariantEntrySuggestionService.Suggest(
+            _activeProject, _activeVariant, _activeTranslationCode, _translationProjectState, catalog);
+        // Project translations are already resolved into the grid: an existing
+        // entry for this edition means Add would only duplicate it.
+        if (!string.IsNullOrWhiteSpace(suggestion.DataFile) &&
+            GetVariantGridEntries(catalog).Any(entry => entry.DataFile.Equals(suggestion.DataFile, StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show(this,
+                string.Format(UiText.Get("VariantDialogAlreadyExists"), suggestion.DisplayName, suggestion.DataFile),
+                UiText.Get("VariantDialogAddTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            RefreshVariantGrid(suggestion.DataFile);
+            return;
+        }
+        using var dialog = new VariantEntryDialog(
+            displayName: suggestion.DisplayName,
+            dataFile: suggestion.DataFile,
+            enabled: true,
+            exePreview: suggestion.ExeFile);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         try
         {

@@ -116,6 +116,22 @@ internal sealed class VariantLauncherService
                 if (!manifest.ProjectCode.Equals(normalizedCode, StringComparison.OrdinalIgnoreCase))
                     return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
                         "The generated output belongs to a different selected project variant.");
+                // R9F V8.6d content-based freshness: the built artifact is stale
+                // when current project inputs differ from the recorded build
+                // provenance. This is a service-level check, not a UI label.
+                try
+                {
+                    string current = ProjectBuildFingerprintService.Compute(project, variant, normalizedCode);
+                    if (string.IsNullOrWhiteSpace(manifest.InputFingerprint) ||
+                        !manifest.InputFingerprint.Equals(current, StringComparison.OrdinalIgnoreCase))
+                        return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                            "Project content changed since the last build; rebuild the variant to use the current project state.");
+                }
+                catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException)
+                {
+                    return Make(project, variant, root, ownership.Status, configured, VariantLaunchReadiness.BuildIncomplete,
+                        "Current project state is invalid; rebuild the variant to use the current project state.");
+                }
                 // R9D: the launch artifacts must still be byte-identical to the authorized
                 // build recorded in the manifest, and the executable must retain a supported
                 // structural identity. A post-build modification blocks readiness. An
