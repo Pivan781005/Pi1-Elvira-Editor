@@ -1173,6 +1173,12 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("Add Variant defaults: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 3 && args[0].Equals("--add-variant-persistence-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyAddVariantPersistenceSmoke(args[1], args[2]); Console.WriteLine("Add Variant persistence: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("Add Variant persistence: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 1 && args[0].Equals("--version-smoke", StringComparison.OrdinalIgnoreCase))
         {
             try { RunVersionSmoke(); Console.WriteLine("Product version: PASS"); Environment.ExitCode = 0; }
@@ -2369,6 +2375,89 @@ internal static class Program
             if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
                 !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
                 throw new InvalidDataException("Add Variant defaults smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void VerifyAddVariantPersistenceSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1AddVariantPersistenceSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext e1 = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            ProjectContext e2 = CreateBuildFixtureProjectContext(root, "e2", elvira2Source, ElviraGameProfile.Elvira2);
+            var translations = new TranslationProjectService();
+            TranslationProjectState s1 = TranslationProjectState.Empty(ElviraGameProfile.Elvira1);
+            s1 = translations.Add(s1, translations.Create(e1, s1, "Slovencina", "SK", new Dictionary<int, string> { [393] = "Test." }));
+            s1 = translations.Add(s1, translations.Create(e1, s1, "Cestina", "CZ", new Dictionary<int, string>()));
+            translations.Save(e1, s1);
+            TranslationProjectState loaded1 = translations.Load(e1).State!;
+            TranslationProjectState s2 = TranslationProjectState.Empty(ElviraGameProfile.Elvira2);
+            s2 = translations.Add(s2, translations.Create(e2, s2, "Slovencina", "SK", new Dictionary<int, string>()));
+            translations.Save(e2, s2);
+            TranslationProjectState loaded2 = translations.Load(e2).State!;
+            VariantContext e1Vga = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Vga);
+            VariantContext e1Ega = VariantContextCatalog.CreateBuiltIns(e1).Single(item => item.VariantId == BuiltInVariantId.Elvira1Ega);
+            VariantContext e2Vga = VariantContextCatalog.CreateBuiltIns(e2).Single();
+
+            void RoundTrip(ProjectContext project, VariantContext runtime, TranslationProjectState state, string edition, string expectData, string expectExe)
+            {
+                var empty = new VariantCatalog(project.GameRoot, project.GameProfile, [], false);
+                VariantEntrySuggestion suggestion = VariantEntrySuggestionService.Suggest(project, runtime, edition, state, empty);
+                if (!suggestion.DataFile.Equals(expectData, StringComparison.OrdinalIgnoreCase) ||
+                    !suggestion.ExeFile.Equals(expectExe, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"Persistence suggestion diverged for {runtime.RuntimeKind}/{edition}: {suggestion.DataFile}/{suggestion.ExeFile}.");
+                // Production persistence path shared with MainForm: derive nothing
+                // from GameProfile here; the runtime-aware boundary resolves it.
+                var fresh = new VariantCatalog(project.GameRoot, project.GameProfile, [], false);
+                VariantEntry persisted = VariantEntrySuggestionService.AddRuntimeAwareEntry(
+                    fresh, suggestion.DisplayName, suggestion.DataFile, true, project, runtime);
+                VariantConfigurationService.Save(fresh);
+                VariantCatalog reloaded = VariantConfigurationService.Load(project.GameRoot, project.GameProfile);
+                VariantEntry? found = reloaded.FindByDataFile(expectData);
+                if (found is null)
+                    throw new InvalidDataException($"Persisted {runtime.RuntimeKind}/{edition} entry missing after reload.");
+                if (!found.DataFile.Equals(expectData, StringComparison.OrdinalIgnoreCase) ||
+                    !found.Code.Equals(edition, StringComparison.OrdinalIgnoreCase) ||
+                    !found.ExeFile.Equals(expectExe, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"Persistence round-trip diverged for {runtime.RuntimeKind}/{edition}: {found.DataFile}/{found.Code}/{found.ExeFile}.");
+            }
+
+            RoundTrip(e1, e1Vga, loaded1, "SK", "GAMEPCSK", "RUNVGASK.EXE");
+            RoundTrip(e1, e1Ega, loaded1, "SK", "GAMEPCSK", "RUNEGASK.EXE");
+            RoundTrip(e2, e2Vga, loaded2, "SK", "GAMEPCSK", "RUNITSK.EXE");
+            RoundTrip(e1, e1Vga, loaded1, "CZ", "GAMEPCCZ", "RUNVGACZ.EXE");
+            RoundTrip(e1, e1Ega, loaded1, "CZ", "GAMEPCCZ", "RUNEGACZ.EXE");
+
+            // The legacy overload demonstrably disagrees on E1 EGA: it derives
+            // RUNVGA from GameProfile while the runtime-aware entry carries
+            // RUNEGA. This proves the regression is sensitive to the fixed path.
+            var sensitivity = new VariantCatalog(e1.GameRoot, e1.GameProfile, [], false);
+            VariantEntry legacyEga = sensitivity.Add("Slovencina legacy", "GAMEPCSK", true);
+            VariantEntry fixedEga = VariantEntrySuggestionService.AddRuntimeAwareEntry(
+                new VariantCatalog(e1.GameRoot, e1.GameProfile, [], false), "Slovencina", "GAMEPCSK", true, e1, e1Ega);
+            if (!legacyEga.ExeFile.Equals("RUNVGASK.EXE", StringComparison.OrdinalIgnoreCase) ||
+                !fixedEga.ExeFile.Equals("RUNEGASK.EXE", StringComparison.OrdinalIgnoreCase) ||
+                legacyEga.ExeFile.Equals(fixedEga.ExeFile, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Persistence sensitivity check cannot distinguish the legacy path from the fixed path.");
+
+            var dupCatalog = new VariantCatalog(e1.GameRoot, e1.GameProfile, [], false);
+            VariantEntrySuggestion dupSuggestion = VariantEntrySuggestionService.Suggest(e1, e1Ega, "SK", loaded1, dupCatalog);
+            VariantEntrySuggestionService.AddRuntimeAwareEntry(dupCatalog, dupSuggestion.DisplayName, dupSuggestion.DataFile, true, e1, e1Ega);
+            bool rejected = false;
+            try { VariantEntrySuggestionService.AddRuntimeAwareEntry(dupCatalog, dupSuggestion.DisplayName, dupSuggestion.DataFile, true, e1, e1Ega); }
+            catch (InvalidOperationException) { rejected = true; }
+            if (!rejected)
+                throw new InvalidDataException("Duplicate runtime-aware entry was not rejected.");
+            if (!VariantEntrySuggestionService.Suggest(e1, e1Ega, "SK", loaded1, dupCatalog).DuplicateExists)
+                throw new InvalidDataException("Duplicate runtime-aware entry was not detected.");
+
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Add Variant persistence smoke modified a real GameRoot.");
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }

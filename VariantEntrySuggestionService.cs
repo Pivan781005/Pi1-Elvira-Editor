@@ -15,6 +15,42 @@ internal sealed record VariantEntrySuggestion(
 
 internal static class VariantEntrySuggestionService
 {
+    /// <summary>Authoritative runtime-aware executable mapping for one edition
+    /// code: resolved against the CURRENT runtime (source stem + code: E1 VGA
+    /// SK to RUNVGASK.EXE, E1 EGA SK to RUNEGASK.EXE, E2 VGA SK to
+    /// RUNITSK.EXE), the same rule ActiveProjectBuildIdentity uses for builds.
+    /// It is never re-derived from GameProfile alone, so EGA never collapses
+    /// to RUNVGA. Arbitrary valid codes work; nothing is hardcoded to SK.</summary>
+    internal static string ResolveExeFileForRuntime(ProjectContext? project, VariantContext? variant, string? code)
+    {
+        string normalized = (code ?? string.Empty).Trim().ToUpperInvariant();
+        if (variant is not null)
+        {
+            if (ProjectVariantOwnership.IsOriginal(normalized))
+                return (variant.SourceExecutableName ?? string.Empty).ToUpperInvariant();
+            string stem = Path.GetFileNameWithoutExtension(variant.SourceExecutableName ?? string.Empty);
+            return (stem + normalized + ".EXE").ToUpperInvariant();
+        }
+        ElviraGameProfile game = project?.GameProfile ?? ElviraGameProfile.Elvira1;
+        string fallbackCode;
+        try { fallbackCode = VariantNaming.ValidateCode(normalized); }
+        catch (InvalidOperationException) { fallbackCode = ProjectVariantOwnership.OriginalCode; }
+        return VariantNaming.DeriveExeFile(fallbackCode, game);
+    }
+
+    /// <summary>Production persistence boundary for the Add Variant dialog.
+    /// Persists the exact runtime-aware executable mapping (see
+    /// ResolveExeFileForRuntime) via the explicit catalog overload instead of
+    /// re-deriving from GameProfile. MainForm and the persistence regression
+    /// share this method, so the smoke proves the real save path.</summary>
+    internal static VariantEntry AddRuntimeAwareEntry(VariantCatalog catalog, string displayName, string dataFile, bool enabled, ProjectContext? project, VariantContext? variant)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        string code = VariantNaming.DeriveCode(dataFile);
+        string exeFile = ResolveExeFileForRuntime(project, variant, code);
+        return catalog.Add(displayName, code, dataFile, exeFile, enabled);
+    }
+
     internal static VariantEntrySuggestion Suggest(
         ProjectContext? project,
         VariantContext? variant,
@@ -45,17 +81,10 @@ internal static class VariantEntrySuggestionService
         string exeFile;
         if (variant is not null && !ProjectVariantOwnership.IsOriginal(code))
         {
-            try
-            {
-                string stem = Path.GetFileNameWithoutExtension(variant.SourceExecutableName ?? "RUNVGA.EXE");
-                exeFile = (stem + code + ".EXE").ToUpperInvariant();
-                if (!GameDataFileService.IsDos83FileName(exeFile))
-                    exeFile = translation?.ExeFile?.Trim().ToUpperInvariant() ?? string.Empty;
-            }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
-            {
-                exeFile = translation?.ExeFile?.Trim().ToUpperInvariant() ?? string.Empty;
-            }
+            string runtimeExe = ResolveExeFileForRuntime(project, variant, code);
+            exeFile = GameDataFileService.IsDos83FileName(runtimeExe)
+                ? runtimeExe
+                : translation?.ExeFile?.Trim().ToUpperInvariant() ?? string.Empty;
         }
         else if (variant is not null && ProjectVariantOwnership.IsOriginal(code))
         {
@@ -77,8 +106,7 @@ internal static class VariantEntrySuggestionService
                 VariantEntry derived = VariantNaming.Create(code, code, project.GameProfile, true, 1);
                 displayName = code;
                 dataFile = derived.DataFile;
-                string stem = Path.GetFileNameWithoutExtension(variant.SourceExecutableName ?? "RUNVGA.EXE");
-                string runtimeExe = (stem + code + ".EXE").ToUpperInvariant();
+                string runtimeExe = ResolveExeFileForRuntime(project, variant, code);
                 exeFile = GameDataFileService.IsDos83FileName(runtimeExe) ? runtimeExe : derived.ExeFile;
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)

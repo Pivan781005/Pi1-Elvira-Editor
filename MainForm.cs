@@ -1865,7 +1865,10 @@ internal sealed class MainForm : Form
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         try
         {
-            VariantEntry created = catalog.Add(dialog.DisplayName, dialog.DataFile, dialog.IsVariantEnabled);
+            // Corrective: persist the runtime-aware mapping through the shared
+            // boundary, never the GameProfile-only 3-arg overload.
+            VariantEntry created = VariantEntrySuggestionService.AddRuntimeAwareEntry(
+                catalog, dialog.DisplayName, dialog.DataFile, dialog.IsVariantEnabled, _activeProject, _activeVariant);
             PersistVariants(created.DataFile);
         }
         catch (Exception ex) { ShowVariantError(ex.Message); }
@@ -2869,11 +2872,14 @@ internal sealed class MainForm : Form
         if (MessageBox.Show(this, UiText.Get("AddCreatedVariantQuestion"), UiText.Get("ModsLauncherTab"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
-        using var dialog = new VariantEntryDialog(displayName: Path.GetFileName(createdPath), dataFile: Path.GetFileName(createdPath), enabled: true);
+        string createdFile = Path.GetFileName(createdPath);
+        using var dialog = new VariantEntryDialog(displayName: createdFile, dataFile: createdFile, enabled: true,
+            exePreview: VariantEntrySuggestionService.ResolveExeFileForRuntime(_activeProject, _activeVariant, VariantNaming.DeriveCode(createdFile)));
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         try
         {
-            VariantEntry created = EnsureVariantCatalog().Add(dialog.DisplayName, dialog.DataFile, dialog.IsVariantEnabled);
+            VariantEntry created = VariantEntrySuggestionService.AddRuntimeAwareEntry(
+                EnsureVariantCatalog(), dialog.DisplayName, dialog.DataFile, dialog.IsVariantEnabled, _activeProject, _activeVariant);
             PersistVariants(created.DataFile);
         }
         catch (Exception ex)
