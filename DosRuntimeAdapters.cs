@@ -2,8 +2,17 @@ using System.Diagnostics;
 
 namespace Pi1ElviraEditor;
 
-/// <summary>Read-only host evidence for identification. Never launches a game.</summary>
-internal sealed record DosRuntimeHostEvidence(string FileName, string? ProductName, string? FileVersion);
+/// <summary>Read-only host evidence for identification. Never launches a game.
+/// Version-resource fields beyond ProductName/FileVersion are optional so
+/// older call sites keep compiling; DOSBox-X positive identification relies
+/// on the extended metadata.</summary>
+internal sealed record DosRuntimeHostEvidence(
+    string FileName,
+    string? ProductName,
+    string? FileVersion,
+    string? ProductVersion = null,
+    string? OriginalFilename = null,
+    string? FileDescription = null);
 
 internal sealed record DosRuntimeProbeResult(bool Success, string Output, string Error, int ExitCode);
 
@@ -66,7 +75,8 @@ internal static class DosRuntimeHostEvidenceReader
         try
         {
             FileVersionInfo version = FileVersionInfo.GetVersionInfo(executablePath);
-            return new(fileName, version.ProductName, version.FileVersion);
+            return new(fileName, version.ProductName, version.FileVersion,
+                version.ProductVersion, version.OriginalFilename, version.FileDescription);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
@@ -91,6 +101,16 @@ internal interface IDosRuntimeAdapter
     /// family output with parseable version, and no contradictory family
     /// evidence. Filename alone never validates.</summary>
     bool IsValidProbe(DosRuntimeHostEvidence evidence, DosRuntimeProbeResult probe);
+    /// <summary>R9F V8.6j: non-interactive metadata validation. False for
+    /// families that require a process version probe (Classic/Staging); true
+    /// only for DOSBox-X, which must never be executed merely to identify it
+    /// on Windows (its -version path opens an interactive console).</summary>
+    bool SupportsMetadataValidation { get; }
+    /// <summary>R9F V8.6j: positively identifies the family from authoritative
+    /// executable metadata without spawning any process. Returns false with a
+    /// diagnostic detail for filename-only, unrelated, contradictory, or
+    /// otherwise unusable metadata. Never falls back to process execution.</summary>
+    bool TryValidateMetadata(DosRuntimeHostEvidence evidence, out string version, out string detail);
     string ParseVersion(string probeOutput);
     IReadOnlyList<string> BuildArguments(DosRuntimeLaunchRequest request);
 }
@@ -152,6 +172,15 @@ internal sealed class DosBoxClassicAdapter : IDosRuntimeAdapter
                 return trimmed.Length > 64 ? trimmed[..64] : trimmed;
         }
         return "unknown";
+    }
+
+    public bool SupportsMetadataValidation => false;
+
+    public bool TryValidateMetadata(DosRuntimeHostEvidence evidence, out string version, out string detail)
+    {
+        version = string.Empty;
+        detail = "DOSBox Classic requires a non-interactive version-probe result.";
+        return false;
     }
 
     public IReadOnlyList<string> BuildArguments(DosRuntimeLaunchRequest request)
@@ -228,6 +257,15 @@ internal sealed class DosBoxStagingAdapter : IDosRuntimeAdapter
         return "unknown";
     }
 
+    public bool SupportsMetadataValidation => false;
+
+    public bool TryValidateMetadata(DosRuntimeHostEvidence evidence, out string version, out string detail)
+    {
+        version = string.Empty;
+        detail = "DOSBox Staging requires a non-interactive version-probe result.";
+        return false;
+    }
+
     public IReadOnlyList<string> BuildArguments(DosRuntimeLaunchRequest request)
     {
         var arguments = new List<string>();
@@ -259,7 +297,11 @@ internal sealed class DosBoxXAdapter : IDosRuntimeAdapter
     public DosRuntimeKind Kind => DosRuntimeKind.DosBoxX;
     public string FamilyDisplayName => "DOSBox-X";
     public IReadOnlyList<string> ExecutableFileNames => ["dosbox-x.exe"];
-    // DOSBox-X manual: -version displays version information and exits.
+    // R9F V8.6j: retained for interface compatibility only. Windows discovery
+    // and Browse NEVER execute dosbox-x.exe -version: the real implementation
+    // opens its own interactive console ("Press ENTER key to continue") for
+    // that flag, so host identification uses authoritative executable metadata
+    // instead (see TryValidateMetadata).
     public IReadOnlyList<string> VersionArguments => ["-version"];
 
     public bool Identifies(DosRuntimeHostEvidence evidence)
@@ -271,7 +313,10 @@ internal sealed class DosBoxXAdapter : IDosRuntimeAdapter
     /// <summary>R9F V8.6f X positive validation. Filename dosbox-x.exe is only
     /// a hint: Compatible additionally requires a DOSBox-X-specific probe
     /// ("DOSBox-X" + version). Rejects Staging/Classic outputs and
-    /// contradictory Classic/Staging metadata. Exit 0 only.</summary>
+    /// contradictory Classic/Staging metadata. Exit 0 only.
+    /// R9F V8.6j: retained for non-Windows or explicitly non-interactive
+    /// callers only; Windows discovery and Browse use TryValidateMetadata and
+    /// never spawn dosbox-x.exe merely to identify it.</summary>
     public bool IsValidProbe(DosRuntimeHostEvidence evidence, DosRuntimeProbeResult probe)
     {
         string product = evidence.ProductName ?? string.Empty;
@@ -299,6 +344,53 @@ internal sealed class DosBoxXAdapter : IDosRuntimeAdapter
                 return trimmed.Length > 64 ? trimmed[..64] : trimmed;
         }
         return "unknown";
+    }
+
+    public bool SupportsMetadataValidation => true;
+
+    /// <summary>R9F V8.6j non-interactive DOSBox-X identification from
+    /// authoritative version-resource metadata. Positive contract: ProductName
+    /// contains "DOSBox-X" (e.g. real "DOSBox-X DOS Emulator"), a usable
+    /// version exists in FileVersion/ProductVersion, no Staging contradiction
+    /// exists, and FileName/OriginalFilename/FileDescription corroborate the
+    /// family. Filename alone is never sufficient. Never spawns a process and
+    /// never falls back to -version when metadata is insufficient.</summary>
+    public bool TryValidateMetadata(DosRuntimeHostEvidence evidence, out string version, out string detail)
+    {
+        version = string.Empty;
+        string product = evidence.ProductName ?? string.Empty;
+        if (!product.Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase))
+        {
+            detail = "Executable metadata does not positively identify DOSBox-X.";
+            return false;
+        }
+        if (product.Contains("Staging", StringComparison.OrdinalIgnoreCase))
+        {
+            detail = "Executable metadata does not positively identify DOSBox-X.";
+            return false;
+        }
+        string rawVersion = !string.IsNullOrWhiteSpace(evidence.FileVersion)
+            ? evidence.FileVersion
+            : evidence.ProductVersion ?? string.Empty;
+        System.Text.RegularExpressions.Match match =
+            System.Text.RegularExpressions.Regex.Match(rawVersion, @"\d+(\.\d+)+");
+        if (!match.Success)
+        {
+            detail = "Executable metadata does not positively identify DOSBox-X.";
+            return false;
+        }
+        bool nameCorroborates =
+            evidence.FileName.Equals("dosbox-x.exe", StringComparison.OrdinalIgnoreCase) ||
+            (evidence.OriginalFilename ?? string.Empty).Equals("dosbox-x.exe", StringComparison.OrdinalIgnoreCase) ||
+            (evidence.FileDescription ?? string.Empty).Contains("DOSBox-X", StringComparison.OrdinalIgnoreCase);
+        if (!nameCorroborates)
+        {
+            detail = "Executable metadata does not positively identify DOSBox-X.";
+            return false;
+        }
+        version = match.Value;
+        detail = "Identified from executable metadata (no process probe).";
+        return true;
     }
 
     public IReadOnlyList<string> BuildArguments(DosRuntimeLaunchRequest request)

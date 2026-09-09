@@ -256,6 +256,24 @@ internal sealed class DosRuntimeDiscoveryService
         if (adapter is null)
             return new(DosRuntimeKind.Unknown, Path.GetFileName(executablePath), string.Empty, executablePath, source,
                 DosRuntimeCompatibility.Unrecognized, "Not a recognized DOSBox-family host.");
+        if (adapter.SupportsMetadataValidation)
+        {
+            // R9F V8.6j: non-interactive DOSBox-X identification. The real
+            // dosbox-x.exe -version path opens its own console and waits for
+            // keyboard input, so Windows discovery and Browse must never spawn
+            // it. Zero process probes on this path by construction.
+            string metadataVersion;
+            string metadataDetail;
+            bool metadataValid;
+            try { metadataValid = adapter.TryValidateMetadata(evidence, out metadataVersion, out metadataDetail); }
+            catch { metadataValid = false; metadataVersion = string.Empty; metadataDetail = "Executable metadata does not positively identify " + adapter.FamilyDisplayName + "."; }
+            if (!metadataValid || string.IsNullOrWhiteSpace(metadataVersion))
+                return new(adapter.Kind, adapter.FamilyDisplayName, string.Empty, executablePath, source,
+                    DosRuntimeCompatibility.Incompatible, metadataDetail);
+            string shortVersion = metadataVersion.Length > 64 ? metadataVersion[..64] : metadataVersion;
+            return new(adapter.Kind, adapter.FamilyDisplayName, shortVersion, executablePath, source,
+                DosRuntimeCompatibility.Compatible, metadataDetail);
+        }
         _probeCount++;
         ModsRefreshDiagnostics.DosProbeCalls++;
         DosRuntimeProbeResult probe;

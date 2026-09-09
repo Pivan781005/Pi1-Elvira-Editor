@@ -56,6 +56,7 @@ internal sealed class DosRuntimeRunDialog : Form
     private readonly DataGridView _grid = new();
     private readonly Label _lblTarget = new();
     private readonly Label _lblEmpty = new();
+    private readonly Label _lblDetail = new();
     private readonly Button _btnRefresh = new();
     private readonly Button _btnBrowse = new();
     private readonly Button _btnRun = new();
@@ -111,6 +112,15 @@ internal sealed class DosRuntimeRunDialog : Form
         _lblEmpty.Visible = false;
         _lblEmpty.Text = UiText.Get("DosRuntime.RunDialogNoHost");
 
+        // R9F V8.6j Invalid-host diagnostics: read-only reason for the selected
+        // row (plus per-row ToolTipText). No modal popup. Status column stays
+        // concise (Ready / Invalid) while the underlying Detail is inspectable.
+        _lblDetail.Dock = DockStyle.Bottom;
+        _lblDetail.Height = 26;
+        _lblDetail.Padding = new Padding(10, 4, 10, 4);
+        _lblDetail.ForeColor = SystemColors.GrayText;
+        _lblDetail.AutoEllipsis = true;
+
         _grid.Dock = DockStyle.Fill;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -158,6 +168,7 @@ internal sealed class DosRuntimeRunDialog : Form
         Controls.Add(_grid);
         Controls.Add(_lblEmpty);
         Controls.Add(_lblTarget);
+        Controls.Add(_lblDetail);
         Controls.Add(bottom);
         AcceptButton = _btnRun;
         CancelButton = _btnCancel;
@@ -212,6 +223,11 @@ internal sealed class DosRuntimeRunDialog : Form
                 candidate.Compatibility == DosRuntimeCompatibility.Compatible ? UiText.Get("DosRuntime.Ready") : UiText.Get("VariantInvalid"));
             DataGridViewRow row = _grid.Rows[index];
             row.Tag = candidate;
+            row.Cells[0].ToolTipText = candidate.Detail;
+            row.Cells[1].ToolTipText = candidate.Detail;
+            row.Cells[2].ToolTipText = candidate.Detail;
+            row.Cells[3].ToolTipText = candidate.Detail;
+            row.Cells[4].ToolTipText = candidate.Detail;
             if (candidate.Compatibility != DosRuntimeCompatibility.Compatible)
                 row.DefaultCellStyle.ForeColor = SystemColors.GrayText;
         }
@@ -236,8 +252,15 @@ internal sealed class DosRuntimeRunDialog : Form
 
     private void UpdateRunState()
     {
-        _btnRun.Enabled = _grid.CurrentRow?.Tag is DosRuntimeCandidate candidate && candidate.IsRunnable;
+        DosRuntimeCandidate? current = _grid.CurrentRow?.Tag as DosRuntimeCandidate;
+        _btnRun.Enabled = IsRunEnabledFor(current);
+        _lblDetail.Text = current?.Detail ?? string.Empty;
     }
+
+    /// <summary>R9F V8.6h/j inner-Run gate shared by the dialog and headless
+    /// regressions: enabled only for a runnable/compatible candidate.</summary>
+    internal static bool IsRunEnabledFor(DosRuntimeCandidate? candidate) =>
+        candidate is not null && candidate.IsRunnable;
 
     private void AcceptSelection()
     {
