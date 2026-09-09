@@ -156,6 +156,12 @@ internal sealed class MainForm : Form
     /// injection reset. Never persisted across restarts without validation.</summary>
     private DosRuntimeCandidate? _dosRememberedCandidate;
     private string? _dosRememberedPath;
+    /// <summary>R9F V8.6h headless Run-dialog open target (test seam only).
+    /// Production modal dialog carries its open target in a local instead.</summary>
+    private VariantLaunchTarget? _pendingRunOpenTargetForTest;
+    /// <summary>R9F V8.6h dialog-local Browse candidates (test seam mirror of
+    /// the modal dialog merged list). Per-launch only, never persisted.</summary>
+    private readonly List<DosRuntimeCandidate> _runDialogExtraCandidatesForTest = [];
     private bool _testBypassConfirm;
     private readonly Label lblRecoveryTitle = new();
     private readonly Label lblRecoveryStatus = new();
@@ -176,7 +182,7 @@ internal sealed class MainForm : Form
     private readonly CompositeBuildService _compositeBuilds;
     private readonly VariantLauncherService _variantLauncher;
     private readonly VariantBuildStatusService _variantBuildStatus;
-    private readonly VariantExecutionService _variantExecution = new(debug: VariantDebugConfiguration.FromEnvironment());
+    private VariantExecutionService _variantExecution = new(debug: VariantDebugConfiguration.FromEnvironment());
     private readonly RecoverySafetyService _recoverySafety;
     // Set only by the explicit installation activation boundary.  Tabs consume
     // these immutable contexts; they never create an installation context.
@@ -1968,6 +1974,9 @@ internal sealed class MainForm : Form
 
     private void ExecuteActiveVariantInDosHost()
     {
+        // R9F V8.6h: the outer Run... action never executes directly. It opens
+        // the modal per-launch DOS runtime dialog (preferred host preselected,
+        // zero starts) and executes only after explicit dialog confirmation.
         if (_activeProject is null || _activeVariant is null)
         {
             SetStatus(UiText.Get("App.NoGameSelected") + " " + UiText.Get("App.FindOrBrowse"), true);
@@ -1979,13 +1988,60 @@ internal sealed class MainForm : Form
             SetStatus(UiText.Get("Workflow.BuildIncomplete"), true);
             return;
         }
-        if (_dosSelected is null || !_dosSelected.IsRunnable)
+        // Reuse session-cached candidates; opening the dialog performs zero
+        // new probes (explicit Refresh/Browse inside the dialog may probe).
+        _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot);
+        using var dialog = new DosRuntimeRunDialog(
+            target,
+            _dosCandidates,
+            _dosSelected,
+            refresh: () =>
+            {
+                _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot, refresh: true);
+                return _dosCandidates;
+            },
+            probePath: path => _dosDiscovery.ProbeUserSelection(path));
+        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Selected is null) return;
+        ExecuteRunWithHost(dialog.Selected, target);
+    }
+
+    /// <summary>R9F V8.6h per-launch execution authority. Re-resolves the
+    /// authoritative target, fails closed on stale target or disappeared host,
+    /// never silently switches hosts, and starts the game only via
+    /// ExecutePlan with exactly the dialog-selected host.</summary>
+    private void ExecuteRunWithHost(DosRuntimeCandidate selected, VariantLaunchTarget openTarget)
+    {
+        if (_activeProject is null || _activeVariant is null) return;
+        VariantLaunchTarget fresh;
+        try { fresh = _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException)
+        {
+            SetStatus(ex.Message, true);
+            return;
+        }
+        if (fresh.Readiness != VariantLaunchReadiness.LaunchReady ||
+            !fresh.GameId.Equals(openTarget.GameId, StringComparison.OrdinalIgnoreCase) ||
+            !fresh.WorkingDirectory.Equals(openTarget.WorkingDirectory, StringComparison.OrdinalIgnoreCase) ||
+            !fresh.ExecutableFile.Equals(openTarget.ExecutableFile, StringComparison.OrdinalIgnoreCase) ||
+            !fresh.DataFile.Equals(openTarget.DataFile, StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus(UiText.Get("Workflow.BuildIncomplete"), true);
+            return;
+        }
+        // Session-valid host state only: the exact selected row must still
+        // exist on disk and remain runnable. The candidate object itself
+        // carries its probe-time compatibility; IsRunnable re-checks file
+        // existence live. No silent fallback to another host.
+        bool hostFileExists;
+        try { hostFileExists = File.Exists(selected.ExecutablePath); }
+        catch { hostFileExists = false; }
+        if (!hostFileExists || !selected.IsRunnable || selected.Compatibility != DosRuntimeCompatibility.Compatible)
         {
             SetStatus(UiText.Get("DosRuntime.NeedHost"), true);
             return;
         }
         DosRuntimeLaunchPlan plan;
-        try { plan = DosRuntimeLaunchPlanner.BuildPlan(_dosSelected, target, _activeProject.GameRoot); }
+        try { plan = DosRuntimeLaunchPlanner.BuildPlan(selected, fresh, _activeProject.GameRoot); }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException or UnauthorizedAccessException)
         {
             SetStatus(ex.Message, true);
@@ -2094,16 +2150,19 @@ internal sealed class MainForm : Form
             (_dosSelected is null
                 ? UiText.Get("DosRuntime.NotConfigured")
                 : _dosSelected.DisplayName + " " + _dosSelected.Version + " — " + _dosSelected.ExecutablePath);
-        DosRuntimeExecutionReadiness readiness = DosRuntimeReadiness.Evaluate(
-            target?.Readiness ?? VariantLaunchReadiness.NoActiveInstallation,
-            _dosSelected?.IsRunnable == true);
-        lblRunReadiness.Text = UiText.Get("DosRuntime.RunReadiness") + " " + readiness switch
+        // R9F V8.6h explicit-selection model: the outer Run... button opens the
+        // per-launch dialog whenever the build is Ready, even with no preferred
+        // host (Browse inside the dialog can supply one). It never implies
+        // immediate execution of the preferred host.
+        bool buildReady = (target?.Readiness ?? VariantLaunchReadiness.NoActiveInstallation) == VariantLaunchReadiness.LaunchReady;
+        bool hostRunnable = _dosSelected?.IsRunnable == true;
+        lblRunReadiness.Text = UiText.Get("DosRuntime.RunReadiness") + " " + (target?.Readiness ?? VariantLaunchReadiness.NoActiveInstallation) switch
         {
-            DosRuntimeExecutionReadiness.Runnable => UiText.Get("DosRuntime.Ready"),
-            DosRuntimeExecutionReadiness.BuildNotReady => UiText.Get("DosRuntime.BuildNotReady"),
-            _ => UiText.Get("DosRuntime.NeedHost")
+            not VariantLaunchReadiness.LaunchReady => UiText.Get("DosRuntime.BuildNotReady"),
+            _ when hostRunnable => UiText.Get("DosRuntime.ReadyPreferred"),
+            _ => UiText.Get("DosRuntime.BuildReadyChooseHost")
         };
-        btnRunVariant.Enabled = readiness == DosRuntimeExecutionReadiness.Runnable;
+        btnRunVariant.Enabled = buildReady;
     }
 
     private void ChangeDosRuntime()
@@ -6124,6 +6183,69 @@ internal sealed class MainForm : Form
         // settings file. Production selection always persists via the dialog.
         _dosSelected = selected;
         UpdateDosRuntimePresentation(_lastLauncherTarget);
+    }
+    internal void InjectVariantExecutionForTest(VariantExecutionService execution)
+    {
+        _variantExecution = execution ?? throw new ArgumentNullException(nameof(execution));
+    }
+    /// <summary>R9F V8.6h headless Run-dialog model: resolves the authoritative
+    /// target and reuses session-cached candidates with zero process starts.
+    /// Mirrors opening the modal Run dialog (preferred host preselected).</summary>
+    internal sealed record RunDialogPreparedForTest(
+        VariantLaunchTarget Target,
+        IReadOnlyList<DosRuntimeCandidate> Candidates,
+        DosRuntimeCandidate? Preselected,
+        string DosCommandPreview);
+    internal RunDialogPreparedForTest BeginRunDialogForTest()
+    {
+        if (_activeProject is null || _activeVariant is null)
+            throw new InvalidOperationException("No game installation is active.");
+        VariantLaunchTarget target = _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
+        _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot);
+        DosRuntimeCandidate? preselected = _dosSelected is not null && _dosSelected.IsRunnable ? _dosSelected : null;
+        _pendingRunOpenTargetForTest = target;
+        _runDialogExtraCandidatesForTest.Clear();
+        return new RunDialogPreparedForTest(target, _dosCandidates, preselected, DosRuntimeRunDialog.DosCommandPreview(target));
+    }
+    /// <summary>R9F V8.6h headless dialog confirmation: revalidates the
+    /// authoritative target plus session-valid host state, then executes
+    /// exactly the chosen host via ExecutePlan. Per-launch only: never writes
+    /// DosRuntimeSettingsStore. Fail-closed with zero starts on stale target
+    /// or disappeared host (no silent fallback).</summary>
+    internal string ConfirmRunDialogForTest(string selectedExecutablePath)
+    {
+        if (_activeProject is null || _activeVariant is null)
+            throw new InvalidOperationException("No game installation is active.");
+        VariantLaunchTarget openTarget = _pendingRunOpenTargetForTest
+            ?? _variantLauncher.ResolveEdition(_activeProject, _activeVariant, _activeTranslationCode);
+        _pendingRunOpenTargetForTest = null;
+        _dosCandidates = _dosDiscovery.Discover(_activeProject.GameRoot);
+        DosRuntimeCandidate? selected = _dosCandidates.FirstOrDefault(item =>
+            item.ExecutablePath.Equals(selectedExecutablePath, StringComparison.OrdinalIgnoreCase));
+        selected ??= _dosRememberedCandidate is not null &&
+            _dosRememberedCandidate.ExecutablePath.Equals(selectedExecutablePath, StringComparison.OrdinalIgnoreCase)
+            ? _dosRememberedCandidate : null;
+        selected ??= _runDialogExtraCandidatesForTest.FirstOrDefault(item =>
+            item.ExecutablePath.Equals(selectedExecutablePath, StringComparison.OrdinalIgnoreCase));
+        if (selected is null || !selected.IsRunnable)
+            return "The selected DOS runtime host is unavailable.";
+        ExecuteRunWithHost(selected, openTarget);
+        return openTarget.Detail;
+    }
+    internal IReadOnlyList<DosRuntimeCandidate> RunDialogCandidatesForTest() => BeginRunDialogForTest().Candidates;
+    internal DosRuntimeCandidate? RunDialogPreselectedForTest() => BeginRunDialogForTest().Preselected;
+    /// <summary>R9F V8.6h headless dialog Browse: probes exactly once, accepts
+    /// only positively identified compatible hosts, adds to the dialog-local
+    /// list without persisting preference and without executing.</summary>
+    internal DosRuntimeCandidate BrowseRunDialogHostForTest(string executablePath)
+    {
+        DosRuntimeCandidate probed = _dosDiscovery.ProbeUserSelection(executablePath);
+        if (!probed.IsRunnable)
+            throw new InvalidOperationException("Browse host is not runnable: " + probed.Detail);
+        _runDialogExtraCandidatesForTest.RemoveAll(item =>
+            item.ExecutablePath.Equals(probed.ExecutablePath, StringComparison.OrdinalIgnoreCase));
+        _runDialogExtraCandidatesForTest.Add(probed);
+        return probed;
     }
     /// <summary>R9F V8.6f production-path Browse simulation: probes exactly
     /// once via the active discovery service, persists path/kind, retains the

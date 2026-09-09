@@ -1185,6 +1185,12 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine("DOS runtime discovery: FAIL - " + ex.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 3 && args[0].Equals("--dos-run-dialog-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            try { VerifyDosRunDialogSmoke(args[1], args[2]); Console.WriteLine("DOS run dialog: PASS"); Environment.ExitCode = 0; }
+            catch (Exception ex) { Console.Error.WriteLine("DOS run dialog: FAIL - " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 3 && args[0].Equals("--dos-launch-plan-smoke", StringComparison.OrdinalIgnoreCase))
         {
             try { VerifyDosLaunchPlanSmoke(args[1], args[2]); Console.WriteLine("DOS launch plan: PASS"); Environment.ExitCode = 0; }
@@ -2923,17 +2929,19 @@ internal static class Program
             if (form.DosSelectedPathForTest is null || !form.DosSelectedPathForTest.Equals(autoHost, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Automatic selection failed with no saved host.");
 
-            // F. No valid hosts => Run disabled / NeedHost.
+            // F. No valid hosts => outer Run... stays available for dialog Browse
+            // (build Ready), with choose-host wording; inner dialog Run stays
+            // disabled until Browse supplies a host.
             File.Delete(autoHost);
             files.Files.Remove(autoHost);
             form.RefreshDosDiscoveryForTest();
             form.OpenModsForTest();
             if (form.DosSelectedPathForTest is not null)
                 throw new InvalidDataException("A host remained selected with no valid hosts.");
-            if (form.RunEnabledForTest)
-                throw new InvalidDataException("Run enabled with no valid hosts.");
-            if (!form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.NeedHost"), StringComparison.Ordinal))
-                throw new InvalidDataException("Missing-host readiness does not report NeedHost.");
+            if (!form.RunEnabledForTest)
+                throw new InvalidDataException("Run... is not available for dialog Browse with no valid hosts.");
+            if (!form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.BuildReadyChooseHost"), StringComparison.Ordinal))
+                throw new InvalidDataException("Missing-host readiness does not report choose-host state.");
             _ = probesAfterRefresh;
 
             if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
@@ -2941,6 +2949,272 @@ internal static class Program
                 throw new InvalidDataException("Remembered-host smoke modified a real GameRoot.");
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    /// <summary>R9F V8.6h explicit DOS runtime selection before Run.
+    /// Headless mirror of the modal Run dialog: outer action opens with zero
+    /// starts (fails on 0ea4f92 immediate auto-launch), confirmation executes
+    /// exactly the chosen host via ExecutePlan only. TEMP fixtures only.</summary>
+    private static void VerifyDosRunDialogSmoke(string elvira1Source, string elvira2Source)
+    {
+        string[] e1Before = SnapshotRootFiles(elvira1Source);
+        string[] e2Before = SnapshotRootFiles(elvira2Source);
+        string root = Path.Combine(Path.GetTempPath(), "Pi1DosRunDialogSmoke", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(root);
+            ProjectContext fixture = CreateBuildFixtureProjectContext(root, "e1", elvira1Source, ElviraGameProfile.Elvira1);
+            SeedSkTranslationForSmoke(fixture);
+            if (!GameInstallationValidator.TryValidate(fixture.GameRoot, InstallationDiscoverySource.Manual, out GameInstallation? installation) || installation is null)
+                throw new InvalidDataException("Run-dialog fixture did not validate as an installation.");
+
+            string stagingDir = Path.Combine(root, "staging"); Directory.CreateDirectory(stagingDir);
+            string classicDir = Path.Combine(root, "classic"); Directory.CreateDirectory(classicDir);
+            string xDir = Path.Combine(root, "x"); Directory.CreateDirectory(xDir);
+            string stagingHost = Path.Combine(stagingDir, "dosbox.exe"); File.WriteAllBytes(stagingHost, [0x4D, 0x5A]);
+            string classicHost = Path.Combine(classicDir, "dosbox.exe"); File.WriteAllBytes(classicHost, [0x4D, 0x5A]);
+            string xHost = Path.Combine(xDir, "dosbox-x.exe"); File.WriteAllBytes(xHost, [0x4D, 0x5A]);
+
+            var files = new FakeDosRuntimeFileSystem
+            {
+                PathVariable = string.Join(Path.PathSeparator, stagingDir, classicDir, xDir),
+                ProgramFiles = Path.Combine(root, "nopf"),
+                ProgramFilesX86 = Path.Combine(root, "nopf86"),
+                LocalAppData = Path.Combine(root, "nolocal")
+            };
+            files.Files.Add(stagingHost);
+            files.Files.Add(classicHost);
+            files.Files.Add(xHost);
+            var evidence = new Dictionary<string, DosRuntimeHostEvidence>(StringComparer.OrdinalIgnoreCase)
+            {
+                [stagingHost] = new("dosbox.exe", "DOSBox Staging", "0.82.2"),
+                [classicHost] = new("dosbox.exe", "DOSBox", "0.74.3"),
+                [xHost] = new("dosbox-x.exe", "DOSBox-X", "2024.03.01")
+            };
+            var prober = new FakeDosRuntimeProbeRunner();
+            prober.Results[stagingHost] = new(true, "dosbox-staging 0.82.2", string.Empty, 0);
+            prober.Results[classicHost] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            prober.Results[xHost] = new(true, "DOSBox-X version 2024.03.01", string.Empty, 0);
+            var discovery = new DosRuntimeDiscoveryService(files, prober, path => evidence[path]);
+            var store = new DosRuntimeSettingsStore(Path.Combine(root, "settings", "dos-runtime.json"));
+            var recorder = new RecordingVariantProcessRunner();
+            var execution = new VariantExecutionService(recorder, VariantDebugConfiguration.Unavailable);
+
+            using var form = new MainForm();
+            form.InitializeInstallationStateForTest();
+            form.ActivateInstallationForTest(installation);
+            form.InjectDosDiscoveryForTest(discovery);
+            form.InjectDosSettingsForTest(store);
+            form.InjectVariantExecutionForTest(execution);
+            form.SelectTranslationForTest("SK");
+            if (!form.RebuildActiveVariantCoreForTest())
+                throw new InvalidDataException("Run-dialog fixture build failed.");
+            form.SelectDosHostViaBrowseForTest(stagingHost);
+            form.OpenModsForTest();
+            if (!form.RunEnabledForTest)
+                throw new InvalidDataException("Outer Run... is not available on a Ready build.");
+            if (recorder.Starts.Count != 0)
+                throw new InvalidDataException("Process started before any Run dialog interaction.");
+
+            // A. Preferred Staging preselected, zero starts, zero new probes on open.
+            int probesBeforeOpen = form.DosProbeCountForTest;
+            var prepared = form.BeginRunDialogForTest();
+            if (recorder.Starts.Count != 0)
+                throw new InvalidDataException("Opening the Run dialog started a process (auto-launch).");
+            if (prepared.Preselected is null || !prepared.Preselected.ExecutablePath.Equals(stagingHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Preferred Staging host was not preselected.");
+            if (prepared.Candidates.Count(item => item.IsRunnable) < 3)
+                throw new InvalidDataException("Run dialog did not list all three compatible hosts.");
+            if (form.DosProbeCountForTest != probesBeforeOpen)
+                throw new InvalidDataException("Opening the Run dialog caused new DOS probes.");
+            if (!prepared.DosCommandPreview.Contains("RUNVGASK", StringComparison.OrdinalIgnoreCase) ||
+                !prepared.DosCommandPreview.Contains("GAMEPCSK", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Run dialog target preview is not the authoritative E1VGA/SK command: " + prepared.DosCommandPreview);
+            if (!prepared.Target.WorkingDirectory.EndsWith(Path.Combine("VARIANTS", "E1VGA", "SK"), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Run dialog target directory is not VARIANTS\\E1VGA\\SK: " + prepared.Target.WorkingDirectory);
+            // B. Cancel path: no confirm => zero starts (implicitly proven by counts below).
+
+            // C. Confirm preselected Staging => exactly one Staging start.
+            form.ConfirmRunDialogForTest(stagingHost);
+            if (recorder.Starts.Count != 1 || !recorder.Starts[0].FileName.Equals(stagingHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Staging confirmation did not start exactly the Staging host.");
+            string stagingArgs = string.Join(" ", recorder.Starts[0].ArgumentList);
+            if (!recorder.Starts[0].ArgumentList.Contains("--noprimaryconf") || !recorder.Starts[0].ArgumentList.Contains("--exit"))
+                throw new InvalidDataException("Staging launch did not use the Staging adapter syntax: " + stagingArgs);
+            RequireHostRouting(recorder.Starts[0], stagingHost, prepared.Target);
+
+            // D. Choose GOG Classic instead => Classic start, preference untouched.
+            _ = form.BeginRunDialogForTest();
+            form.ConfirmRunDialogForTest(classicHost);
+            if (recorder.Starts.Count != 2 || !recorder.Starts[1].FileName.Equals(classicHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Classic selection did not start exactly the GOG Classic host.");
+            if (recorder.Starts[1].FileName.Equals(stagingHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Classic run silently reused Staging.");
+            string classicArgs = string.Join(" ", recorder.Starts[1].ArgumentList);
+            if (!recorder.Starts[1].ArgumentList.Contains("-exit") || recorder.Starts[1].ArgumentList.Contains("--noprimaryconf") || !classicArgs.Contains("RUNVGASK", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Classic launch misroutes the E1VGA/SK target: " + classicArgs);
+            RequireHostRouting(recorder.Starts[1], classicHost, prepared.Target);
+            DosRuntimeSelectedHost? afterClassic = store.Load();
+            if (afterClassic is null || !afterClassic.ExecutablePath.Equals(stagingHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Per-launch Classic selection overwrote the preferred Staging host.");
+
+            // E. Choose DOSBox-X => X host used.
+            _ = form.BeginRunDialogForTest();
+            form.ConfirmRunDialogForTest(xHost);
+            if (recorder.Starts.Count != 3 || !recorder.Starts[2].FileName.Equals(xHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("DOSBox-X selection did not start exactly the X host.");
+            RequireHostRouting(recorder.Starts[2], xHost, prepared.Target);
+
+            // F. No preferred host but candidates exist => dialog opens, inner works.
+            form.ClearDosSettingsForTest();
+            form.OpenModsForTest();
+            int startsBeforeF = recorder.Starts.Count;
+            var preparedF = form.BeginRunDialogForTest();
+            if (recorder.Starts.Count != startsBeforeF)
+                throw new InvalidDataException("Dialog open without preference started a process.");
+            if (preparedF.Candidates.Count(item => item.IsRunnable) == 0)
+                throw new InvalidDataException("Dialog without preference lists no selectable host.");
+            form.ConfirmRunDialogForTest(classicHost);
+            if (recorder.Starts.Count != startsBeforeF + 1)
+                throw new InvalidDataException("Inner Run without preference did not execute once.");
+            form.SelectDosHostViaBrowseForTest(stagingHost);
+            form.OpenModsForTest();
+
+            // H. Browse valid host => added/selected, zero starts until confirm.
+            string browseDir = Path.Combine(root, "browsed"); Directory.CreateDirectory(browseDir);
+            string browseHost = Path.Combine(browseDir, "dosbox.exe"); File.WriteAllBytes(browseHost, [0x4D, 0x5A]);
+            files.Files.Add(browseHost);
+            evidence[browseHost] = new("dosbox.exe", "DOSBox", "0.74.3");
+            prober.Results[browseHost] = new(true, "DOSBox version 0.74-3", string.Empty, 0);
+            int startsBeforeBrowse = recorder.Starts.Count;
+            _ = form.BeginRunDialogForTest();
+            DosRuntimeCandidate browsed = form.BrowseRunDialogHostForTest(browseHost);
+            if (!browsed.IsRunnable)
+                throw new InvalidDataException("Valid Browse host was not accepted.");
+            if (recorder.Starts.Count != startsBeforeBrowse)
+                throw new InvalidDataException("Browse started a process before confirmation.");
+            form.ConfirmRunDialogForTest(browseHost);
+            if (recorder.Starts.Count != startsBeforeBrowse + 1 || !recorder.Starts[^1].FileName.Equals(browseHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Browsed host confirmation did not execute once.");
+
+            // I. Browse invalid host => rejected, zero starts.
+            string evilDir = Path.Combine(root, "evil"); Directory.CreateDirectory(evilDir);
+            string evilHost = Path.Combine(evilDir, "dosbox.exe"); File.WriteAllBytes(evilHost, [0x4D, 0x5A]);
+            files.Files.Add(evilHost);
+            evidence[evilHost] = new("dosbox.exe", "EvilSoft Player", "1.0");
+            prober.Results[evilHost] = new(true, "Unknown option: -version", string.Empty, 0);
+            int startsBeforeEvil = recorder.Starts.Count;
+            _ = form.BeginRunDialogForTest();
+            bool evilRejected = false;
+            try { form.BrowseRunDialogHostForTest(evilHost); }
+            catch (InvalidOperationException) { evilRejected = true; }
+            if (!evilRejected)
+                throw new InvalidDataException("Invalid Browse host was accepted.");
+            if (recorder.Starts.Count != startsBeforeEvil)
+                throw new InvalidDataException("Invalid Browse started a process.");
+
+            // G. No compatible candidates => dialog opens, inner disabled.
+            var emptyFiles = new FakeDosRuntimeFileSystem
+            {
+                PathVariable = string.Empty,
+                ProgramFiles = Path.Combine(root, "gonull"),
+                ProgramFilesX86 = Path.Combine(root, "gonull86"),
+                LocalAppData = Path.Combine(root, "gonulllocal")
+            };
+            var emptyDiscovery = new DosRuntimeDiscoveryService(emptyFiles, new FakeDosRuntimeProbeRunner(), path => new DosRuntimeHostEvidence(Path.GetFileName(path), null, null));
+            form.InjectDosDiscoveryForTest(emptyDiscovery);
+            form.InjectVariantExecutionForTest(execution);
+            form.ClearDosSettingsForTest();
+            form.OpenModsForTest();
+            var preparedG = form.BeginRunDialogForTest();
+            if (preparedG.Candidates.Any(item => item.IsRunnable))
+                throw new InvalidDataException("Empty discovery lists a runnable host.");
+            if (preparedG.Preselected is not null)
+                throw new InvalidDataException("Empty discovery preselected a host.");
+            int startsBeforeG = recorder.Starts.Count;
+            string blocked = form.ConfirmRunDialogForTest(classicHost);
+            if (recorder.Starts.Count != startsBeforeG || string.IsNullOrWhiteSpace(blocked))
+                throw new InvalidDataException("No-host confirmation was not blocked fail-closed.");
+            form.InjectDosDiscoveryForTest(discovery);
+            form.InjectVariantExecutionForTest(execution);
+            form.SelectDosHostViaBrowseForTest(stagingHost);
+            form.OpenModsForTest();
+
+            // Stale target: dialog opened Ready, build goes stale, confirm => zero starts.
+            _ = form.BeginRunDialogForTest();
+            var fonts = new FontVariantService();
+            FontProjectState stale = fonts.SetEdit(form.ActiveProjectForTest!, fonts.Load(form.ActiveProjectForTest!, "SK").State!,
+                FontProjectEdit.Create(new(0x42), Convert.FromHexString("0102030405060708"), FontEditScope.Shared, null));
+            if (!fonts.Save(form.ActiveProjectForTest!, "SK", stale).Succeeded)
+                throw new InvalidDataException("Stale font mutation did not save.");
+            form.OpenModsForTest();
+            if (form.RunEnabledForTest)
+                throw new InvalidDataException("Outer Run... is enabled for a stale build.");
+            int startsBeforeStale = recorder.Starts.Count;
+            form.ConfirmRunDialogForTest(stagingHost);
+            if (recorder.Starts.Count != startsBeforeStale)
+                throw new InvalidDataException("Stale target confirmation launched a process.");
+            if (!form.RebuildActiveVariantCoreForTest())
+                throw new InvalidDataException("Stale rebuild failed.");
+            form.OpenModsForTest();
+
+            // Disappeared host: confirm after deletion => zero starts, no fallback.
+            _ = form.BeginRunDialogForTest();
+            File.Delete(classicHost);
+            files.Files.Remove(classicHost);
+            int startsBeforeGone = recorder.Starts.Count;
+            form.ConfirmRunDialogForTest(classicHost);
+            if (recorder.Starts.Count != startsBeforeGone)
+                throw new InvalidDataException("Disappeared-host confirmation launched or silently fell back.");
+
+            // Generic routing: E1EGA + E2 + non-SK EN previews (zero starts).
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Ega);
+            var egaPrepared = form.BeginRunDialogForTest();
+            if (!egaPrepared.DosCommandPreview.Contains("RUNEGA", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("E1EGA preview is hardcoded to another runtime: " + egaPrepared.DosCommandPreview);
+            if (recorder.Starts.Count != startsBeforeGone)
+                throw new InvalidDataException("EGA preview started a process.");
+            form.SetActiveVariantForTest(BuiltInVariantId.Elvira1Vga);
+            form.SelectTranslationForTest("EN");
+            var enPrepared = form.BeginRunDialogForTest();
+            if (!enPrepared.DosCommandPreview.Contains("RUNVGA", StringComparison.OrdinalIgnoreCase) ||
+                !enPrepared.DosCommandPreview.Contains("GAMEPC", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Non-SK EN preview is hardcoded: " + enPrepared.DosCommandPreview);
+            form.SelectTranslationForTest("SK");
+
+            // Proof: no direct RUN*.EXE Windows launch; no GameRoot copies.
+            foreach (var start in recorder.Starts)
+            {
+                string fileName = start.FileName;
+                if (fileName.EndsWith("RUNVGASK.EXE", StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith("RUNEGASK.EXE", StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith("RUNITSK.EXE", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Run started the DOS executable directly: " + fileName);
+            }
+            if (File.Exists(Path.Combine(fixture.GameRoot, "RUNVGASK.EXE")) ||
+                File.Exists(Path.Combine(fixture.GameRoot, "GAMEPCSK")))
+                throw new InvalidDataException("Generated variant files were copied to GameRoot.");
+            string editionRoot = Path.Combine(fixture.GameRoot, "VARIANTS", "E1VGA", "SK");
+            if (!File.Exists(Path.Combine(editionRoot, "RUNVGASK.EXE")) || !File.Exists(Path.Combine(editionRoot, "GAMEPCSK")))
+                throw new InvalidDataException("Owned E1VGA/SK outputs are missing after dialog runs.");
+
+            if (!SnapshotRootFiles(elvira1Source).SequenceEqual(e1Before, StringComparer.Ordinal) ||
+                !SnapshotRootFiles(elvira2Source).SequenceEqual(e2Before, StringComparer.Ordinal))
+                throw new InvalidDataException("Run-dialog smoke modified a real GameRoot.");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private static void RequireHostRouting(System.Diagnostics.ProcessStartInfo start, string expectedHost, VariantLaunchTarget target)
+    {
+        if (!start.FileName.Equals(expectedHost, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"Run used {start.FileName} instead of {expectedHost}.");
+        if (!start.WorkingDirectory.Equals(target.WorkingDirectory, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Run working directory is not the authoritative edition directory.");
+        string args = string.Join(" ", start.ArgumentList);
+        string exe = Path.GetFileNameWithoutExtension(target.ExecutableFile);
+        if (!args.Contains(exe, StringComparison.OrdinalIgnoreCase) || !args.Contains(target.DataFile, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Host arguments do not reference the authoritative runtime+edition target: " + args);
     }
 
     private static void VerifyDosLaunchPlanSmoke(string elvira1Source, string elvira2Source)
@@ -3247,15 +3521,16 @@ internal static class Program
             form.OpenModsForTest();
             string fakeHost = Path.Combine(root, "dosbox.exe");
             var host = new DosRuntimeCandidate(DosRuntimeKind.DosBoxClassic, "DOSBox Classic", "0.74", fakeHost, DosRuntimeSource.UserBrowse, DosRuntimeCompatibility.Compatible, string.Empty);
-            // A: build Ready, no host -> Run disabled with host reason.
+            // A: build Ready, no host -> outer Run... opens the dialog (Browse
+            // available); readiness honestly reports host will be chosen at Run.
             form.SetDosSelectedHostForTest(null);
-            if (form.RunEnabledForTest || !form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.NeedHost"), StringComparison.Ordinal))
-                throw new InvalidDataException("Run is enabled without a DOS host.");
-            // B: build Ready, valid host -> Run enabled.
+            if (!form.RunEnabledForTest || !form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.BuildReadyChooseHost"), StringComparison.Ordinal))
+                throw new InvalidDataException("Run... is not available for dialog selection on a Ready build without a host.");
+            // B: build Ready, valid host -> Run... enabled with preferred wording.
             File.WriteAllBytes(fakeHost, [0x4D, 0x5A]);
             form.SetDosSelectedHostForTest(host);
-            if (!form.RunEnabledForTest || !form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.Ready"), StringComparison.Ordinal))
-                throw new InvalidDataException("Run is disabled with a Ready build and valid host.");
+            if (!form.RunEnabledForTest || !form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.ReadyPreferred"), StringComparison.Ordinal))
+                throw new InvalidDataException("Run... is disabled with a Ready build and valid host.");
             // C: stale build, valid host -> Run disabled with build reason.
             var fonts = new FontVariantService();
             FontProjectState stale = fonts.SetEdit(form.ActiveProjectForTest!, fonts.Load(form.ActiveProjectForTest!, "SK").State!,
@@ -3266,14 +3541,17 @@ internal static class Program
             form.SetDosSelectedHostForTest(host);
             if (form.RunEnabledForTest || !form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.BuildNotReady"), StringComparison.Ordinal))
                 throw new InvalidDataException("Run is enabled for a stale build.");
-            // D: host becomes invalid -> Run disabled.
-            File.Delete(fakeHost);
-            form.SetDosSelectedHostForTest(host);
-            if (form.RunEnabledForTest)
-                throw new InvalidDataException("Run is enabled with an invalid host.");
-            // E: rebuild to Ready, reselect valid host -> Run enabled.
+            // D: rebuild to Ready, then host becomes invalid -> outer Run...
+            // stays available for dialog Browse, with choose-host wording
+            // (inner Run stays disabled until Browse supplies a host).
             if (!form.RebuildActiveVariantCoreForTest())
                 throw new InvalidDataException("Readiness rebuild failed.");
+            form.OpenModsForTest();
+            File.Delete(fakeHost);
+            form.SetDosSelectedHostForTest(host);
+            if (!form.RunEnabledForTest || !form.RunReadinessForTest.Contains(UiText.Get("DosRuntime.BuildReadyChooseHost"), StringComparison.Ordinal))
+                throw new InvalidDataException("Run... is not available for dialog Browse with an invalid host.");
+            // E: reselect valid host -> Run... enabled with preferred wording.
             File.WriteAllBytes(fakeHost, [0x4D, 0x5A]);
             form.SetDosSelectedHostForTest(host);
             if (!form.RunEnabledForTest)
