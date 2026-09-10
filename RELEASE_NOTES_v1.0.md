@@ -77,14 +77,17 @@ Original (EN) game assets in GameRoot are immutable: no normal editor action rep
 ## Download Verification
 
 - Package: `Pi1-Elvira-Editor-v1.0.0-win-x64.zip`
-- Size: 75981156 bytes
-- SHA-256: `C0918226D51206A2799BC4473F9595729343E5E79C73A7E486F06C897F1F3B76`
+- Size: 75993370 bytes
+- SHA-256: `C7B46F6159CA344A5EB82E63FB4E3AA14DD38C3E6DE9F9AC9A36A143CD4AFC5A`
 - Primary executable: `Pi1ElviraEditor.exe` (FileVersion `1.0.0.0`,
   ProductVersion `1.0.0`, 327680 bytes)
 - Executable SHA-256:
   `2920BC00EA5E881446AC3DDB3C9E66100D96043C79D43D1267DF07D99F0643A5`
 - Distribution: self-contained Windows x64 (`net8.0-windows`, RID `win-x64`,
-  multi-file, 479 files); no separate .NET installation required.
+  multi-file, 480 files) via tracked profile
+  `Properties\PublishProfiles\win-x64-self-contained.pubxml`;
+  no separate .NET installation required.
+- Package root includes GPL-3.0 `LICENSE`; no PDB shipped.
 
 ## License
 
