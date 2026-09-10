@@ -396,7 +396,9 @@ Help/*.md audited against final post-R10 UI/workflow:
 6. Whole-codebase benefit/effort/risk audit
 7. Possible .NET 10 WPF/MVVM redesign / 2.0 branch
 8. Palette substitution/conversion preview
-9. Repository/folder release rename to `Pi1-Elvira-I-II-Editor` (R11 work)
+
+Repository/project rename to the current `π1 Elvira Editor` / `Pi1-Elvira-Editor`
+identity is COMPLETE and is not future work.
 
 ## R10 Pre-existing 22 Failures — R11 Release-Readiness Classification
 
@@ -427,13 +429,13 @@ R9E/V5 additionally ran a broader current-dispatch diagnostic battery (110 curre
 |-----------|--------|
 | 1/50–48/50 | COMPLETE |
 | 48/50: R10 — Legacy Cleanup | COMPLETE |
-| **49/50: R9E — Technical Documentation Update** | **CURRENT** |
-| 50/50: R11 — Release | PENDING |
+| 49/50: R9E — Technical Documentation Update | COMPLETE |
+| 50/50: R11 — Release | CURRENT (R11A release candidate) |
 
 PRE-R9D remains an unnumbered stabilization phase between R9C and R9D. Earlier milestones not renumbered.
 
 ---
 
 **Product Identity:** π1 Elvira Editor v1.0
-**Repository:** Pi1ElviraEditor (local directory; remote: Pi1-Elvira-I-II-Editor)
+**Repository:** Pi1ElviraEditor (local directory; remote: Pi1-Elvira-Editor)
 **License:** GPL-3.0

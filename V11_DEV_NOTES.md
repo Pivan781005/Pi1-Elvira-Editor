@@ -1,6 +1,71 @@
-# π1 Elvira I&II VGA Editor v1.1b
+# π1 Elvira Editor — Development Notes (v1.0 release + post-v1.0 roadmap)
 
-## Included in this snapshot
+## v1.0 Release (R11A)
+
+- Public product: **π1 Elvira Editor v1.0** (`v1.0.0`, assembly `1.0.0.0`).
+- Technical project/namespace remains `Pi1ElviraEditor`; repository remote is
+  `Pi1-Elvira-Editor`. The repository/project rename is **COMPLETE** and is
+  not future work.
+- v1.0 architecture: SUPPORTED INSTALLATION → IMMUTABLE ORIGINAL GAMEROOT →
+  EDITABLE EDITION PROJECT STATE → SAVE TO PROJECT → COMPOSITE BUILD /
+  BUILD VARIANT → `VARIANTS\<runtime>\<edition>\` → MODS & LAUNCHER →
+  DOS RUNTIME HOST (DOSBox Classic / DOSBox Staging / DOSBox-X) → RUN.
+- Spice86, custom π1 DOSBox-X builds, palette conversion, 0x81 remap, Locale
+  Translation Workbench and UI-mode redesigns are post-v1.0 research only.
+
+## Post-v1.0 Roadmap (NOT implemented in v1.0)
+
+### Version 1.1 / Next UX
+
+- Basic / Advanced / Expert UI modes.
+- Basic mode as simplified normal-user workflow.
+- Smart Guidance / state-based next-action highlighting.
+- First-run guidance: Find games → choose installation → choose
+  edition/runtime as appropriate → choose Graphics/Text/Font editing.
+- Recurring guidance: dirty → Save; saved/stale → Build; LaunchReady → Run.
+- Guidance is presentation-only and must reuse authoritative application state.
+- Expert mode must expose all current v1.0 functionality.
+- No duplicate business logic per UI mode.
+
+### Graphics
+
+- Palette substitution/conversion preview.
+- Optionally convert incompatible imported images to the active Elvira palette.
+- Preview before/after.
+- Preserve valid 16-color target constraints.
+- User confirmation before applying conversion.
+
+### Font / Character Set Research
+
+- Investigate whether reserved HUD erase glyph 0x81 can be safely moved,
+  remapped, or decoupled.
+- Objective: potentially free the entire desired character set.
+- Do NOT promise feasibility until runtime/code paths are proven.
+
+### Runtime UI / Localization
+
+- RUNVGA Runtime UI capacity/mapping research.
+- Unresolved RUNIT Runtime UI routes (LOAD_FAILURE, FILE_NOT_FOUND,
+  TRY_ANOTHER_DISK).
+- Canonical/default Runtime UI decoding improvements.
+- Locale Translation Workbench.
+
+### Runtime / Emulation Research
+
+- Evaluate Spice86 as an analysis/emulation/runtime option.
+- Investigate integration opportunities.
+- Evaluate/use our own custom DOSBox-X build where technically beneficial.
+- Do NOT replace the three supported v1.0 host families (DOSBox Classic,
+  DOSBox Staging, DOSBox-X) without separate design and regression work.
+
+### Longer Term
+
+- Whole-codebase benefit/effort/risk audit.
+- Possible .NET 10 WPF/MVVM redesign / future 2.0 branch.
+
+## Historical v1.1b snapshot (preserved, pre-release)
+
+### Included in this historical snapshot (pre-release, preserved)
 
 - Game profile selector: Auto-detect / Elvira I / Elvira II.
 - GAMEPC Text column fills the available grid width.

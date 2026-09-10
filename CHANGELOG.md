@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.0
+
+- Initial public release of **π1 Elvira Editor v1.0** (`1.0.0`).
+- Elvira I VGA / EGA and Elvira II VGA project/edition/runtime model with
+  immutable original GameRoot and owned disposable `VARIANTS\<runtime>\<edition>\`
+  composite builds (EDIT → SAVE TO PROJECT → BUILD VARIANT → RUN).
+- Text, graphics, extended CP852 font (Elvira I V5 / Elvira II V2) and
+  evidence-based Runtime UI editing where supported; Mods & Launcher with
+  DOSBox Classic / Staging / DOSBox-X launch support; EN/SK/CS interface
+  localization with localized Help.
+- R9D fail-closed unsupported-binary rejection; R10 legacy direct-GameRoot
+  write workflows removed; PRE-R9D UI stabilization.
+- Known limitations: incomplete RUNVGA Runtime UI capacity/mapping, unresolved
+  RUNIT routes, protected HUD glyph 0x81, no RUNEGA font materialization, no
+  Czech game binary/data localization. See `RELEASE_NOTES_v1.0.md`.
+
 ## 1.3
 
 - Added verified extended CP852 font support for Elvira I and Elvira II.

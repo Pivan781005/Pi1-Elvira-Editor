@@ -21,10 +21,10 @@ A Windows editor for working with graphics and text resources from **Elvira: Mis
   - TTF/OTF/SFD import with CP852 mapping, composed diacritics, baseline-aware rasterization
   - R9D trusted-patch gates: structure + frozen invariant validation before mutation
 - Evidence-based Runtime UI editing:
-  - RUNEGA: 8 records mapped (ProvenLive/ProvenByBinary)
-  - RUNVGA: routes frozen per record (Pause.menu PROVEN LIVE, others PROVEN BY BINARY); layout/capacity mapping incomplete, patching blocked
+  - RUNEGA: 8 records mapped (ProvenLive/ProvenByBinary), editable/materializable with audited contracts
+  - RUNVGA: Pause.menu / Confirm.generic / Save.overwrite materializable (proven-live, frozen anchors/geometry); other 5 records read-only, fail closed
   - RUNIT: SAVE_FAILURE mapped; LOAD_FAILURE/FILE_NOT_FOUND/TRY_ANOTHER_DISK unresolved
-- Disposable/owned variant builds via CompositeBuild → `VARIANTS\<KEY>\`
+- Disposable/owned variant builds via CompositeBuild → `VARIANTS\<KEY>\<EDITION>\`
 - Build reproducibility (deterministic stages, provenance manifests)
 - Run/Debug readiness with artifact integrity/provenance validation
 - EN/SK/CS interface localization (dynamic, with English fallback)
@@ -36,7 +36,7 @@ A Windows editor for working with graphics and text resources from **Elvira: Mis
 
 ## Installation
 
-1. Download the R11 release package (final package identity is populated during R11 release packaging).
+1. Download the R11 release package `Pi1-Elvira-Editor-v1.0.0-win-x64.zip`.
 2. Extract the archive.
 3. Run `Pi1ElviraEditor.exe`.
 4. Select your Elvira I or Elvira II game directory via **Find games...** or **Browse folder...**.
@@ -76,7 +76,15 @@ Original (EN) game assets in GameRoot are immutable: no normal editor action rep
 
 ## Download Verification
 
-Final package name and SHA-256 will be populated during R11 release packaging.
+- Package: `Pi1-Elvira-Editor-v1.0.0-win-x64.zip`
+- Size: 75981156 bytes
+- SHA-256: `C0918226D51206A2799BC4473F9595729343E5E79C73A7E486F06C897F1F3B76`
+- Primary executable: `Pi1ElviraEditor.exe` (FileVersion `1.0.0.0`,
+  ProductVersion `1.0.0`, 327680 bytes)
+- Executable SHA-256:
+  `2920BC00EA5E881446AC3DDB3C9E66100D96043C79D43D1267DF07D99F0643A5`
+- Distribution: self-contained Windows x64 (`net8.0-windows`, RID `win-x64`,
+  multi-file, 479 files); no separate .NET installation required.
 
 ## License
 

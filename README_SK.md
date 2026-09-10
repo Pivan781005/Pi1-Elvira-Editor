@@ -1,3 +1,20 @@
+# π1 Elvira Editor v1.0 (SK)
+
+Aktuálna verejná identita: **π1 Elvira Editor v1.0** (`1.0.0`).
+
+Aktuálny pracovný postup v1.0: **EDIT → SAVE TO PROJECT → BUILD VARIANT → RUN**.
+Originálne súbory v GameRoot (`RUNVGA.EXE`, `RUNEGA.EXE`, `RUNIT.EXE`, `GAMEPC`,
+VGA zdroje) sú nemenné; výstupy patria do vlastnených
+`VARIANTS\<runtime>\<edition>\`; priamy zápis do GameRoot bol odstránený.
+Priame `APLIKOVAŤ DO HRY` / `.bak_original` postupy popísané nižšie sú
+predbežné (pre-release) a vo v1.0 neplatia. Podrobný aktuálny popis je
+v `README.md` a v lokalizovanej Pomoci (`Help/help.sk.md`), UI jazyky: EN/SK/CS.
+
+---
+
+Nižšie je zachovaný historický predbežný obsah (neaktuálny workflow, verzie
+1.1b–1.3) pre referenciu; nie je to popis v1.0.
+
 # π1 Elvira Editor — GUI + automatický deploy
 
 ## Bezpečnosť CP852 fontu pre Elvira I a II
