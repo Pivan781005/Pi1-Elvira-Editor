@@ -28,6 +28,13 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <!-- v1.0 release: bundle GPL-3.0 license at the top level of the publish
+         package. Deterministic/tracked; no source or unrelated files. -->
+    <None Include="LICENSE">
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
   </ItemGroup>
 </Project>
